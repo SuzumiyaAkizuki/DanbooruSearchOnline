@@ -59,7 +59,17 @@ def apply_nsfw_filter(rows: list[dict], show_nsfw: bool) -> list[dict]:
 @ui.page('/')
 async def main_page():
     ui.colors(primary='#4A90E2', secondary='#5E6C84', accent='#FF6B6B')
+    ui.add_head_html('''
+        <meta name="description" content="基于语义匹配的 Danbooru 标签搜索引擎，支持中英双语描述、多维匹配、智能分词与共现关联推荐。">
+        <meta name="keywords" content="Danbooru, AI绘画, Stable Diffusion, 提示词, 标签搜索, Prompt, NovelAI">
 
+        <style>
+            .nsfw-blur-cell      { filter: blur(8px); opacity: 0.5; transition: all 0.3s ease;
+                                   pointer-events: none !important; user-select: none !important; }
+            .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
+            .nsfw-row-blocked    { cursor: not-allowed !important; }
+        </style>
+    ''')
     # 引擎预热提示
     init_banner = ui.card().classes(
         'w-full max-w-6xl mx-auto bg-blue-50 border-l-4 border-blue-400 mb-2'
