@@ -30,7 +30,7 @@ jobs:
           repo_id = "SAkizuki/DanbooruSearch"
 
           IGNORE_DIRS = {"tags_embedding", ".git", "__pycache__"}
-          IGNORE_SUFFIX = {".pyc", ".parquet"}
+          IGNORE_SUFFIX = {".pyc", ".parquet",".csv"}
 
 
           root = Path(".")

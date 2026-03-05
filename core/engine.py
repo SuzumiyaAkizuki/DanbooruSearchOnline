@@ -10,7 +10,7 @@ DanbooruTagger 核心引擎
 """
 
 from __future__ import annotations
-
+from huggingface_hub import hf_hub_download
 import asyncio
 import json
 import os
@@ -63,6 +63,9 @@ LOCAL_MODEL_PATH = 'my_model_bge_m3'
 HF_MODEL_ID      = 'BAAI/bge-m3'
 SCHEMA_VERSION   = 2   # 升级此值将自动触发全量重建，用于破坏性格式变更
 
+
+def is_running_on_huggingface_space() -> bool:
+    return os.environ.get("SPACE_ID") is not None
 
 # ──────────────────────────────────────────────
 # 缓存路径助手
@@ -146,7 +149,27 @@ class DanbooruTagger:
         if self.is_loaded:
             return
         t0 = time.time()
-
+        # ====== 新增：环境检测与强制拉取真实的 LFS 文件 ======
+        if is_running_on_huggingface_space():
+            print(f'[Engine] 检测到 HF Space 线上环境 ({space_id})，正在拉取真实数据文件...')
+            try:
+                # 直接使用环境变量中的 space_id，这样即使以后改名也不用改代码
+                self.csv_path = hf_hub_download(
+                    repo_id=space_id,
+                    repo_type="space",
+                    filename="tags_enhanced.csv"
+                )
+                self.cooc_file = hf_hub_download(
+                    repo_id=space_id,
+                    repo_type="space",
+                    filename="cooccurrence_clean.parquet"
+                )
+                print('[Engine] 线上真实数据文件拉取完毕！')
+            except Exception as e:
+                print(f'[Engine] 拉取线上文件警告 (可能影响启动): {e}')
+        else:
+            print('[Engine] 检测到本地环境，直接使用本地数据文件。')
+        # ============================================
         if not self.paths.exists():
             print('\n' + '=' * 50)
             print('[Engine] 未找到缓存，开始首次构建（约 1~3 分钟）...')
@@ -263,12 +286,7 @@ class DanbooruTagger:
         """
         print('[Engine] 检查增量变更...')
         t0 = time.time()
-        # ======= 临时加入这两行用于诊断 =======
-        with open(self.csv_path, 'r', encoding='utf-8') as f:
-            print(f"\n--- {self.csv_path} 文件开头前 100 个字符 ---")
-            print(f.read(100))
-            print("---------------------------------------\n")
-        # ==================================
+
         raw_df = self._read_csv_robust(self.csv_path)
         new_df = self._preprocess_raw_df(raw_df)
 
