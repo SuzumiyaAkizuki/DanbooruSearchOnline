@@ -154,18 +154,26 @@ class DanbooruTagger:
         if space_id:
             print(f'[Engine] 检测到 HF Space 线上环境 ({space_id})，正在拉取真实数据文件...')
             try:
-                # 直接使用环境变量中的 space_id，这样即使以后改名也不用改代码
-                self.csv_path = hf_hub_download(
-                    repo_id=space_id,
-                    repo_type="space",
-                    filename="tags_enhanced.csv"
-                )
-                self.cooc_file = hf_hub_download(
-                    repo_id=space_id,
-                    repo_type="space",
-                    filename="cooccurrence_clean.parquet"
-                )
-                print('[Engine] 线上真实数据文件拉取完毕！')
+                # 1. 拉取真实源数据
+                self.csv_path = hf_hub_download(repo_id=space_id, repo_type="space", filename="tags_enhanced.csv")
+                self.cooc_file = hf_hub_download(repo_id=space_id, repo_type="space",
+                                                 filename="cooccurrence_clean.parquet")
+
+                # 2. 拉取真实的缓存文件！
+                real_meta = hf_hub_download(repo_id=space_id, repo_type="space",
+                                            filename="tags_embedding/tags_metadata.parquet")
+                real_emb = hf_hub_download(repo_id=space_id, repo_type="space",
+                                           filename="tags_embedding/danbooru_multiview_embeddings.safetensors")
+                real_json = hf_hub_download(repo_id=space_id, repo_type="space",
+                                            filename="tags_embedding/version_data.json")
+
+                # 覆盖原来的路径，让底层读取我们刚刚下载好的真文件
+                from pathlib import Path
+                self.paths.metadata = Path(real_meta)
+                self.paths.embeddings = Path(real_emb)
+                self.paths.meta_json = Path(real_json)
+
+                print('[Engine] 线上真实数据和缓存文件拉取完毕！')
             except Exception as e:
                 print(f'[Engine] 拉取线上文件警告 (可能影响启动): {e}')
         else:
