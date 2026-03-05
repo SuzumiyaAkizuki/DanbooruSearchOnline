@@ -1,0 +1,7 @@
+nicegui
+pandas
+sentence-transformers
+torch
+jieba
+pyarrow
+safetensors
