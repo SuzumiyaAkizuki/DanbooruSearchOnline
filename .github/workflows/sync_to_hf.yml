@@ -29,10 +29,9 @@ jobs:
           api = HfApi(token=os.environ["HF_TOKEN"])
           repo_id = "SAkizuki/DanbooruSearch"
 
-          # 忽略的目录（缓存文件夹）
           IGNORE_DIRS = {"tags_embedding", ".git", "__pycache__"}
-          # 忽略的文件后缀
-          IGNORE_SUFFIX = {".pyc"}
+          IGNORE_SUFFIX = {".pyc", ".parquet"}
+
 
           root = Path(".")
           for path in root.rglob("*"):
