@@ -8,6 +8,8 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: 1    # 全局阻止 LFS smudge filter，fetch 时只拉指针不拉实际文件
     steps:
       - name: Checkout GitHub repo
         uses: actions/checkout@v4
@@ -22,18 +24,15 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name  "GitHub Actions"
 
-          # 全局禁用 LFS，避免 fetch HF Space 时尝试下载大文件
-          git lfs uninstall
-
           git remote add hf_space \
             https://user:${HF_TOKEN}@huggingface.co/spaces/SAkizuki/DanbooruSearch
 
-          # 拉取 HF Space 当前状态（含缓存文件的 LFS 指针）
+          # 拉取 HF Space（LFS 文件只拉指针，不下载实际内容）
           git fetch hf_space main
 
           # 以 HF Space 为基础合并，代码冲突以 GitHub 版本为准
           git merge hf_space/main --allow-unrelated-histories -X theirs \
             -m "sync from GitHub"
 
-          # 推回 HF Space
+          # 推回 HF Space（LFS 指针原样保留，不触发上传）
           git push hf_space main:main
