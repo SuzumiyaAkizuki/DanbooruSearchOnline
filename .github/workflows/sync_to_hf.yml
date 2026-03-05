@@ -8,31 +8,46 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    env:
-      GIT_LFS_SKIP_SMUDGE: 1    # 全局阻止 LFS smudge filter，fetch 时只拉指针不拉实际文件
     steps:
       - name: Checkout GitHub repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           lfs: false
 
-      - name: Push to HuggingFace Space
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: Upload code files to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git config user.email "github-actions@github.com"
-          git config user.name  "GitHub Actions"
+          python - << 'PYEOF'
+          import os
+          from pathlib import Path
+          from huggingface_hub import HfApi
 
-          git remote add hf_space \
-            https://user:${HF_TOKEN}@huggingface.co/spaces/SAkizuki/DanbooruSearch
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo_id = "SAkizuki/DanbooruSearch"
 
-          # 拉取 HF Space（LFS 文件只拉指针，不下载实际内容）
-          git fetch hf_space main
+          # 忽略的目录（缓存文件夹）
+          IGNORE_DIRS = {"tags_embedding", ".git", "__pycache__"}
+          # 忽略的文件后缀
+          IGNORE_SUFFIX = {".pyc"}
 
-          # 以 HF Space 为基础合并，代码冲突以 GitHub 版本为准
-          git merge hf_space/main --allow-unrelated-histories -X theirs \
-            -m "sync from GitHub"
-
-          # 推回 HF Space（LFS 指针原样保留，不触发上传）
-          git push hf_space main:main
+          root = Path(".")
+          for path in root.rglob("*"):
+              if path.is_dir():
+                  continue
+              if set(path.parts) & IGNORE_DIRS:
+                  continue
+              if path.suffix in IGNORE_SUFFIX:
+                  continue
+              print(f"uploading: {path}")
+              api.upload_file(
+                  path_or_fileobj=str(path),
+                  path_in_repo=str(path),
+                  repo_id=repo_id,
+                  repo_type="space",
+              )
+          print("done")
+          PYEOF
