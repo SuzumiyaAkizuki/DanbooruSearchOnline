@@ -263,7 +263,12 @@ class DanbooruTagger:
         """
         print('[Engine] 检查增量变更...')
         t0 = time.time()
-
+        # ======= 临时加入这两行用于诊断 =======
+        with open(self.csv_path, 'r', encoding='utf-8') as f:
+            print(f"\n--- {self.csv_path} 文件开头前 100 个字符 ---")
+            print(f.read(100))
+            print("---------------------------------------\n")
+        # ==================================
         raw_df = self._read_csv_robust(self.csv_path)
         new_df = self._preprocess_raw_df(raw_df)
 
