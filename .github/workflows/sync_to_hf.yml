@@ -2,8 +2,8 @@ name: Sync to HuggingFace Space
 
 on:
   push:
-    branches: [main]       # main 分支有新提交时自动触发
-  workflow_dispatch:       # 也可以在 GitHub Actions 页面手动触发
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -22,17 +22,18 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name  "GitHub Actions"
 
-          # 添加 HF Space 作为远程仓库
+          # 全局禁用 LFS，避免 fetch HF Space 时尝试下载大文件
+          git lfs uninstall
+
           git remote add hf_space \
             https://user:${HF_TOKEN}@huggingface.co/spaces/SAkizuki/DanbooruSearch
 
-          # 拉取 HF Space 当前状态（含缓存文件）
+          # 拉取 HF Space 当前状态（含缓存文件的 LFS 指针）
           git fetch hf_space main
 
-          # 以 HF Space 为基础，把 GitHub 的代码变更 merge 进去
-          # -X theirs：代码文件有冲突时以 GitHub 版本为准
+          # 以 HF Space 为基础合并，代码冲突以 GitHub 版本为准
           git merge hf_space/main --allow-unrelated-histories -X theirs \
             -m "sync from GitHub"
 
-          # 推回 HF Space，不需要 --force
+          # 推回 HF Space
           git push hf_space main:main
