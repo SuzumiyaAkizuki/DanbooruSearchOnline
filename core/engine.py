@@ -150,7 +150,8 @@ class DanbooruTagger:
             return
         t0 = time.time()
         # ====== 新增：环境检测与强制拉取真实的 LFS 文件 ======
-        if is_running_on_huggingface_space():
+        space_id = os.environ.get('SPACE_ID')
+        if space_id:
             print(f'[Engine] 检测到 HF Space 线上环境 ({space_id})，正在拉取真实数据文件...')
             try:
                 # 直接使用环境变量中的 space_id，这样即使以后改名也不用改代码
