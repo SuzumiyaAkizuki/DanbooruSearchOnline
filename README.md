@@ -21,7 +21,7 @@ tags:
 
 目前支持使用汉语和英语进行查找。
 
-**立即使用：**https://huggingface.co/spaces/SAkizuki/DanbooruSearch
+**立即使用：** https://huggingface.co/spaces/SAkizuki/DanbooruSearch
 
 **ComfyUI 插件版本：** [ComfyUI-DanbooruSearcher](https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher)
 
