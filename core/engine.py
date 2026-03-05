@@ -399,6 +399,7 @@ class DanbooruTagger:
 
     def _preprocess_raw_df(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
+        print("Current columns:", df.columns.tolist())
         df.dropna(subset=['name'], inplace=True)
         df = df[df['name'].str.strip() != '']
         for col in ['cn_name', 'category', 'wiki', 'nsfw']:
