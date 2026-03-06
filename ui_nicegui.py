@@ -107,12 +107,13 @@ async def main_page():
         with ui.column().classes('gap-1'):
             ui.label('⚠️ 注意事项 / Note').classes('text-lg font-bold text-orange-800')
             ui.markdown("""
-- **本网站为AI工具，其结果未必正确无误** (Results may contain errors)
-- **查找结果可能会包括 NSFW 内容** (Results may include NSFW content)
-- **仅支持汉语、英语查找** (Only supports Chinese/English)
-- **仅显示Danbooru频数超过100的标签** (Frequency >= 100)
-- **仅显示特征、角色、作品标签**  (General Character and Copyright tags only)
-- **Comfy UI 插件地址** ： https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher
+- **AI 辅助**：基于语义匹配，结果未必绝对准确 (Results may contain errors)
+- **内容警告**：查找结果可能会包括 NSFW 内容 (May include NSFW content)
+- **检索限制**：仅支持中/英双语查找(CN/EN only)
+- **标签类型**：仅显示特征、角色与作品标签，，且仅显示 Danbooru 频数 ≥100 的标签 (General,Character,Copyright only,Freq>100)
+- **使用指南**：[DanbooruSearchOnline](https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline)
+- **ComfyUI 插件**：[ComfyUI-DanbooruSearcher](https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher)
+- **支持作者**：如果觉得好用，请点击顶部给本 Space 点个 **Like ❤️**，或前往 GitHub 点个 **Star ⭐**！
 """).classes('text-sm text-gray-800 ml-4')
 
     with ui.column().classes('w-full max-w-6xl mx-auto p-4 gap-6'):
