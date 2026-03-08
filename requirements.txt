@@ -5,3 +5,6 @@ torch
 jieba
 pyarrow
 safetensors
+huggingface_hub
+fastapi
+uvicorn
