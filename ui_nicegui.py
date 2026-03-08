@@ -14,6 +14,8 @@ import sys
 import json as _json
 import traceback
 from dataclasses import asdict
+import sys
+sys.stdout.reconfigure(line_buffering=True) # 强制 Python 实时输出日志
 
 # ── 全局异常捕获：确保启动崩溃时有完整堆栈输出到日志 ──────────
 def _excepthook(exc_type, exc_value, exc_tb):
@@ -632,11 +634,15 @@ if __name__ in {'__main__', '__mp_main__'}:
     # 程序启动时立即在后台预热引擎，不等用户第一次搜索
     @app.on_startup
     def _warmup():
-        # ⚠️ 关键修复：将初始化任务放入后台，防止阻塞 7860 端口开放
-        # 这样 HF 的健康检查就能秒通过，你的 UI loading 条才能起作用
         async def background_init_tasks():
+            # ⚠️ 给 Uvicorn 留出 5 秒钟绑定端口并响应 HF 的健康检查！
+            await asyncio.sleep(5)
+            print("==== [System] 开始预热计数器与引擎 ====", flush=True)
+
             await counter.init()
             await DanbooruTagger.get_instance()
+
+            print("==== [System] 后台预热全部完成！ ====", flush=True)
 
         asyncio.create_task(background_init_tasks())
 
