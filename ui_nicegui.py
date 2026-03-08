@@ -87,7 +87,7 @@ async def main_page():
             .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
             .nsfw-row-blocked    { cursor: not-allowed !important; }
         </style>
-        <!-- Google Analytics（将 G-QPB7EEPR5G 替换为你的测量 ID，留空则不启用）-->
+        <!-- Google Analytics -->
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-QPB7EEPR5G"></script>
         <script>
             window.dataLayer = window.dataLayer || [];
@@ -131,41 +131,6 @@ async def main_page():
 
     if not DanbooruTagger.is_ready():
         asyncio.ensure_future(_hide_banner_when_ready())
-
-    ui.add_head_html('''
-        <style>
-            .nsfw-blur-cell      { filter: blur(8px); opacity: 0.5; transition: all 0.3s ease;
-                                   pointer-events: none !important; user-select: none !important; }
-            .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
-            .nsfw-row-blocked    { cursor: not-allowed !important; }
-        </style>
-        <!-- Google Analytics（将 G-QPB7EEPR5G 替换为你的测量 ID，留空则不启用）-->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-QPB7EEPR5G"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-QPB7EEPR5G');
-        </script>
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                function openExternal(root) {
-                    root.querySelectorAll('a[href^="http"]').forEach(function(a) {
-                        a.setAttribute('target', '_blank');
-                        a.setAttribute('rel', 'noopener noreferrer');
-                    });
-                }
-                openExternal(document);
-                new MutationObserver(function(mutations) {
-                    mutations.forEach(function(m) {
-                        m.addedNodes.forEach(function(node) {
-                            if (node.querySelectorAll) openExternal(node);
-                        });
-                    });
-                }).observe(document.body, { childList: true, subtree: true });
-            });
-        </script>
-    ''')
 
     # 页面状态
     search_count_label_ref: list = [None]  # 底部计数标签引用
@@ -651,16 +616,22 @@ async def main_page():
 
 
 # 入口
-
 if __name__ in {'__main__', '__mp_main__'}:
     host = '0.0.0.0' if is_running_on_huggingface_space() else '127.0.0.1'
-    port = 7860       if is_running_on_huggingface_space() else 1145
+    port = 7860 if is_running_on_huggingface_space() else 1145
+
 
     # 程序启动时立即在后台预热引擎，不等用户第一次搜索
     @app.on_startup
-    async def _warmup():
-        await counter.init()
-        await DanbooruTagger.get_instance()
+    def _warmup():
+        # ⚠️ 关键修复：将初始化任务放入后台，防止阻塞 7860 端口开放
+        # 这样 HF 的健康检查就能秒通过，你的 UI loading 条才能起作用
+        async def background_init_tasks():
+            await counter.init()
+            await DanbooruTagger.get_instance()
+
+        asyncio.create_task(background_init_tasks())
+
 
     # 把 FastAPI 子应用挂载到 /api，与 UI 共用同一端口
     app.mount('/api', api_app)
