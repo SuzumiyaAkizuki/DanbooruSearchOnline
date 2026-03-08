@@ -126,7 +126,7 @@ class DanbooruTagger:
             self.model_path = HF_MODEL_ID
 
         self.csv_path  = csv_file
-        self.device    = 'cpu' if torch.cuda.is_available() else 'cpu'
+        self.device    = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.paths     = _CachePaths(cache_dir)
         self.cooc_file = cooc_file
 
