@@ -5,3 +5,4 @@ my_model_bge_m3/
 *.ignore
 tags_embedding/
 .idea/
+test.py

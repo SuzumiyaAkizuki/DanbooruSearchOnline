@@ -13,6 +13,7 @@ import os
 from dataclasses import asdict
 from nicegui import ui, app, run
 
+import counter
 from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
 from core.models import RelatedTag, SearchRequest
@@ -70,6 +71,14 @@ async def main_page():
             .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
             .nsfw-row-blocked    { cursor: not-allowed !important; }
         </style>
+        <!-- Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-QPB7EEPR5G"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-QPB7EEPR5G');
+        </script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 function openExternal(root) {
@@ -114,6 +123,14 @@ async def main_page():
             .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
             .nsfw-row-blocked    { cursor: not-allowed !important; }
         </style>
+        <!-- Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-QPB7EEPR5G"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-QPB7EEPR5G');
+        </script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 function openExternal(root) {
@@ -135,6 +152,7 @@ async def main_page():
     ''')
 
     # 页面状态
+    search_count_label_ref: list = [None]  # 底部计数标签引用
     full_table_data: list[dict] = []
     current_query_str: str = ""
     full_tags_str:     list[str] = [""]
@@ -286,6 +304,11 @@ async def main_page():
                             target_categories=target_cats_list,
                         )
                         response = await run.io_bound(tagger.search, request)
+
+                        # 搜索成功，计数 +1
+                        new_count = await counter.increment()
+                        if search_count_label_ref[0] is not None:
+                            search_count_label_ref[0].text = f'累计搜索 {new_count:,} 次'
 
                         if not _client_alive():
                             return
@@ -603,6 +626,12 @@ async def main_page():
                     </q-tr>
                 ''')
 
+    # ── 底部计数页脚 ──────────────────────────────────────────
+    with ui.element('div').classes('w-full text-center py-4 mt-2'):
+        count_label = ui.label(f'累计搜索 {counter.get():,} 次') \
+            .classes('text-xs text-gray-400')
+        search_count_label_ref[0] = count_label
+
 
 
 # 入口
@@ -614,6 +643,7 @@ if __name__ in {'__main__', '__mp_main__'}:
     # 程序启动时立即在后台预热引擎，不等用户第一次搜索
     @app.on_startup
     async def _warmup():
+        await counter.init()
         await DanbooruTagger.get_instance()
 
     # 把 FastAPI 子应用挂载到 /api，与 UI 共用同一端口
