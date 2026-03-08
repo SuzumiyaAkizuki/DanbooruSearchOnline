@@ -626,7 +626,7 @@ async def main_page():
 # 入口
 if __name__ in {'__main__', '__mp_main__'}:
     host = '0.0.0.0' if is_running_on_huggingface_space() else '127.0.0.1'
-    port = 7860 if is_running_on_huggingface_space() else 1145
+    port = 7860 if is_running_on_huggingface_space() else 8888
 
 
     # 程序启动时立即在后台预热引擎，不等用户第一次搜索
@@ -648,7 +648,7 @@ if __name__ in {'__main__', '__mp_main__'}:
         host=host,
         port=port,
         title='Danbooru Tags Searcher',
-        reload=True,
-        show=True,
+        reload=not is_running_on_huggingface_space(),
+        show=not is_running_on_huggingface_space(),
         reconnect_timeout=120,  # 给引擎冷启动足够的时间（秒）
     )

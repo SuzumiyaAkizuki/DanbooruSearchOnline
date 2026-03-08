@@ -8,3 +8,4 @@ safetensors
 huggingface_hub
 fastapi
 uvicorn
+json
