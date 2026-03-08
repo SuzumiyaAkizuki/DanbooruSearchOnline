@@ -11,6 +11,7 @@ NiceGUI 前端层。
 import asyncio
 import os
 import sys
+import json as _json
 import traceback
 from dataclasses import asdict
 
@@ -290,6 +291,13 @@ async def main_page():
                         new_count = await counter.increment()
                         if search_count_label_ref[0] is not None:
                             search_count_label_ref[0].text = f'累计搜索 {new_count:,} 次'
+
+                        # GA 搜索词埋点（json.dumps 自动处理所有转义）
+
+                        await ui.run_javascript(
+                            f"if(typeof gtag!=='undefined'){{"
+                            f"gtag('event','search',{{'search_term':{ _json.dumps(query) }}})}}"
+                        )
 
                         if not _client_alive():
                             return
