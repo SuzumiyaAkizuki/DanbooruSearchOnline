@@ -6,6 +6,7 @@ RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH
+ENV PYTHONUNBUFFERED=1
 COPY --chown=user . /app
 EXPOSE 7860
 CMD ["python", "ui_nicegui.py"]
