@@ -93,7 +93,7 @@ class DanbooruTagger:
     """核心搜索引擎（单例）"""
 
     _instance: Optional['DanbooruTagger'] = None
-    _lock: asyncio.Lock = asyncio.Lock()
+    _lock: Optional[asyncio.Lock] = None
 
     @classmethod
     def is_ready(cls) -> bool:
@@ -102,13 +102,15 @@ class DanbooruTagger:
 
     @classmethod
     async def get_instance(cls, **kwargs) -> 'DanbooruTagger':
+        if cls._lock is None:
+            cls._lock = asyncio.Lock()
+
         async with cls._lock:
             if cls._instance is None:
                 inst = cls(**kwargs)
                 await asyncio.to_thread(inst.load)
                 cls._instance = inst
             return cls._instance
-
     def __init__(
         self,
         model_path: Optional[str] = None,
