@@ -13,6 +13,7 @@ import os
 from dataclasses import asdict
 from nicegui import ui, app, run
 
+from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
 from core.models import RelatedTag, SearchRequest
 
@@ -69,6 +70,24 @@ async def main_page():
             .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
             .nsfw-row-blocked    { cursor: not-allowed !important; }
         </style>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                function openExternal(root) {
+                    root.querySelectorAll('a[href^="http"]').forEach(function(a) {
+                        a.setAttribute('target', '_blank');
+                        a.setAttribute('rel', 'noopener noreferrer');
+                    });
+                }
+                openExternal(document);
+                new MutationObserver(function(mutations) {
+                    mutations.forEach(function(m) {
+                        m.addedNodes.forEach(function(node) {
+                            if (node.querySelectorAll) openExternal(node);
+                        });
+                    });
+                }).observe(document.body, { childList: true, subtree: true });
+            });
+        </script>
     ''')
     # 引擎预热提示
     init_banner = ui.card().classes(
@@ -95,6 +114,24 @@ async def main_page():
             .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
             .nsfw-row-blocked    { cursor: not-allowed !important; }
         </style>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                function openExternal(root) {
+                    root.querySelectorAll('a[href^="http"]').forEach(function(a) {
+                        a.setAttribute('target', '_blank');
+                        a.setAttribute('rel', 'noopener noreferrer');
+                    });
+                }
+                openExternal(document);
+                new MutationObserver(function(mutations) {
+                    mutations.forEach(function(m) {
+                        m.addedNodes.forEach(function(node) {
+                            if (node.querySelectorAll) openExternal(node);
+                        });
+                    });
+                }).observe(document.body, { childList: true, subtree: true });
+            });
+        </script>
     ''')
 
     # 页面状态
@@ -185,6 +222,7 @@ async def main_page():
                 selected_display_ref: list = [None]
                 related_container_ref: list = [None]  # 关联推荐
                 current_related_ref:  list = [[] ]   # 当前正在展示的 related 列表
+                chip_extra_selected:  set  = set()   # 从推荐 chip 加入、不在表格里的标签
 
                 def filter_table_by_source(keyword: str):
                     nonlocal full_table_data, current_query_str
@@ -344,12 +382,14 @@ async def main_page():
                 def _update_selection_display(_e):
                     if result_table_ref[0] is None:
                         return
-                    tags = [row['tag'] for row in result_table_ref[0].selected]
-                    selected_display_ref[0].value = ", ".join(tags)
-                    selection_count_ref[0].text   = str(len(tags))
-                    if tags:
-                        _refresh_related_from_selection(tags, input_nsfw.value)
+                    # 合并表格选中 + chip_extra_selected
+                    all_tags = _get_selected_tags()
+                    selected_display_ref[0].value = ", ".join(all_tags)
+                    selection_count_ref[0].text   = str(len(all_tags))
+                    if all_tags:
+                        _refresh_related_from_selection(all_tags, input_nsfw.value)
                     else:
+                        chip_extra_selected.clear()
                         _refresh_related([], input_nsfw.value)
 
                 # 关联推荐辅助函数
@@ -359,22 +399,30 @@ async def main_page():
                 }
 
                 def _get_selected_tags() -> list[str]:
-                    disp = selected_display_ref[0]
-                    if disp is None:
-                        return []
-                    return [t.strip() for t in disp.value.split(',') if t.strip()]
+                    tbl = result_table_ref[0]
+                    table_tags = [row['tag'] for row in tbl.selected] if tbl else []
+                    seen = set(table_tags)
+                    extra = [t for t in chip_extra_selected if t not in seen]
+                    return table_tags + extra
 
                 def _set_selected_tags(tags: list[str]):
+                    tbl  = result_table_ref[0]
                     disp = selected_display_ref[0]
                     cnt  = selection_count_ref[0]
-                    if disp is not None:
-                        disp.value = ', '.join(tags)
-                    if cnt is not None:
-                        cnt.text = str(len(tags))
-                    tbl = result_table_ref[0]
+                    tag_set = set(tags)
+                    # chip_extra_selected：只存不在表格里的 tag
+                    table_tag_set = {row['tag'] for row in tbl.rows} if tbl else set()
+                    chip_extra_selected.clear()
+                    chip_extra_selected.update(t for t in tag_set if t not in table_tag_set)
+                    # 同步表格勾选
                     if tbl is not None:
-                        tag_set = set(tags)
                         tbl.selected = [row for row in tbl.rows if row.get('tag') in tag_set]
+                    # 同步 display 文本和计数
+                    all_tags = _get_selected_tags()
+                    if disp is not None:
+                        disp.value = ', '.join(all_tags)
+                    if cnt is not None:
+                        cnt.text = str(len(all_tags))
 
                 def _render_related_chips(related: list, show_nsfw: bool):
                     """在 related_container 内渲染推荐 chips（调用前 container 已 clear）。"""
@@ -413,13 +461,22 @@ async def main_page():
                         chip.on('click', _on_click)
 
                 def _refresh_related(related: list, show_nsfw: bool):
-                    current_related_ref[0] = related  # 记录当前展示内容供 chip 点击后重绘
+                    # 合并新推荐与已选中的旧推荐，已选标签不因刷新而消失
+                    selected_now = set(_get_selected_tags())
+                    old_related  = current_related_ref[0]
+                    # 已选但不在新推荐里的旧条目，追加到末尾保留
+                    new_tags  = {r.tag for r in related}
+                    preserved = [r for r in old_related
+                                 if r.tag in selected_now and r.tag not in new_tags]
+                    merged = list(related) + preserved
+
+                    current_related_ref[0] = merged
                     c = related_container_ref[0]
                     if c is None:
                         return
                     c.clear()
                     with c:
-                        _render_related_chips(related, show_nsfw)
+                        _render_related_chips(merged, show_nsfw)
 
                 def _refresh_related_from_selection(selected_tags: list[str], show_nsfw: bool):
                     """用已选 tag 异步重算关联推荐。"""
@@ -558,6 +615,9 @@ if __name__ in {'__main__', '__mp_main__'}:
     @app.on_startup
     async def _warmup():
         await DanbooruTagger.get_instance()
+
+    # 把 FastAPI 子应用挂载到 /api，与 UI 共用同一端口
+    app.mount('/api', api_app)
 
     ui.run(
         host=host,
