@@ -7,15 +7,14 @@ NiceGUI 前端层。
 ▸ 调用 core.engine.DanbooruTagger，通过 core.models 的数据结构通信。
 ▸ 不包含任何算法逻辑。
 """
-
+import sys
+sys.stdout.reconfigure(line_buffering=True) # 强制 Python 实时输出日志
+print("==== [Step 1] 脚本开始执行 ====", flush=True)
 import asyncio
 import os
-import sys
 import json as _json
 import traceback
 from dataclasses import asdict
-import sys
-sys.stdout.reconfigure(line_buffering=True) # 强制 Python 实时输出日志
 
 # ── 全局异常捕获：确保启动崩溃时有完整堆栈输出到日志 ──────────
 def _excepthook(exc_type, exc_value, exc_tb):
