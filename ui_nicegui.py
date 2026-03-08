@@ -10,13 +10,29 @@ NiceGUI 前端层。
 
 import asyncio
 import os
+import sys
+import traceback
 from dataclasses import asdict
-from nicegui import ui, app, run
 
-import counter
-from api_fastapi import app as api_app
-from core.engine import DanbooruTagger
-from core.models import RelatedTag, SearchRequest
+# ── 全局异常捕获：确保启动崩溃时有完整堆栈输出到日志 ──────────
+def _excepthook(exc_type, exc_value, exc_tb):
+    print("=" * 60, flush=True)
+    print("FATAL ERROR ON STARTUP:", flush=True)
+    traceback.print_exception(exc_type, exc_value, exc_tb)
+    print("=" * 60, flush=True)
+    sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+sys.excepthook = _excepthook
+
+try:
+    from nicegui import ui, app, run
+    import counter
+    from api_fastapi import app as api_app
+    from core.engine import DanbooruTagger
+    from core.models import RelatedTag, SearchRequest
+except Exception:
+    traceback.print_exc()
+    raise
 
 
 
@@ -71,7 +87,7 @@ async def main_page():
             .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
             .nsfw-row-blocked    { cursor: not-allowed !important; }
         </style>
-        <!-- Google Analytics -->
+        <!-- Google Analytics（将 G-QPB7EEPR5G 替换为你的测量 ID，留空则不启用）-->
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-QPB7EEPR5G"></script>
         <script>
             window.dataLayer = window.dataLayer || [];
@@ -123,7 +139,7 @@ async def main_page():
             .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
             .nsfw-row-blocked    { cursor: not-allowed !important; }
         </style>
-        <!-- Google Analytics -->
+        <!-- Google Analytics（将 G-QPB7EEPR5G 替换为你的测量 ID，留空则不启用）-->
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-QPB7EEPR5G"></script>
         <script>
             window.dataLayer = window.dataLayer || [];
@@ -165,7 +181,7 @@ async def main_page():
 - **AI 辅助**：基于语义匹配，结果未必绝对准确 (Results may contain errors)
 - **内容警告**：查找结果可能会包括 NSFW 内容 (May include NSFW content)
 - **检索限制**：仅支持中/英双语查找(CN/EN only)
-- **标签类型**：仅显示特征、角色与作品标签，且仅显示 Danbooru 频数 ≥100 的标签 (General, Character, and Copyright only,Freq>=100)
+- **标签类型**：仅显示特征、角色与作品标签，，且仅显示 Danbooru 频数 ≥100 的标签 (General,Character,Copyright only,Freq>100)
 - **使用指南**：[DanbooruSearchOnline](https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline)
 - **ComfyUI 插件**：[ComfyUI-DanbooruSearcher](https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher)
 - **支持作者**：如果觉得好用，请点击顶部给本 Space 点个 **Like ❤️**，或前往 GitHub 点个 **Star ⭐**！
