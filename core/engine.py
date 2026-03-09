@@ -114,9 +114,9 @@ class DanbooruTagger:
     def __init__(
         self,
         model_path: Optional[str] = None,
-        csv_file:   str = 'tags_enhanced.csv',
+        csv_file:   str = 'origin_database/tags_enhanced.csv',
         cache_dir:  str = 'tags_embedding',
-        cooc_file:  str = 'cooccurrence_clean.csv',
+        cooc_file:  str = 'origin_database/cooccurrence_clean.csv',
     ):
         if model_path:
             self.model_path = model_path
@@ -154,12 +154,12 @@ class DanbooruTagger:
         # ====== 新增：环境检测与强制拉取真实的 LFS 文件 ======
         space_id = os.environ.get('SPACE_ID')
         if space_id:
-            print(f'[Engine] 检测到 HF Space 线上环境 ({space_id})，正在拉取真实数据文件...')
+            print(f'[Engine] 检测到 HF Space 线上环境 ({space_id})，正在拉取HF数据文件...')
             try:
                 # 1. 拉取真实源数据
-                self.csv_path = hf_hub_download(repo_id=space_id, repo_type="space", filename="tags_enhanced.csv")
+                self.csv_path = hf_hub_download(repo_id=space_id, repo_type="space", filename="origin_database/tags_enhanced.csv")
                 self.cooc_file = hf_hub_download(repo_id=space_id, repo_type="space",
-                                                 filename="cooccurrence_clean.parquet")
+                                                 filename="origin_database/cooccurrence_clean.parquet")
 
                 # 2. 拉取真实的缓存文件！
                 real_meta = hf_hub_download(repo_id=space_id, repo_type="space",
