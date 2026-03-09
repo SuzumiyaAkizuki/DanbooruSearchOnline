@@ -148,7 +148,7 @@ async def main_page():
 - **AI 辅助**：基于语义匹配，结果未必绝对准确 (Results may contain errors)
 - **内容警告**：查找结果可能会包括 NSFW 内容 (May include NSFW content)
 - **检索限制**：仅支持中/英双语查找(CN/EN only)
-- **标签类型**：仅显示特征、角色与作品标签，且仅显示 Danbooru 频数 ≥100 的标签 (General, Character, and Copyright only,Freq>=100)
+- **标签类型**：仅显示特征、角色与作品标签，且仅显示 Danbooru 频数 ≥100 的标签 (General, Character, and Copyright only, Freq>=100)
 - **使用指南**：[DanbooruSearchOnline](https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline)
 - **ComfyUI 插件**：[ComfyUI-DanbooruSearcher](https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher)
 - **支持作者**：如果觉得好用，请点击顶部给本 Space 点个 **Like ❤️**，或前往 GitHub 点个 **Star ⭐**！
