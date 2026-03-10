@@ -7,4 +7,4 @@ my_model_bge_m3/
 tags_embedding/
 .idea/
 test.py
-/uploaddata.sh
+*.sh

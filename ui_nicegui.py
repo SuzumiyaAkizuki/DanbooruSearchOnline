@@ -296,8 +296,7 @@ async def main_page():
                         # GA 搜索词埋点（json.dumps 自动处理所有转义）
 
                         await ui.run_javascript(
-                            f"if(typeof gtag!=='undefined'){{"
-                            f"gtag('event','search',{{'search_term':{ _json.dumps(query) }}})}}"
+                            f"typeof gtag !== 'undefined' && gtag('event', 'search', {{'search_term': {_json.dumps(query)}}});"
                         )
 
                         if not _client_alive():
