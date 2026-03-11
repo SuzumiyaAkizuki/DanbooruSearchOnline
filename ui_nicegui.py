@@ -288,10 +288,18 @@ async def main_page():
                         )
                         response = await run.io_bound(tagger.search, request)
 
-                        # 搜索成功，计数 +1
-                        new_count = await counter.increment()
-                        if search_count_label_ref[0] is not None:
-                            search_count_label_ref[0].text = f'累计搜索 {new_count:,} 次'
+                        async def silent_counter_update():
+                            try:
+                                new_count = await counter.increment()
+                                if search_count_label_ref[0] is not None:
+                                    search_count_label_ref[0].text = f'累计搜索 {new_count:,} 次'
+                            except Exception as e:
+                                # 把报错打印到终端日志，方便开发者排查，但不影响前端用户的搜索流程
+                                print(f"[Counter Error] 后台静默更新计数器失败: {e}", flush=True)
+                                import traceback
+                                traceback.print_exc()
+
+                        asyncio.create_task(silent_counter_update())
 
                         # GA 搜索词埋点（json.dumps 自动处理所有转义）
 
