@@ -345,9 +345,14 @@ class DanbooruSearchUI:
                         </q-tr>
                     ''')
 
-        # 底部计数页脚
+        # 底部计数页脚 (修改了这里，同时展示搜索和访问)
         with ui.element('div').classes('w-full text-center py-4 mt-2'):
-            self.search_count_label = ui.label(f'累计搜索 {counter.get():,} 次').classes('text-xs text-gray-400')
+            try:
+                # 尝试获取访问量，如果旧版 counter 还没加载会抛错，通过 try...except 保护
+                display_text = f'累计搜索 {counter.get():,} 次 | 累计访问 {counter.get_visits():,} 次'
+            except AttributeError:
+                display_text = f'累计搜索 {counter.get():,} 次'
+            self.search_count_label = ui.label(display_text).classes('text-xs text-gray-400')
 
 
     # ── 交互与业务逻辑 ─────────────────────────────────────────
@@ -415,11 +420,15 @@ class DanbooruSearchUI:
             )
             response = await run.io_bound(tagger.search, request)
 
+            # 更新计数器的地方也同步修改
             async def silent_counter_update():
                 try:
                     new_count = await counter.increment()
                     if self.search_count_label is not None:
-                        self.search_count_label.text = f'累计搜索 {new_count:,} 次'
+                        try:
+                            self.search_count_label.text = f'累计搜索 {new_count:,} 次 | 累计访问 {counter.get_visits():,} 次'
+                        except AttributeError:
+                            self.search_count_label.text = f'累计搜索 {new_count:,} 次'
                 except Exception as e:
                     print(f"[Counter Error] 后台静默更新计数器失败: {e}", flush=True)
                     import traceback
@@ -427,8 +436,8 @@ class DanbooruSearchUI:
 
             asyncio.create_task(silent_counter_update())
 
-            await ui.run_javascript(
-                f"typeof gtag !== 'undefined' && gtag('event', 'search', {{'search_term': {_json.dumps(query)}}});"
+            ui.run_javascript(
+                f"if(typeof gtag !== 'undefined') gtag('event', 'search', {{'search_term': {_json.dumps(query)}}});"
             )
 
             if not self._client_alive():
@@ -615,6 +624,16 @@ async def main_page():
     app_ui = DanbooruSearchUI()
     app_ui.build_page()
 
+    # --- 页面真实访问量统计 (静默触发) ---
+    async def silent_visit_update():
+        try:
+            new_visits = await counter.increment_visit()
+            if app_ui.search_count_label is not None:
+                app_ui.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计访问 {new_visits:,} 次'
+        except Exception:
+            pass
+    asyncio.create_task(silent_visit_update())
+
 
 # 入口
 if __name__ in {'__main__', '__mp_main__'}:
@@ -635,6 +654,18 @@ if __name__ in {'__main__', '__mp_main__'}:
             print("==== [System] 后台预热全部完成！ ====", flush=True)
 
         asyncio.create_task(background_init_tasks())
+
+    # 关机钩子
+    @app.on_shutdown
+    def _shutdown():
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(counter.force_sync())
+            else:
+                asyncio.run(counter.force_sync())
+        except Exception as e:
+            print(f"[System] 关机同步失败: {e}")
 
     # 把 FastAPI 子应用挂载到 /api，与 UI 共用同一端口
     app.mount('/api', api_app)
