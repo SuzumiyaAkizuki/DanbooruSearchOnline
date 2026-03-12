@@ -77,7 +77,7 @@ def apply_nsfw_filter(rows: list[dict], show_nsfw: bool) -> list[dict]:
 
 class DanbooruSearchUI:
     def __init__(self):
-        # 页面状态 (替代原先的 list[None] 做法)
+        # 页面状态
         self.search_count_label = None
         self.full_table_data: list[dict] = []
         self.current_query_str: str = ""
@@ -345,11 +345,10 @@ class DanbooruSearchUI:
                         </q-tr>
                     ''')
 
-        # 底部计数页脚 (修改了这里，同时展示搜索和访问)
+        # ── 底部计数页脚（三轨制显示） ──────────────────────────────────────────
         with ui.element('div').classes('w-full text-center py-4 mt-2'):
             try:
-                # 尝试获取访问量，如果旧版 counter 还没加载会抛错，通过 try...except 保护
-                display_text = f'累计搜索 {counter.get():,} 次 | 累计访问 {counter.get_visits():,} 次'
+                display_text = f'累计搜索 {counter.get():,} 次 | 累计复制 {counter.get_copies():,} 次 | 累计访问 {counter.get_visits():,} 次'
             except AttributeError:
                 display_text = f'累计搜索 {counter.get():,} 次'
             self.search_count_label = ui.label(display_text).classes('text-xs text-gray-400')
@@ -420,19 +419,17 @@ class DanbooruSearchUI:
             )
             response = await run.io_bound(tagger.search, request)
 
-            # 更新计数器的地方也同步修改
+            # 搜索计数静默更新
             async def silent_counter_update():
                 try:
                     new_count = await counter.increment()
                     if self.search_count_label is not None:
                         try:
-                            self.search_count_label.text = f'累计搜索 {new_count:,} 次 | 累计访问 {counter.get_visits():,} 次'
+                            self.search_count_label.text = f'累计搜索 {new_count:,} 次 | 累计复制 {counter.get_copies():,} 次 | 累计访问 {counter.get_visits():,} 次'
                         except AttributeError:
                             self.search_count_label.text = f'累计搜索 {new_count:,} 次'
                 except Exception as e:
-                    print(f"[Counter Error] 后台静默更新计数器失败: {e}", flush=True)
-                    import traceback
-                    traceback.print_exc()
+                    print(f"[Counter Error] 后台静默更新搜索计数失败: {e}", flush=True)
 
             asyncio.create_task(silent_counter_update())
 
@@ -497,6 +494,17 @@ class DanbooruSearchUI:
     def copy_selection(self):
         ui.clipboard.write(self.selected_display.value)
         ui.notify('已复制选中标签!', type='positive')
+
+        # 复制操作静默统计
+        async def silent_copy_update():
+            try:
+                new_copies = await counter.increment_copy()
+                if self.search_count_label is not None:
+                    self.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计复制 {new_copies:,} 次 | 累计访问 {counter.get_visits():,} 次'
+            except Exception as e:
+                print(f"[Counter Error] 复制计数失败: {e}")
+
+        asyncio.create_task(silent_copy_update())
 
     def _get_selected_tags(self) -> list[str]:
         table_tags = [row['tag'] for row in self.result_table.selected] if self.result_table else []
@@ -620,7 +628,6 @@ class DanbooruSearchUI:
 
 @ui.page('/')
 async def main_page():
-    # 使用面向对象模式，确保每个独立访问者的状态互相隔离
     app_ui = DanbooruSearchUI()
     app_ui.build_page()
 
@@ -629,7 +636,7 @@ async def main_page():
         try:
             new_visits = await counter.increment_visit()
             if app_ui.search_count_label is not None:
-                app_ui.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计访问 {new_visits:,} 次'
+                app_ui.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计复制 {counter.get_copies():,} 次 | 累计访问 {new_visits:,} 次'
         except Exception:
             pass
     asyncio.create_task(silent_visit_update())
@@ -638,13 +645,12 @@ async def main_page():
 # 入口
 if __name__ in {'__main__', '__mp_main__'}:
     host = '0.0.0.0' if is_running_on_huggingface_space() else '127.0.0.1'
-    port = 7860 if is_running_on_huggingface_space() else 8888
+    port = 7860 if is_running_on_huggingface_space() else 1111
 
-    # 程序启动时立即在后台预热引擎，不等用户第一次搜索
+    # 程序启动时立即在后台预热引擎
     @app.on_startup
     def _warmup():
         async def background_init_tasks():
-            # ⚠️ 给 Uvicorn 留出 5 秒钟绑定端口并响应 HF 的健康检查！
             await asyncio.sleep(5)
             print("==== [System] 开始预热计数器与引擎 ====", flush=True)
 
@@ -667,7 +673,6 @@ if __name__ in {'__main__', '__mp_main__'}:
         except Exception as e:
             print(f"[System] 关机同步失败: {e}")
 
-    # 把 FastAPI 子应用挂载到 /api，与 UI 共用同一端口
     app.mount('/api', api_app)
 
     ui.run(
@@ -676,5 +681,5 @@ if __name__ in {'__main__', '__mp_main__'}:
         title='Danbooru Tags Searcher',
         reload=not is_running_on_huggingface_space(),
         show=not is_running_on_huggingface_space(),
-        reconnect_timeout=120,  # 给引擎冷启动足够的时间（秒）
+        reconnect_timeout=120,
     )
