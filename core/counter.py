@@ -24,8 +24,8 @@ BASE_VISITS: int = 9051     # 旧版 JSON 没有 visits 字段时的默认起点
 _last_sync: float = 0.0     # 上次同步时间戳
 _sync_lock: Optional[asyncio.Lock] = None
 
-SYNC_INTERVAL = 60          # 最小同步间隔（秒），建议设为 60 秒
-SYNC_THRESHOLD = 10         # 搜索或访问 累计达到 10 次强制同步
+SYNC_INTERVAL = 1800          # 最小同步间隔（秒）
+SYNC_THRESHOLD = 50         # 搜索或访问 累计达到 50 次强制同步
 
 def _get_sync_lock() -> asyncio.Lock:
     global _sync_lock
