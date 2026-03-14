@@ -348,7 +348,7 @@ class DanbooruSearchUI:
         # ── 底部计数页脚（三轨制显示） ──────────────────────────────────────────
         with ui.element('div').classes('w-full text-center py-4 mt-2'):
             try:
-                display_text = f'累计搜索 {counter.get():,} 次 | 累计复制 {counter.get_copies():,} 次 | 累计访问 {counter.get_visits():,} 次'
+                display_text = f'累计搜索 {counter.get():,} 次 | 累计访问 {counter.get_visits():,} 次'
             except AttributeError:
                 display_text = f'累计搜索 {counter.get():,} 次'
             self.search_count_label = ui.label(display_text).classes('text-xs text-gray-400')
@@ -425,7 +425,7 @@ class DanbooruSearchUI:
                     new_count = await counter.increment()
                     if self.search_count_label is not None:
                         try:
-                            self.search_count_label.text = f'累计搜索 {new_count:,} 次 | 累计复制 {counter.get_copies():,} 次 | 累计访问 {counter.get_visits():,} 次'
+                            self.search_count_label.text = f'累计搜索 {new_count:,} 次 | 累计访问 {counter.get_visits():,} 次'
                         except AttributeError:
                             self.search_count_label.text = f'累计搜索 {new_count:,} 次'
                 except Exception as e:
@@ -500,7 +500,7 @@ class DanbooruSearchUI:
             try:
                 new_copies = await counter.increment_copy()
                 if self.search_count_label is not None:
-                    self.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计复制 {new_copies:,} 次 | 累计访问 {counter.get_visits():,} 次'
+                    self.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计访问 {counter.get_visits():,} 次'
             except Exception as e:
                 print(f"[Counter Error] 复制计数失败: {e}")
 
@@ -636,7 +636,7 @@ async def main_page():
         try:
             new_visits = await counter.increment_visit()
             if app_ui.search_count_label is not None:
-                app_ui.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计复制 {counter.get_copies():,} 次 | 累计访问 {new_visits:,} 次'
+                app_ui.search_count_label.text = f'累计搜索 {counter.get():,} 次 | 累计访问 {new_visits:,} 次'
         except Exception:
             pass
     asyncio.create_task(silent_visit_update())

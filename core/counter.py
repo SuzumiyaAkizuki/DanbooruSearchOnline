@@ -23,7 +23,7 @@ BASE_VISITS: int = 0     # 旧版 JSON 没有 visits 时的默认起点
 
 _memory_copies: int = 0     # 当前总复制次数
 _dirty_copies: int = 0      # 尚未同步的复制增量
-BASE_COPIES: int = 1832     # 基于搜索转化率(约22%)推算的初始复制基准值
+BASE_COPIES: int = 0     # 基于搜索转化率(约22%)推算的初始复制基准值
 
 _last_sync: float = 0.0     # 上次同步时间戳
 _sync_lock: Optional[asyncio.Lock] = None
