@@ -21,7 +21,6 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from core.engine import DanbooruTagger
 from core.models import SearchRequest
-import core.counter as counter
 import re
 
 
@@ -190,11 +189,6 @@ Each result: tag, cn_name, category, final_score, count[, wiki if include_wiki=T
         target_categories=target_categories,
     )
     response = await asyncio.to_thread(tagger.search, request)
-    # 计数：每次 MCP 搜索调用均计入搜索、成功、复制；访问不变
-    await counter.increment()
-    await counter.increment_success()
-    await counter.increment_copy()
-    await counter.increment_mcp()
 
     results = []
     for r in response.results:
@@ -283,11 +277,6 @@ JSON array sorted by aggregated NPMI score (descending). Each result:
         limit,
         show_nsfw,
     )
-    # 计数：每次 MCP related 调用均计入搜索、成功、复制；访问不变
-    await counter.increment()
-    await counter.increment_success()
-    await counter.increment_copy()
-    await counter.increment_mcp()
 
     output = []
     for r in results:

@@ -27,7 +27,6 @@ def _excepthook(exc_type, exc_value, exc_tb):
 sys.excepthook = _excepthook
 
 from nicegui import ui, app, run
-from core import counter
 from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
 from core.models import RelatedTag, SearchRequest
@@ -160,8 +159,6 @@ class DanbooruSearchUI:
         self.selected_layers = {'英文': True, '中文扩展词': True, '释义': True, '中文核心词': True}
         self.selected_cats = {'General': True, 'Copyright': True, 'Character': True}
 
-        self.bad_case_btn = None
-
         self.mcp_notice = None
         self.notice_expansion = None
 
@@ -180,11 +177,8 @@ class DanbooruSearchUI:
     def _update_footer_text(self):
         if self.search_count_label is not None:
             try:
-                total = counter.get()
-                visits = counter.get_visits()
                 commit = _get_git_commit()
                 self.search_count_label.content = (
-                    f'累计搜索 {total:,} 次 | 累计访问 {visits:,} 次 | '
                     f'<span class="font-mono text-gray-300">版本号: {commit}</span>'
                     f'<br>'
                     f'<a href="/api/docs" '
@@ -200,13 +194,6 @@ class DanbooruSearchUI:
     def _mark_interaction(self, e=None):
         if not self.current_search_interacted:
             self.current_search_interacted = True
-
-            async def silent_success_update():
-                try:
-                    await counter.increment_success()
-                except Exception:
-                    pass
-            asyncio.create_task(silent_success_update())
 
     # ── 分页辅助 ──────────────────────────────────────────────────────────
 
@@ -650,12 +637,6 @@ class DanbooruSearchUI:
                             ).style('font-size:14px;line-height:1.6;')
 
                 with ui.row().classes('items-center gap-2'):
-                    with ui.button('没搜到？', icon='help_outline').props('dense flat color=grey-6').classes('text-sm') as _bad_btn:
-                        with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
-                            ui.html('点击此处以反馈失败案例。<br>您的搜索词将被匿名收集用于优化引擎（不包含个人隐私）。').style('font-size:14px;line-height:1.5;')
-                    self.bad_case_btn = _bad_btn
-                    self.bad_case_btn.disable()
-                    self.bad_case_btn.on_click(self.report_bad_case)
                     self.format_toggle_btn = ui.button(
                         'SDXL', icon='swap_horiz'
                     ).props('dense flat color=grey-7').classes('text-xs font-mono')
@@ -1048,9 +1029,6 @@ class DanbooruSearchUI:
         self.spinner.classes(remove='hidden')
         ui.notify('正在搜索...', type='info')
 
-        if self.bad_case_btn is not None:
-            self.bad_case_btn.disable()
-
         target_layers_list = [k for k, v in self.selected_layers.items() if v]
         target_cats_list   = [k for k, v in self.selected_cats.items()   if v]
 
@@ -1077,17 +1055,6 @@ class DanbooruSearchUI:
                 target_categories=target_cats_list,
             )
             response = await run.io_bound(tagger.search, request)
-
-            # 后台计数
-            async def silent_counter_update():
-                try:
-                    await counter.increment()
-                    if response.keywords:
-                        await counter.add_keywords(response.keywords)
-                    self._update_footer_text()
-                except Exception as e:
-                    print(f"[UI] 后台静默更新计数失败: {e}", flush=True)
-            asyncio.create_task(silent_counter_update())
 
             if not self._client_alive():
                 return
@@ -1141,9 +1108,6 @@ class DanbooruSearchUI:
 
             ui.notify(f'找到 {len(table_data)} 个标签', type='positive')
             self.current_search_interacted = False
-
-            if self.bad_case_btn is not None:
-                self.bad_case_btn.enable()
 
         except RuntimeError as e:
             if 'deleted' in str(e).lower() or 'client' in str(e).lower():
@@ -1297,7 +1261,7 @@ class DanbooruSearchUI:
             self.result_table.selected = [r for r in self.result_table.selected if r.get('nsfw') != '1']
         self._update_selection_display(None)
 
-    # ── 复制 / 反馈 ──────────────────────────────────────────────────────
+    # ── 复制 ────────────────────────────────────────────────────────────
 
     def _toggle_prompt_format(self):
         if self.prompt_format == 'sdxl':
@@ -1322,13 +1286,6 @@ class DanbooruSearchUI:
         fmt_label = 'NAI' if self.prompt_format == 'nai' else 'SDXL'
         ui.notify(f'已复制选中标签（{fmt_label} 格式）!', type='positive')
 
-        async def silent_copy_update():
-            try:
-                await counter.increment_copy()
-            except Exception:
-                pass
-        asyncio.create_task(silent_copy_update())
-
     def _copy_all_tags(self):
         self._mark_interaction()
         show_nsfw_val = self.input_nsfw.value
@@ -1339,42 +1296,12 @@ class DanbooruSearchUI:
         else:
             ui.notify('暂无标签可复制', type='warning')
 
-    async def report_bad_case(self):
-        from platform_utils import PLATFORM
-        query = self.current_query_str.strip()
-        if len(query) <= 1:
-            ui.notify('搜索词太短，无法提交反馈。', type='warning', timeout=2000)
-            return
-        if self.bad_case_btn is not None:
-            self.bad_case_btn.disable()
-        try:
-            settings = {
-                'top_k': int(self.input_top_k.value) if self.input_top_k else None,
-                'segmentation': self.input_segment.value if self.input_segment else None,
-                'nsfw': self.input_nsfw.value if self.input_nsfw else None,
-            }
-            await counter.add_bad_case(query, platform=PLATFORM, settings=settings)
-            ui.notify('感谢反馈！我们会持续优化。', type='positive', timeout=3000)
-        except Exception as e:
-            print(f'[UI] bad_case 记录异常: {e}')
-            ui.notify('记录失败，请稍后再试。', type='warning', timeout=3000)
-            if self.bad_case_btn is not None:
-                self.bad_case_btn.enable()
-
 # ── 页面路由 ───────────────────────────────────────────────────────────────────
 
 @ui.page('/')
 async def main_page():
     app_ui = DanbooruSearchUI()
     app_ui.build_page()
-
-    async def silent_visit_update():
-        try:
-            await counter.increment_visit()
-            app_ui._update_footer_text()
-        except Exception:
-            pass
-    asyncio.create_task(silent_visit_update())
 
     # 恢复用户配置（在页面渲染完成后执行）
     await app_ui._restore_config()
@@ -1391,22 +1318,10 @@ if __name__ in {'__main__', '__mp_main__'}:
     def _warmup():
         async def background_init_tasks():
             await asyncio.sleep(5)
-            print("[UI] 开始预热计数器与引擎", flush=True)
-            await counter.init()
+            print("[UI] 开始预热引擎", flush=True)
             await DanbooruTagger.get_instance()
-            print("[UI] 后台预热全部完成！", flush=True)
+            print("[UI] 后台预热完成！", flush=True)
         asyncio.create_task(background_init_tasks())
-
-    @app.on_shutdown
-    def _shutdown():
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(counter.force_sync())
-            else:
-                asyncio.run(counter.force_sync())
-        except Exception as e:
-            print(f"[UI] 关机同步失败: {e}")
 
     app.mount('/api', api_app)
 

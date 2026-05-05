@@ -29,12 +29,7 @@ from safetensors.torch import load_file as st_load, save_file as st_save
 from sentence_transformers import SentenceTransformer
 
 from .models import SearchRequest, SearchResponse, TagResult
-from platform_utils import (
-    PLATFORM,
-    is_cloud,
-    download_file,
-    resolve_model_path,
-)
+from platform_utils import resolve_model_path
 
 
 # LRU 缓存
@@ -208,10 +203,6 @@ class DanbooruTagger:
             return
         t0 = time.time()
 
-        # ── 云端环境：从对应平台 Hub 拉取数据文件 ──────────────────────────
-        if is_cloud():
-            self._pull_cloud_files()
-
         # ── 缓存校验与构建 ─────────────────────────────────────────────────
         if not self.paths.exists():
             print('\n' + '=' * 50)
@@ -269,47 +260,6 @@ class DanbooruTagger:
         # 预算热度归一化分，避免 search 中每次 np.log1p
         max_log = self.max_log_count if self.max_log_count > 0 else 1.0
         self._arr_pop_score  = np.log1p(self._arr_post_count) / max_log
-
-    def _pull_cloud_files(self) -> None:
-        """
-        从当前云平台拉取所有数据文件，并将路径写回实例属性。
-        HF / MS 的差异完全由 platform_utils.download_file() 屏蔽。
-        """
-        print(f'[Engine] 云端环境 ({PLATFORM})，开始拉取数据文件...')
-
-        # ── HF 平台需要额外指定 repo_id（SPACE_ID）和 repo_type ──────────
-        extra_hf_kwargs = {}
-        if PLATFORM == 'hf':
-            extra_hf_kwargs = {
-                'hf_repo_id':   os.environ.get('SPACE_ID'),
-                'hf_repo_type': 'space',
-            }
-
-        def pull(filename: str) -> str:
-            try:
-                return download_file(filename, **extra_hf_kwargs)
-            except Exception as e:
-                print(f'[Engine] 拉取 {filename} 失败（非致命）: {e}')
-                return filename   # 回退到原始路径，让后续逻辑决定是否重建
-
-        self.csv_path  = pull('origin_database/tags_enhanced.csv')
-        self.cooc_file = pull('origin_database/cooccurrence_clean.parquet')
-
-        meta_path = pull('tags_embedding/tags_metadata.parquet')
-        emb_path  = pull('tags_embedding/danbooru_multiview_embeddings.safetensors')
-        json_path = pull('tags_embedding/version_data.json')
-
-        # 只有三个缓存文件都成功拉取才覆盖路径，防止部分失败导致 exists() 误判
-        if all(
-            Path(p).is_file()
-            for p in (meta_path, emb_path, json_path)
-        ):
-            self.paths.metadata   = Path(meta_path)
-            self.paths.embeddings = Path(emb_path)
-            self.paths.meta_json  = Path(json_path)
-            print('[Engine] 云端数据文件拉取完毕。')
-        else:
-            print('[Engine] 部分缓存文件拉取失败，将触发本地重建。')
 
     # ── 搜索 ──────────────────────────────────────────────────────────────
 

@@ -8,6 +8,4 @@ safetensors
 huggingface_hub
 fastapi
 uvicorn
-modelscope
-oss2
 mcp==1.27.0
