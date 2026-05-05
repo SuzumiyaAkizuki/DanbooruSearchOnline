@@ -31,29 +31,10 @@ from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
 from core.models import RelatedTag, SearchRequest
 from platform_utils import is_cloud, get_host_port, nsfw_allowed
-from mcp_server import mcp
 
 import logging
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
-logging.getLogger("mcp").setLevel(logging.WARNING)
-logging.getLogger("mcp.server").setLevel(logging.WARNING)
-logging.getLogger("fastmcp").setLevel(logging.WARNING)
-# suppress MCP streamable-HTTP transport noise ("No response returned" from Starlette middleware)
-class _SuppressMCPNoise(logging.Filter):
-    _MARKER = "No response returned"
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if self._MARKER in record.getMessage():
-            return False
-        if record.exc_info:
-            import traceback
-            tb_text = "".join(traceback.format_exception(*record.exc_info))
-            if self._MARKER in tb_text:
-                return False
-        return True
-
-logging.getLogger("uvicorn.error").addFilter(_SuppressMCPNoise())
 
 # ── 表格列定义 ─────────────────────────────────────────────────────────────────
 
@@ -159,7 +140,6 @@ class DanbooruSearchUI:
         self.selected_layers = {'英文': True, '中文扩展词': True, '释义': True, '中文核心词': True}
         self.selected_cats = {'General': True, 'Copyright': True, 'Character': True}
 
-        self.mcp_notice = None
         self.notice_expansion = None
 
         # 表格显示选项开关
@@ -184,9 +164,6 @@ class DanbooruSearchUI:
                     f'<a href="/api/docs" '
                     f'target="_blank" rel="noopener noreferrer" '
                     f'class="text-blue-400 hover:text-blue-600 hover:underline">使用 API 服务</a>'
-                    f' | <a href="https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline#mcp-接口" '
-                    f'target="_blank" rel="noopener noreferrer" '
-                    f'class="text-blue-400 hover:text-blue-600 hover:underline">使用 MCP 服务</a>'
                 )
             except AttributeError:
                 pass
@@ -238,7 +215,6 @@ class DanbooruSearchUI:
             'rows_per_page': self._get_rows_per_page(),
             'search_query': self.search_input.value if self.search_input else '',
             'notice_expanded': bool(self.notice_expansion.value) if self.notice_expansion else True,
-            'mcp_notice_dismissed': not bool(self.mcp_notice.visible) if self.mcp_notice else False,
         }
         js = _json.dumps(cfg, ensure_ascii=False)
         ui.run_javascript(f"localStorage.setItem('{_CONFIG_LS_KEY}', {_json.dumps(js)});")
@@ -320,9 +296,6 @@ class DanbooruSearchUI:
 
         if self.notice_expansion and 'notice_expanded' in cfg:
             self.notice_expansion.set_value(cfg['notice_expanded'])
-
-        if self.mcp_notice and cfg.get('mcp_notice_dismissed'):
-            self.mcp_notice.set_visibility(False)
 
         # 若高级选项列有变更，同步更新表格列
         self._update_table_columns()
@@ -435,10 +408,7 @@ class DanbooruSearchUI:
             if not DanbooruTagger.is_ready():
                 asyncio.ensure_future(self._hide_banner_when_ready())
 
-            # ── 1. MCP 上线通知 ──
-            self._build_mcp_notice()
-
-            # ── 2. 注意事项 ──
+            # ── 1. 注意事项 ──
             self._build_notice()
 
             # ── 2. 搜索卡片 ──
@@ -462,39 +432,6 @@ class DanbooruSearchUI:
             with ui.element('div').classes('w-full text-center py-4 mt-2'):
                 self.search_count_label = ui.html('正在加载数据...').classes('text-xs text-gray-400')
                 self._update_footer_text()
-
-    # ── MCP 上线通知 ──────────────────────────────────────────────────────
-
-    def _build_mcp_notice(self):
-        self.mcp_notice = ui.card().classes(
-            'w-full bg-green-50 border-l-4 border-green-500 p-0 overflow-hidden'
-        )
-        with self.mcp_notice:
-            with ui.column().classes('px-4 py-3 w-full gap-1'):
-                with ui.row().classes('items-center justify-between w-full'):
-                    ui.label('🎉 MCP 服务正式上线！').classes('text-base font-bold text-green-800')
-                    ui.button(icon='close').props('flat dense round color=grey-6') \
-                        .on_click(self._dismiss_mcp_notice)
-                ui.html(
-                    '本站现已支持通过 MCP 协议接入 AI Agent（如 Claude Desktop）。'
-                    '如需体验<b>托管版</b>（免配置、开箱即用），请访问 '
-                    '<a href="https://huggingface.co/spaces/SAkizuki/WenQiuYue" '
-                    'target="_blank" rel="noopener noreferrer" '
-                    'class="text-green-700 font-bold underline">问秋月 Space</a>，'
-                    '进入后点击「搜标签」即可调用。'
-                    '<span class="text-gray-500 ml-1">'
-                    'API 额度有限（约 30 元），用完即止，仅供体验。'
-                    '</span>'
-                    '&nbsp;&nbsp;'
-                    '<a href="https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline#mcp-接口" '
-                    'target="_blank" rel="noopener noreferrer" '
-                    'class="text-green-700 underline">查看接入文档 →</a>'
-                ).classes('text-sm text-green-900')
-
-    def _dismiss_mcp_notice(self):
-        if self.mcp_notice:
-            self.mcp_notice.set_visibility(False)
-        self._save_config()
 
     # ── 注意事项 ──────────────────────────────────────────────────────────
 
@@ -1324,20 +1261,6 @@ if __name__ in {'__main__', '__mp_main__'}:
         asyncio.create_task(background_init_tasks())
 
     app.mount('/api', api_app)
-
-    mcp_app = mcp.streamable_http_app()
-    app.mount('/mcp', mcp_app)
-    _mcp_lifespan_ctx = None
-    @app.on_startup
-    async def _start_mcp():
-        global _mcp_lifespan_ctx
-        _mcp_lifespan_ctx = mcp_app.router.lifespan_context(mcp_app)
-        await _mcp_lifespan_ctx.__aenter__()
-    @app.on_shutdown
-    async def _stop_mcp():
-        global _mcp_lifespan_ctx
-        if _mcp_lifespan_ctx is not None:
-            await _mcp_lifespan_ctx.__aexit__(None, None, None)
 
     @app.get('/googlebd34b54f8562aa06.html')
     def google_verification():

@@ -1,0 +1,7 @@
+{
+  "model_dir": "my_model_bge_m3",
+  "port": 11111,
+  "csv_file": "origin_database/tags_enhanced.csv",
+  "cooc_file": "origin_database/cooccurrence_clean.csv",
+  "atomic_cjk_max_len": 7
+}

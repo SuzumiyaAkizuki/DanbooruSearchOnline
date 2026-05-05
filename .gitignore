@@ -12,7 +12,8 @@ origin_database/
 tempsave/
 *.env
 *.png
-*.bat
+updata_img.bat
+run_eval.bat
 eval/
 legacy_history.json
 CLAUDE.md

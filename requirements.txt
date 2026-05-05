@@ -1,7 +1,11 @@
 nicegui
 pandas
 sentence-transformers
+# 注意：直接 pip install torch 默认是 CPU 版。
+# 请使用 start.bat 启动，它会自动检测 GPU 并安装对应的 CUDA 版 PyTorch。
+# 如需手动安装 GPU 版，参考：https://pytorch.org/get-started/locally/
 torch
+torchvision
 jieba
 pyarrow
 safetensors

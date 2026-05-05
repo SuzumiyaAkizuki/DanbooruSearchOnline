@@ -1,14 +1,20 @@
 """
 mcp_server.py
 ─────────────
-MCP 服务层
+MCP 服务层（本地 stdio 模式）
 
-挂载方式（在 ui_nicegui.py 中）：
-    from mcp_server import mcp
-    app.mount('/mcp', mcp.streamable_http_app())
+启动方式：
+    python mcp_server.py
 
-接入地址：
-    https://sakizuki-danboorusearch.hf.space/mcp/mcp
+Claude Desktop 配置（claude_desktop_config.json）：
+    {
+      "mcpServers": {
+        "danbooru-searcher": {
+          "command": "python",
+          "args": ["mcp_server.py的完整路径"]
+        }
+      }
+    }
 
 支持的工具：
     search_tags      自然语言搜索标签
@@ -17,17 +23,20 @@ MCP 服务层
 
 import json
 import asyncio
+import os
+import sys
+from pathlib import Path
 from mcp.server.fastmcp import FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
 from core.engine import DanbooruTagger
 from core.models import SearchRequest
 import re
 
+# 确保工作目录为脚本所在目录（stdio 模式下 MCP 客户端可能从任意目录启动）
+_SCRIPT_DIR = str(Path(__file__).resolve().parent)
+os.chdir(_SCRIPT_DIR)
+sys.path.insert(0, _SCRIPT_DIR)
 
-mcp = FastMCP(
-    name="danbooru-searcher",
-    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-)
+mcp = FastMCP(name="danbooru-searcher")
 
 
 @mcp.tool()
@@ -293,3 +302,7 @@ JSON array sorted by aggregated NPMI score (descending). Each result:
         output.append(item)
 
     return json.dumps(output, ensure_ascii=False, indent=2)
+
+
+if __name__ == '__main__':
+    mcp.run(transport='stdio')

@@ -29,7 +29,13 @@ from safetensors.torch import load_file as st_load, save_file as st_save
 from sentence_transformers import SentenceTransformer
 
 from .models import SearchRequest, SearchResponse, TagResult
-from platform_utils import resolve_model_path
+from platform_utils import (
+    resolve_model_path,
+    ensure_data_files,
+    CFG_CSV_FILE,
+    CFG_COOC_FILE,
+    CFG_ATOMIC_CJK_MAX_LEN,
+)
 
 
 # LRU 缓存
@@ -97,7 +103,8 @@ CAT_MAP: dict[str, str] = {
 SCHEMA_VERSION = 3   # 升级此值将自动触发全量重建，用于破坏性格式变更
 
 # 用户显式分隔后，纯 CJK 片段超过此长度仍用 jieba 切分（避免长句被当作原子概念）
-_ATOMIC_CJK_MAX_LEN = 7
+# 值从 config.json 的 atomic_cjk_max_len 读取
+_ATOMIC_CJK_MAX_LEN = CFG_ATOMIC_CJK_MAX_LEN
 
 # 四路 embedding 层配置: (层名, tensor 属性名, DataFrame 列名)
 _LAYER_SPEC: list[tuple[str, str, str]] = [
@@ -155,9 +162,9 @@ class DanbooruTagger:
     def __init__(
         self,
         model_path: Optional[str] = None,
-        csv_file:   str = 'origin_database/tags_enhanced.csv',
+        csv_file:   str = CFG_CSV_FILE,
         cache_dir:  str = 'tags_embedding',
-        cooc_file:  str = 'origin_database/cooccurrence_clean.csv',
+        cooc_file:  str = CFG_COOC_FILE,
     ):
         # 模型路径：优先使用显式传入，否则交由 platform_utils 解析
         self.model_path = model_path or resolve_model_path()
@@ -202,6 +209,9 @@ class DanbooruTagger:
         if self.is_loaded:
             return
         t0 = time.time()
+
+        # ── 从 GitHub 拉取最新数据文件 ───────────────────────────────────
+        ensure_data_files('origin_database')
 
         # ── 缓存校验与构建 ─────────────────────────────────────────────────
         if not self.paths.exists():

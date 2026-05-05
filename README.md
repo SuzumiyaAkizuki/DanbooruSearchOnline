@@ -36,6 +36,133 @@ thumbnail: >-
 
 ---
 
+## 本地部署
+
+本项目支持在本地运行，无需依赖云端服务。首次启动会自动下载模型和数据文件，后续启动直接使用本地缓存。
+
+### 环境要求
+
+- Python 3.10+
+- NVIDIA GPU（推荐，CPU 也可运行但全量编码会很慢）
+- 约 5GB 磁盘空间（模型 4.3GB + 数据 410MB）
+
+### 快速开始
+
+1. 克隆仓库并进入目录：
+
+```bash
+git clone https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline.git
+cd DanbooruSearchOnline
+git checkout local-release
+```
+
+2. 双击 `start.bat`（Windows），脚本会自动：
+   - 检测 GPU 和 CUDA 版本
+   - 安装对应版本的 PyTorch（GPU 版或 CPU 版）
+   - 安装其余依赖
+   - 启动 Web UI
+
+3. 浏览器会自动打开 `http://127.0.0.1:11111`
+
+### 手动安装
+
+如果不用 `start.bat`，可以手动操作：
+
+```bash
+# 创建虚拟环境（推荐）
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Linux/macOS
+
+# 安装 PyTorch（根据你的 CUDA 版本选择，参考 https://pytorch.org/get-started/locally/）
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+
+# 安装其余依赖
+pip install -r requirements.txt
+
+# 启动
+python ui_nicegui.py
+```
+
+### 配置文件
+
+项目根目录的 `config.json` 可自定义以下设置：
+
+```json
+{
+  "model_dir": "my_model_bge_m3",
+  "port": 11111,
+  "csv_file": "origin_database/tags_enhanced.csv",
+  "cooc_file": "origin_database/cooccurrence_clean.csv",
+  "atomic_cjk_max_len": 7
+}
+```
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| `model_dir` | `my_model_bge_m3` | 本地模型目录名，不存在时自动从 HuggingFace Hub 下载 |
+| `port` | `11111` | Web UI 监听端口 |
+| `csv_file` | `origin_database/tags_enhanced.csv` | 标签数据库路径 |
+| `cooc_file` | `origin_database/cooccurrence_clean.csv` | 共现矩阵路径（引擎会自动查找同名 `.parquet` 文件） |
+| `atomic_cjk_max_len` | `7` | 中文分词原子长度阈值，超过此长度的片段会被自动分词 |
+
+### 数据自动更新
+
+引擎每次启动时会检查 `origin_database/` 下的数据文件是否有更新（通过 GitHub ETag 机制），有新版本时自动下载，无变化时跳过。网络不可用时使用本地已有文件，不影响启动。
+
+### GPU 加速注意事项
+
+`pip install torch` 默认安装的是 **CPU 版本**，全量编码时会非常慢。请务必安装对应 CUDA 版本的 PyTorch：
+
+| GPU 系列 | CUDA 版本 | PyTorch 安装命令 |
+|---|---|---|
+| RTX 5090/5080 等（Blackwell） | 12.8 | `pip install torch --index-url https://download.pytorch.org/whl/cu128` |
+| RTX 4090/4080 等（Ada） | 12.6 | `pip install torch --index-url https://download.pytorch.org/whl/cu126` |
+| RTX 3090/3080 等（Ampere） | 12.1 | `pip install torch --index-url https://download.pytorch.org/whl/cu121` |
+| RTX 2080/2070 等（Turing） | 11.8 | `pip install torch --index-url https://download.pytorch.org/whl/cu118` |
+
+`start.bat` 会自动检测并安装正确版本。安装完成后可通过以下命令验证 GPU 是否可用：
+
+```python
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+输出 `True` 即为成功。
+
+### 本地 MCP 接入（stdio 模式）
+
+本地版使用 stdio 模式运行 MCP 服务，无需启动 Web UI 即可接入 Claude Desktop 等客户端。
+
+在 Claude Desktop 配置文件中添加（Windows：`%APPDATA%\Claude\claude_desktop_config.json`，macOS：`~/Library/Application Support/Claude/claude_desktop_config.json`）：
+
+```json
+{
+  "mcpServers": {
+    "danbooru-searcher": {
+      "command": "python",
+      "args": ["mcp_server.py 的完整绝对路径"]
+    }
+  }
+}
+```
+
+例如 Windows 上：
+
+```json
+{
+  "mcpServers": {
+    "danbooru-searcher": {
+      "command": "python",
+      "args": ["D:\\DanbooruSearchOnline\\mcp_server.py"]
+    }
+  }
+}
+```
+
+保存后重启 Claude Desktop，工具列表中出现 `search_tags` 和 `get_related_tags` 即为成功。首次调用时引擎会自动初始化（约 1~3 分钟），后续调用秒级响应。
+
+---
+
 ## 核心特性
 
 本版本在基础语义检索之上，引入了完整的标签工作流辅助功能：
