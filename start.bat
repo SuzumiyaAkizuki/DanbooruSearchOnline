@@ -8,7 +8,7 @@ echo ============================================
 echo.
 
 :: ── 检测 GPU 与 CUDA 版本 ──────────────────────────────────────────────
-set "TORCH_INDEX="
+set "TORCH_CUDA="
 
 where nvidia-smi >nul 2>&1
 if %errorlevel% neq 0 (
@@ -34,33 +34,17 @@ if not defined CUDA_VER (
 
 echo [检测] CUDA 版本: %CUDA_VER%
 
-:: 取主版本号（如 12.8 → 12）
+:: 取主版本号（如 12.8 → 12, 13.0 → 13）
 for /f "tokens=1 delims=." %%m in ("%CUDA_VER%") do set "CUDA_MAJOR=%%m"
-for /f "tokens=2 delims=." %%n in ("%CUDA_VER%") do set "CUDA_MINOR=%%n"
 
 if "%CUDA_MAJOR%" geq "12" (
-    if "%CUDA_MINOR%" geq "8" (
-        set "TORCH_INDEX=https://download.pytorch.org/whl/cu128"
-        echo [匹配] PyTorch → cu128
-        goto :install_torch
-    )
-    if "%CUDA_MINOR%" geq "6" (
-        set "TORCH_INDEX=https://download.pytorch.org/whl/cu126"
-        echo [匹配] PyTorch → cu126
-        goto :install_torch
-    )
-    if "%CUDA_MINOR%" geq "4" (
-        set "TORCH_INDEX=https://download.pytorch.org/whl/cu124"
-        echo [匹配] PyTorch → cu124
-        goto :install_torch
-    )
-    set "TORCH_INDEX=https://download.pytorch.org/whl/cu121"
-    echo [匹配] PyTorch → cu121
+    set "TORCH_CUDA=cu128"
+    echo [匹配] PyTorch → cu128
     goto :install_torch
 )
 
 if "%CUDA_MAJOR%"=="11" (
-    set "TORCH_INDEX=https://download.pytorch.org/whl/cu118"
+    set "TORCH_CUDA=cu118"
     echo [匹配] PyTorch → cu118
     goto :install_torch
 )
@@ -69,9 +53,9 @@ echo [提示] CUDA %CUDA_VER% 版本较旧，将安装 CPU 版 PyTorch。
 
 :install_torch
 echo.
-if defined TORCH_INDEX (
-    echo [安装] 正在安装 PyTorch (GPU 版)...
-    python -m pip install torch torchvision --index-url %TORCH_INDEX% --quiet
+if defined TORCH_CUDA (
+    echo [安装] 正在安装 PyTorch (GPU 版, %TORCH_CUDA%)...
+    python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/%TORCH_CUDA% --quiet
 ) else (
     echo [安装] 正在安装 PyTorch (CPU 版)...
     python -m pip install torch torchvision --quiet
