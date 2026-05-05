@@ -13,9 +13,6 @@ platform_utils.py
   is_cloud()        : bool
   get_host_port()   : tuple[str, int]
   download_file()   : 下载单个文件，返回本地路径
-  upload_bytes()    : 上传 bytes 到 OSS（用于计数器持久化）
-  read_bytes()      : 从 OSS 读取文件内容，返回 bytes | None
-  get_counter_cfg() : 返回 CounterConfig（platform / available）
 
 环境变量约定：
   
@@ -30,31 +27,16 @@ platform_utils.py
      MODELSCOPE_ENVIRONMENT  存在即代表在魔搭环境（值通常为 "studio"）  
      STUDIO_ID               创空间 ID（备用检测）                      
                                                                         
-   魔搭平台数据文件说明：                                                
-     数据文件（CSV / parquet / safetensors）直接放在创空间 studio repo  
-     中，容器启动时会自动同步到工作目录，download_file() 在 MS 平台     
-     直接返回本地路径，无需额外配置 Model repo。                         
-
-   阿里云 OSS（计数器唯一后端，HF 与 MS 共享同一数据）                  
-                                                                        
-     OSS_ACCESS_KEY_ID      RAM 子账号 AccessKey ID                    
-     OSS_ACCESS_KEY_SECRET  RAM 子账号 AccessKey Secret                
-     OSS_ENDPOINT           Bucket 所在地域节点                         
-                            例: oss-cn-hangzhou.aliyuncs.com           
-                            （无需加 https://，代码自动拼接）            
-     OSS_BUCKET_NAME        Bucket 名称                                 
-     OSS_COUNTER_DIR        计数文件在 Bucket 中的前缀目录（可选）       
-                            默认 "danbooru_counter"                    
-                            最终路径: {OSS_COUNTER_DIR}/count.json
+   魔搭平台数据文件说明：
+     数据文件（CSV / parquet / safetensors）直接放在创空间 studio repo
+     中，容器启动时会自动同步到工作目录，download_file() 在 MS 平台
+     直接返回本地路径，无需额外配置 Model repo。
 """
 
 from __future__ import annotations
 
 import os
-import time
-from dataclasses import dataclass
 from pathlib import Path
-import oss2
 from typing import Literal, Optional
 
 #  平台检测 
@@ -96,119 +78,7 @@ def nsfw_allowed() -> bool:
     return PLATFORM != 'ms'
 
 
-#  阿里云 OSS 
-
-def _get_oss_bucket():
-    """
-    从环境变量读取 OSS 配置，返回 oss2.Bucket 对象。
-    若环境变量不完整或 oss2 未安装则返回 None。
-    """
-    ak  = os.environ.get('OSS_ACCESS_KEY_ID')
-    sk  = os.environ.get('OSS_ACCESS_KEY_SECRET')
-    ep  = os.environ.get('OSS_ENDPOINT')
-    bkt = os.environ.get('OSS_BUCKET_NAME')
-    if not all([ak, sk, ep, bkt]):
-        return None
-    try:
-        import oss2
-        auth = oss2.Auth(ak, sk)
-        endpoint = ep if ep.startswith('http') else f'https://{ep}'
-        return oss2.Bucket(auth, endpoint, bkt)
-    except ImportError:
-        print('[PlatformUtils] oss2 未安装，OSS 计数器不可用。请 pip install oss2。')
-        return None
-
-
-def _oss_key(filename: str) -> str:
-    """将 filename 拼上可选的前缀目录，得到 OSS Object Key。"""
-    prefix = os.environ.get('OSS_COUNTER_DIR', 'danbooru_counter').rstrip('/')
-    return f'{prefix}/{filename}'
-
-
-def _oss_available() -> bool:
-    """检测 OSS 四项环境变量是否均已设置且 oss2 可导入。"""
-    return _get_oss_bucket() is not None
-
-
-#  计数器配置 
-
-@dataclass
-class CounterConfig:
-    platform: Literal['oss', 'local']
-
-    @property
-    def available(self) -> bool:
-        if self.platform == 'oss':
-            return _oss_available()
-        return False
-
-
-def get_counter_cfg() -> CounterConfig:
-    """
-    读取计数器配置。
-    配置了 OSS 环境变量则使用 OSS，否则退化为本地模式（无持久化）。
-    """
-    if _oss_available():
-        return CounterConfig(platform='oss')
-    return CounterConfig(platform='local')
-
-
-#  计数器读写（OSS）
-
-def read_bytes(filename: str, cfg: CounterConfig) -> Optional[bytes]:
-    """
-    从 OSS 读取文件内容，返回 bytes。
-    文件不存在返回 None；网络或权限异常向上抛出。
-    """
-    if not cfg.available:
-        return None
-
-    bucket = _get_oss_bucket()
-    key = _oss_key(filename)
-    try:
-        import oss2
-        result = bucket.get_object(key)
-        return result.read()
-    except oss2.exceptions.NoSuchKey:
-        return None
-    except Exception as e:
-        print(f'[PlatformUtils] OSS 读取失败 ({key}): {e}')
-        raise
-
-
-def upload_bytes(
-    content: bytes,
-    filename: str,
-    cfg: CounterConfig,
-    commit_message: str = 'Update',
-    *,
-    retries: int = 3,
-    retry_delay: float = 1.0,
-) -> bool:
-    """
-    将 bytes 写入 OSS 的 filename 路径。
-    返回 True 表示成功，False 表示全部重试均失败。
-    commit_message 参数保留以兼容 counter.py 的调用签名，OSS 不使用。
-    """
-    if not cfg.available:
-        return False
-
-    bucket = _get_oss_bucket()
-    key = _oss_key(filename)
-
-    for attempt in range(retries):
-        try:
-            bucket.put_object(key, content)
-            return True
-        except Exception as e:
-            print(f'[PlatformUtils] OSS 上传失败（第 {attempt + 1} 次）({key}): {e}')
-            if attempt < retries - 1:
-                time.sleep(retry_delay)
-
-    return False
-
-
-#  文件下载（引擎数据文件，与计数器无关）
+#  文件下载（引擎数据文件）
 
 # 魔搭创空间工作目录，studio repo 的文件会被同步到此处
 _MS_WORKDIR = Path('/home/user/app')
