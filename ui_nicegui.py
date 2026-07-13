@@ -114,6 +114,8 @@ def _resolve_group_render_limit(default: int = 80) -> int:
 
 
 GROUP_RENDER_TAG_LIMIT = _resolve_group_render_limit()
+ARTIST_REC_LIMIT = 64
+ARTIST_REC_PAGE_SIZE = 8
 
 # 搜索模式预设
 _SEARCH_MODE_PRESETS: dict[str, dict] = {
@@ -254,6 +256,7 @@ class DanbooruSearchUI:
         self.result_table = None           # 左栏表格
         self.related_list_container = None  # 右栏关联推荐列表
         self.group_expansion_container = None  # 左栏 Group 同类扩展（表格下方）
+        self.artist_rec_pagination = None
         self.client = None
         self._group_render_limits: dict[str, int] = {}
         self._group_expanded_names: set[str] = set()
@@ -311,6 +314,12 @@ class DanbooruSearchUI:
         self._group_checkboxes: dict[str, ui.checkbox] = {}
         # 推荐画师的 checkbox 引用
         self._artist_rec_checkboxes: dict[str, ui.checkbox] = {}
+        self._artist_rec_rows: list = []
+        self._artist_rec_page = 1
+        self._artist_rec_page_count = 0
+        self._artist_rec_page_label = None
+        self._artist_rec_prev_button = None
+        self._artist_rec_next_button = None
         # 当前推荐画师的标签名集合（用于 Anima 模式复制时加 @ 前缀）
         self._current_artist_rec_tags: set[str] = set()
         self._artist_result_tags: set[str] = set()
@@ -1219,6 +1228,7 @@ class DanbooruSearchUI:
                 self.artist_rec_list = ui.column().classes('w-full gap-0').style('max-height: 420px; overflow-y: auto;')
                 with self.artist_rec_list:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
+                self.artist_rec_pagination = ui.column().classes('w-full')
 
                 ui.separator().classes('my-3')
 
@@ -1777,21 +1787,52 @@ class DanbooruSearchUI:
                 return
             tagger = await DanbooruTagger.get_instance()
             artist_results = await tagger.search_artists_by_tags_async(
-                selected_tags, limit=30, min_cooc=3,
+                selected_tags, limit=ARTIST_REC_LIMIT, min_cooc=3,
             )
             top_tags = {}
             if artist_results:
-                names = [r.artist for r in artist_results[:10]]
+                names = [r.artist for r in artist_results]
                 top_tags = tagger.get_artist_top_tags(names, show_nsfw=show_nsfw)
             self._render_artist_rec(artist_results, top_tags, show_nsfw)
         self._debounce_artist_task = asyncio.ensure_future(_do())
 
+    def _set_artist_rec_page(self, page: int):
+        """切换推荐画师页，仅切换已构建行的可见性。"""
+        if self._artist_rec_page_count < 1:
+            return
+        self._artist_rec_page = max(1, min(page, self._artist_rec_page_count))
+        start = (self._artist_rec_page - 1) * ARTIST_REC_PAGE_SIZE
+        end = start + ARTIST_REC_PAGE_SIZE
+        for index, row in enumerate(self._artist_rec_rows):
+            row.set_visibility(start <= index < end)
+        if self._artist_rec_page_label is not None:
+            self._artist_rec_page_label.text = (
+                f'{self._artist_rec_page} / {self._artist_rec_page_count}'
+            )
+        if self._artist_rec_prev_button is not None:
+            if self._artist_rec_page == 1:
+                self._artist_rec_prev_button.disable()
+            else:
+                self._artist_rec_prev_button.enable()
+        if self._artist_rec_next_button is not None:
+            if self._artist_rec_page == self._artist_rec_page_count:
+                self._artist_rec_next_button.disable()
+            else:
+                self._artist_rec_next_button.enable()
+
     def _render_artist_rec(self, artist_results, top_tags=None, show_nsfw: bool = True):
         """渲染推荐画师列表（对标关联推荐样式）。"""
-        if self.artist_rec_list is None:
+        if self.artist_rec_list is None or self.artist_rec_pagination is None:
             return
         self.artist_rec_list.clear()
+        self.artist_rec_pagination.clear()
         self._artist_rec_checkboxes.clear()
+        self._artist_rec_rows.clear()
+        self._artist_rec_page = 1
+        self._artist_rec_page_count = 0
+        self._artist_rec_page_label = None
+        self._artist_rec_prev_button = None
+        self._artist_rec_next_button = None
         self._current_artist_rec_tags.clear()
 
         if not artist_results:
@@ -1803,7 +1844,7 @@ class DanbooruSearchUI:
         selected_now = set(self._get_selected_tags())
 
         with self.artist_rec_list:
-            for r in artist_results[:10]:
+            for r in artist_results[:ARTIST_REC_LIMIT]:
                 artist = r.artist
                 self._current_artist_rec_tags.add(artist)
                 is_selected = artist in selected_now
@@ -1825,7 +1866,8 @@ class DanbooruSearchUI:
 
                 with ui.row().classes(
                     'w-full items-center gap-2 px-3 py-2 related-item border-b border-gray-100'
-                ).style('background: rgba(244,114,182,0.04);'):
+                ).style('background: rgba(244,114,182,0.04);') as row:
+                    self._artist_rec_rows.append(row)
                     # tooltip
                     with ui.tooltip().props('content-class="bg-black text-white shadow-4" max-width="400px"'):
                         ui.html(tooltip_html).style('font-size:14px;line-height:1.5;max-width:380px;')
@@ -1849,6 +1891,24 @@ class DanbooruSearchUI:
                     # 分值
                     score_color = 'green' if normalized > 0.6 else ('teal' if normalized > 0.3 else 'grey')
                     ui.label(score_pct).classes(f'text-sm font-bold text-{score_color}-600 whitespace-nowrap')
+
+            self._artist_rec_page_count = (
+                len(self._artist_rec_rows) + ARTIST_REC_PAGE_SIZE - 1
+            ) // ARTIST_REC_PAGE_SIZE
+        if self._artist_rec_page_count > 1:
+            with self.artist_rec_pagination:
+                with ui.row().classes('w-full items-center justify-center gap-2 px-3 py-2'):
+                    self._artist_rec_prev_button = ui.button(
+                        '‹',
+                        on_click=lambda: self._set_artist_rec_page(self._artist_rec_page - 1),
+                    ).props('flat dense round color=grey-7')
+                    self._artist_rec_page_label = ui.label().classes('text-xs text-gray-600 min-w-12 text-center')
+                    self._artist_rec_next_button = ui.button(
+                        '›',
+                        on_click=lambda: self._set_artist_rec_page(self._artist_rec_page + 1),
+                    ).props('flat dense round color=grey-7')
+
+        self._set_artist_rec_page(1)
 
     def _render_group_expansion(self, group_data: list, selected_tags: list[str], show_nsfw: bool):
         """渲染 Group 同类扩展区域。"""
