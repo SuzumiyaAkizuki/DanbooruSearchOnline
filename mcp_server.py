@@ -67,6 +67,22 @@ logging.getLogger("mcp.server").addFilter(_disconnect_filter)
 logging.getLogger("uvicorn.error").addFilter(_disconnect_filter)
 
 
+# ── 过滤 Trae 非标准会话结束通知产生的校验噪音 ─────────────────────────────
+class _SuppressTraeSessionStopNoise(logging.Filter):
+    _MARKERS = (
+        "Failed to validate notification",
+        "notifications/trae/session_stop",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not all(marker in message for marker in self._MARKERS)
+
+
+# MCP 依赖在 shared.session 中直接使用根 logger 记录此校验警告。
+logging.getLogger().addFilter(_SuppressTraeSessionStopNoise())
+
+
 mcp = FastMCP(
     name="danbooru-searcher",
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),

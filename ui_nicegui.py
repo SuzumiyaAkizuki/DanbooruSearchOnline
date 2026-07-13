@@ -57,12 +57,15 @@ class _SuppressMCPNoise(logging.Filter):
 
 logging.getLogger("uvicorn.error").addFilter(_SuppressMCPNoise())
 
-# suppress MCP OAuth discovery 404 noise (clients probing .well-known/oauth-authorization-server)
+# suppress MCP OAuth discovery 404 noise (clients probing .well-known OAuth endpoints)
 class _SuppressOAuthNoise(logging.Filter):
-    _MARKER = ".well-known/oauth-authorization-server"
+    _MARKERS = (
+        ".well-known/oauth-authorization-server",
+        ".well-known/oauth-protected-resource",
+    )
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if self._MARKER in record.getMessage():
+        if any(marker in record.getMessage() for marker in self._MARKERS):
             return False
         return True
 
