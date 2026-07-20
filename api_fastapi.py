@@ -97,11 +97,13 @@ class RelatedIn(BaseModel):
     tags: list[str]
     limit: int = Field(50, ge=1, le=200)
     show_nsfw: bool = True
+    target_categories: list[CategoryName] | None = None
 
 
 class RelatedTagOut(BaseModel):
     tag: str
     cn_name: str
+    category: str = ""
     sources: list[str]
     wiki: str = ""
 
@@ -220,6 +222,7 @@ async def related(body: RelatedIn) -> dict[str, Any]:
     - tags：种子标签列表（Danbooru 英文标签名）
     - limit：最多返回条数，默认 50
     - show_nsfw：是否包含 NSFW 标签，默认 True
+    - target_categories：仅返回指定类别；未传入时不过滤
     """
     tagger = await DanbooruTagger.get_instance()
     corrected_tags, invalid_tags, corrections = await _correct_tags(tagger, body.tags)
@@ -233,6 +236,7 @@ async def related(body: RelatedIn) -> dict[str, Any]:
         set(corrected_tags),
         body.limit,
         body.show_nsfw,
+        set(body.target_categories) if body.target_categories is not None else None,
     )
     # 计数：每次 API related 调用均计入搜索、成功、复制；访问不变
     await counter.increment()
@@ -244,6 +248,7 @@ async def related(body: RelatedIn) -> dict[str, Any]:
         item = {
             "tag": result.tag,
             "cn_name": result.cn_name,
+            "category": result.category,
             "sources": result.sources,
         }
         item["wiki"] = result.wiki

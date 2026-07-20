@@ -638,11 +638,12 @@ class DanbooruTagger:
         exclude: set[str] | None = None,
         limit: int = 20,
         show_nsfw: bool = True,
+        target_categories: set[str] | None = None,
     ) -> list:
         """get_related() 的并发安全异步封装，共享同一个 CPU 闸门。"""
         async with self._get_cpu_sem():
             return await asyncio.to_thread(
-                self.get_related, seed_tags, exclude, limit, show_nsfw,
+                self.get_related, seed_tags, exclude, limit, show_nsfw, target_categories,
             )
 
     async def get_group_candidates_async(
@@ -1129,6 +1130,7 @@ class DanbooruTagger:
             exclude: set[str] | None = None,
             limit: int = 20,
             show_nsfw: bool = True,
+            target_categories: set[str] | None = None,
     ) -> list:
         from .models import RelatedTag
         import math
@@ -1137,7 +1139,10 @@ class DanbooruTagger:
             return []
         exclude = exclude or set()
 
-        related_key = (tuple(sorted(seed_tags)), tuple(sorted(exclude)), limit, show_nsfw)
+        related_key = (
+            tuple(sorted(seed_tags)), tuple(sorted(exclude)), limit, show_nsfw,
+            tuple(sorted(target_categories)) if target_categories is not None else None,
+        )
         cached = self._related_cache.get(related_key)
         if cached is not None:
             return cached
@@ -1209,6 +1214,8 @@ class DanbooruTagger:
             if nsfw == '1' and not show_nsfw:
                 continue
             cat = CAT_MAP.get(self._arr_category[idx], 'Other')
+            if target_categories is not None and cat not in target_categories:
+                continue
             results.append(RelatedTag(
                 tag=tag_name,
                 cn_name=str(self._arr_cn_name[idx]),
