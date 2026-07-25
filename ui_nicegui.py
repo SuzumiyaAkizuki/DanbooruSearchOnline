@@ -18,6 +18,7 @@ import json as _json
 import subprocess
 import traceback
 from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 from fastapi.responses import PlainTextResponse
 
 def _excepthook(exc_type, exc_value, exc_tb):
@@ -32,6 +33,57 @@ from core import counter
 from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
 from core.models import RelatedTag, SearchRequest
+from core.prompt_import import (
+    WORKSPACE_GROUP_ORDER,
+    PromptImportResult,
+    WorkspaceCanonicalizationResult,
+    canonicalize_workspace_tags,
+    classify_workspace_tag,
+    pending_to_workspace_entry,
+    resolve_prompt_text,
+)
+from core.workspace_insights import (
+    CANDIDATE_UNSELECTED,
+    COVERED,
+    UNCOVERED,
+    artist_candidate_reason,
+    compute_concept_coverage,
+    related_candidate_reason,
+    selected_tag_reason,
+    semantic_candidate_reason,
+    tag_group_candidate_reason,
+)
+from core.workspace import (
+    ARTIST_SELECTION_ORIGINS,
+    FAVORITES_STORAGE_KEY,
+    HISTORY_STORAGE_KEY,
+    LEGACY_STAGED_STORAGE_KEY,
+    WORKSPACE_STORAGE_KEY,
+    WorkspaceDataError,
+    add_history_entry,
+    append_workspace_query,
+    build_backup,
+    clone_workspace,
+    dump_collection,
+    dump_workspace,
+    empty_favorites,
+    empty_history,
+    favorite_from_workspace,
+    merge_favorite_into_workspace,
+    merge_favorites,
+    merge_history,
+    merge_workspaces,
+    migrate_legacy_workspace,
+    new_workspace,
+    normalize_backup,
+    normalize_favorites,
+    normalize_history,
+    normalize_workspace,
+    replace_with_favorite,
+    sync_selected_entries,
+    utc_now_iso,
+    workspace_signature,
+)
 from platform_utils import is_cloud, get_host_port, nsfw_allowed
 from mcp_server import mcp
 
@@ -80,6 +132,7 @@ TABLE_COLUMNS = [
     {'name': 'nsfw',        'label': '分级',     'field': 'nsfw',        'align': 'center', 'sortable': True},
     {'name': 'final_score', 'label': '综合分',   'field': 'final_score', 'sortable': True},
     {'name': 'count',       'label': '热度',     'field': 'count',       'sortable': True},
+    {'name': 'reason',      'label': '推荐原因', 'field': 'reason',      'align': 'left'},
 ]
 
 OPTIONAL_COLS = {
@@ -125,9 +178,86 @@ _SEARCH_MODE_PRESETS: dict[str, dict] = {
     '完整场景': {'top_k': 5,  'limit': 80, 'popularity_weight': 0.15, 'use_segmentation': True,  'group_mode': 'diverse', 'max_per_group': 2},
 }
 _SEARCH_MODE_OPTIONS = ['自定义'] + list(_SEARCH_MODE_PRESETS.keys())
+_ARTIST_ORIGINS = set(ARTIST_SELECTION_ORIGINS)
 
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
+
+_HISTORY_DISPLAY_TIMEZONE = timezone(timedelta(hours=8))
+
+
+def _format_history_time(value: object) -> str:
+    """将历史记录的 ISO 时间转成简短的北京时间。"""
+    raw = str(value or '').strip()
+    if not raw:
+        return '--'
+    try:
+        parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_HISTORY_DISPLAY_TIMEZONE)
+        return parsed.astimezone(_HISTORY_DISPLAY_TIMEZONE).strftime('%y-%m-%d %H:%M:%S')
+    except ValueError:
+        return raw
+
+
+def _format_history_settings(settings: object) -> str:
+    if not isinstance(settings, dict):
+        settings = {}
+
+    mode = settings.get('search_mode')
+    preset = _SEARCH_MODE_PRESETS.get(mode)
+    if preset and all(settings.get(key) == value for key, value in preset.items()):
+        return f'预设：{mode}'
+
+    top_k = settings.get('top_k', '--')
+    limit = settings.get('limit', '--')
+    segmentation = settings.get('use_segmentation')
+    segmentation_text = '开启' if segmentation is True else '关闭' if segmentation is False else '--'
+    return f'Top K：{top_k} · 数量上限：{limit} · 分词：{segmentation_text}'
+
+def _sanitize_restored_config(cfg: dict) -> dict:
+    """保留旧配置中的已知、安全字段；坏字段不得阻止页面启动。"""
+    safe: dict = {}
+
+    numeric_fields = {
+        'top_k': (int, 1, 200),
+        'limit': (int, 10, 500),
+        'popularity_weight': (float, 0.0, 1.0),
+        'max_per_group': (int, 1, 10),
+    }
+    for key, (caster, minimum, maximum) in numeric_fields.items():
+        if key not in cfg:
+            continue
+        try:
+            value = caster(cfg[key])
+        except (TypeError, ValueError):
+            continue
+        if minimum <= value <= maximum:
+            safe[key] = value
+
+    for key in (
+        'show_nsfw', 'use_segmentation', 'sw_semantic', 'sw_layer',
+        'sw_source', 'notice_expanded', 'mcp_notice_dismissed',
+    ):
+        if isinstance(cfg.get(key), bool):
+            safe[key] = cfg[key]
+
+    for key in ('selected_layers', 'selected_cats'):
+        value = cfg.get(key)
+        if isinstance(value, dict):
+            safe[key] = {str(k): v for k, v in value.items() if isinstance(v, bool)}
+
+    if cfg.get('prompt_format') in ('sdxl', 'nai', 'anima'):
+        safe['prompt_format'] = cfg['prompt_format']
+    if cfg.get('search_mode') in _SEARCH_MODE_OPTIONS:
+        safe['search_mode'] = cfg['search_mode']
+    if cfg.get('group_mode') in ('off', 'expand', 'diverse'):
+        safe['group_mode'] = cfg['group_mode']
+    if isinstance(cfg.get('rows_per_page'), int) and cfg['rows_per_page'] in {0, 5, 7, 10, 15, 20, 25, 50}:
+        safe['rows_per_page'] = cfg['rows_per_page']
+    if isinstance(cfg.get('search_query'), str):
+        safe['search_query'] = cfg['search_query'][:4_000]
+    return safe
 
 def _next_group_render_limit(current: int, total: int, page_size: int) -> int:
     if page_size <= 0:
@@ -205,6 +335,7 @@ def _get_git_commit() -> str:
 def result_to_row(r, nsfw_visible: bool) -> dict:
     d = asdict(r)
     d['_nsfw_blocked'] = (r.nsfw == '1') and not nsfw_visible
+    d['reason'] = semantic_candidate_reason(r.source, r.layer)
     return d
 
 
@@ -248,6 +379,7 @@ class DanbooruSearchUI:
 
         self.full_table_data: list[dict] = []
         self.current_segments: list[str] = []   # 从句级原始片段，用于区分 chip 颜色
+        self.current_keywords: list[str] = []
         self.current_filter_keyword: str = 'ALL'  # 当前选中的分词筛选 keyword（NSFW 切换时复用）
         self.current_query_str: str = ""
         self.full_tags_str: str = ""
@@ -263,11 +395,26 @@ class DanbooruSearchUI:
         self._group_scroll_positions: dict[str, int] = {}
         self._group_render_key: tuple[str, ...] = ()
         self.results_section = None        # 整个结果区域（搜索前隐藏）
+        self.coverage_container = None
         self.selection_count_label = None
         self.selected_display = None       # 已废弃 textarea，保留兼容
         self.selected_chips_container = None  # 已选标签 chip 容器
+        self.prompt_pending_container = None
         self.current_related: list = []
         self.chip_extra_selected: set = set()
+        self._selected_order: list[str] = []
+        self.workspace_state: dict = new_workspace()
+        self.search_history: dict = empty_history()
+        self.favorites: dict = empty_favorites()
+        self._undo_stack: list[dict] = []
+        self._redo_stack: list[dict] = []
+        self._pending_selection_meta: dict[str, dict[str, str]] = {}
+        self._workspace_artist_tags: set[str] = set()
+        self.undo_btn = None
+        self.redo_btn = None
+        self.history_count_label = None
+        self.favorites_count_label = None
+        self._workspace_storage_listener_installed = False
         # 去抖任务句柄（取消旧任务避免 CPU 洪峰）
         self._debounce_related_task = None  # type: asyncio.Task | None
         self._debounce_group_task = None    # type: asyncio.Task | None
@@ -315,6 +462,8 @@ class DanbooruSearchUI:
         # 推荐画师的 checkbox 引用
         self._artist_rec_checkboxes: dict[str, ui.checkbox] = {}
         self._artist_rec_rows: list = []
+        self._artist_rec_sources: dict[str, str] = {}
+        self._group_candidate_sources: dict[str, str] = {}
         self._artist_rec_page = 1
         self._artist_rec_page_count = 0
         self._artist_rec_page_label = None
@@ -400,9 +549,25 @@ class DanbooruSearchUI:
 
     # ── 配置持久化 ────────────────────────────────────────────────────────
 
-    def _save_config(self):
-        """将当前控件状态序列化并写入 localStorage。"""
-        cfg = {
+    def _apply_prompt_format(self, prompt_format: str):
+        """统一设置复制格式及按钮外观，不触发额外持久化。"""
+        if prompt_format not in ('sdxl', 'nai', 'anima'):
+            prompt_format = 'sdxl'
+        self.prompt_format = prompt_format
+        if not self.format_toggle_btn:
+            return
+        if prompt_format == 'nai':
+            self.format_toggle_btn.text = 'NAI'
+            self.format_toggle_btn.props('color=purple-7')
+        elif prompt_format == 'anima':
+            self.format_toggle_btn.text = 'Anima'
+            self.format_toggle_btn.props('color=teal-7')
+        else:
+            self.format_toggle_btn.text = 'SDXL'
+            self.format_toggle_btn.props('color=grey-7')
+
+    def _collect_config_state(self) -> dict:
+        return {
             'version': _CONFIG_VERSION,
             'top_k': int(self.input_top_k.value) if self.input_top_k else 10,
             'limit': int(self.input_limit.value) if self.input_limit else 80,
@@ -423,8 +588,62 @@ class DanbooruSearchUI:
             'group_mode': self.input_group_mode.value if self.input_group_mode else 'off',
             'max_per_group': int(self.input_max_per_group.value) if self.input_max_per_group else 2,
         }
+
+    def _save_config(self):
+        """将当前控件状态序列化并写入 localStorage。"""
+        cfg = self._collect_config_state()
         js = _json.dumps(cfg, ensure_ascii=False)
         ui.run_javascript(f"localStorage.setItem('{_CONFIG_LS_KEY}', {_json.dumps(js)});")
+
+    def _apply_config_state(self, cfg: dict):
+        cfg = _sanitize_restored_config(cfg if isinstance(cfg, dict) else {})
+
+        # 模式可能触发预设填充，因此随后再覆盖各个具体参数。
+        if self.input_search_mode and 'search_mode' in cfg:
+            self.input_search_mode.set_value(cfg['search_mode'])
+        if self.input_top_k and 'top_k' in cfg:
+            self.input_top_k.set_value(cfg['top_k'])
+        if self.input_limit and 'limit' in cfg:
+            self.input_limit.set_value(cfg['limit'])
+        if self.input_weight and 'popularity_weight' in cfg:
+            self.input_weight.set_value(cfg['popularity_weight'])
+        if self.input_segment and 'use_segmentation' in cfg:
+            self.input_segment.set_value(cfg['use_segmentation'])
+        if self.input_group_mode and 'group_mode' in cfg:
+            self.input_group_mode.set_value(cfg['group_mode'])
+        if self.input_max_per_group and 'max_per_group' in cfg:
+            self.input_max_per_group.set_value(cfg['max_per_group'])
+        if nsfw_allowed() and self.input_nsfw and 'show_nsfw' in cfg:
+            self.input_nsfw.set_value(cfg['show_nsfw'])
+
+        for layer, val in cfg.get('selected_layers', {}).items():
+            if layer in self.selected_layers:
+                self.selected_layers[layer] = bool(val)
+                if layer in self._layer_checkboxes:
+                    self._layer_checkboxes[layer].set_value(bool(val))
+        for cat, val in cfg.get('selected_cats', {}).items():
+            if cat in self.selected_cats:
+                self.selected_cats[cat] = bool(val)
+                if cat in self._cat_checkboxes:
+                    self._cat_checkboxes[cat].set_value(bool(val))
+
+        if self.sw_semantic and 'sw_semantic' in cfg:
+            self.sw_semantic.set_value(cfg['sw_semantic'])
+        if self.sw_layer and 'sw_layer' in cfg:
+            self.sw_layer.set_value(cfg['sw_layer'])
+        if self.sw_source and 'sw_source' in cfg:
+            self.sw_source.set_value(cfg['sw_source'])
+        if 'prompt_format' in cfg:
+            self._apply_prompt_format(cfg['prompt_format'])
+        if 'rows_per_page' in cfg:
+            self._set_rows_per_page(cfg['rows_per_page'])
+        if self.search_input and cfg.get('search_query'):
+            self.search_input.set_value(cfg['search_query'])
+        if self.notice_expansion and 'notice_expanded' in cfg:
+            self.notice_expansion.set_value(cfg['notice_expanded'])
+        if self.mcp_notice and cfg.get('mcp_notice_dismissed'):
+            self.mcp_notice.set_visibility(False)
+        self._update_table_columns()
 
     async def _restore_config(self):
         """从 localStorage 读取配置并恢复控件状态。"""
@@ -446,80 +665,15 @@ class DanbooruSearchUI:
         except Exception:
             return
 
-        if cfg.get('version') != _CONFIG_VERSION:
-            # 版本不符，丢弃旧配置
-            ui.run_javascript(f"localStorage.removeItem('{_CONFIG_LS_KEY}');")
+        if not isinstance(cfg, dict):
             return
-
-        # 恢复搜索模式（会触发预设填充，但 _applying_preset 防止联动覆盖）
-        if self.input_search_mode and 'search_mode' in cfg:
-            self.input_search_mode.set_value(cfg['search_mode'])
-
-        if self.input_top_k and 'top_k' in cfg:
-            self.input_top_k.set_value(cfg['top_k'])
-        if self.input_limit and 'limit' in cfg:
-            self.input_limit.set_value(cfg['limit'])
-        if self.input_weight and 'popularity_weight' in cfg:
-            self.input_weight.set_value(cfg['popularity_weight'])
-        if self.input_segment and 'use_segmentation' in cfg:
-            self.input_segment.set_value(cfg['use_segmentation'])
-        if self.input_group_mode and 'group_mode' in cfg:
-            self.input_group_mode.set_value(cfg['group_mode'])
-        if self.input_max_per_group and 'max_per_group' in cfg:
-            self.input_max_per_group.set_value(cfg['max_per_group'])
-
-        # NSFW：仅在平台允许时恢复
-        if nsfw_allowed() and self.input_nsfw and 'show_nsfw' in cfg:
-            self.input_nsfw.set_value(cfg['show_nsfw'])
-
-        if 'selected_layers' in cfg:
-            for layer, val in cfg['selected_layers'].items():
-                if layer in self.selected_layers:
-                    self.selected_layers[layer] = bool(val)
-                    if layer in self._layer_checkboxes:
-                        self._layer_checkboxes[layer].set_value(bool(val))
-
-        if 'selected_cats' in cfg:
-            for cat, val in cfg['selected_cats'].items():
-                if cat in self.selected_cats:
-                    self.selected_cats[cat] = bool(val)
-                    if cat in self._cat_checkboxes:
-                        self._cat_checkboxes[cat].set_value(bool(val))
-
-        if self.sw_semantic and 'sw_semantic' in cfg:
-            self.sw_semantic.set_value(cfg['sw_semantic'])
-        if self.sw_layer and 'sw_layer' in cfg:
-            self.sw_layer.set_value(cfg['sw_layer'])
-        if self.sw_source and 'sw_source' in cfg:
-            self.sw_source.set_value(cfg['sw_source'])
-
-        if 'prompt_format' in cfg and cfg['prompt_format'] in ('sdxl', 'nai', 'anima'):
-            self.prompt_format = cfg['prompt_format']
-            if self.format_toggle_btn:
-                if self.prompt_format == 'nai':
-                    self.format_toggle_btn.text = 'NAI'
-                    self.format_toggle_btn.props('color=purple-7')
-                elif self.prompt_format == 'anima':
-                    self.format_toggle_btn.text = 'Anima'
-                    self.format_toggle_btn.props('color=teal-7')
-                else:
-                    self.format_toggle_btn.text = 'SDXL'
-                    self.format_toggle_btn.props('color=grey-7')
-
-        if 'rows_per_page' in cfg:
-            self._set_rows_per_page(cfg['rows_per_page'])
-
-        if self.search_input and cfg.get('search_query'):
-            self.search_input.set_value(cfg['search_query'])
-
-        if self.notice_expansion and 'notice_expanded' in cfg:
-            self.notice_expansion.set_value(cfg['notice_expanded'])
-
-        if self.mcp_notice and cfg.get('mcp_notice_dismissed'):
-            self.mcp_notice.set_visibility(False)
-
-        # 若高级选项列有变更，同步更新表格列
-        self._update_table_columns()
+        if cfg.get('version') != _CONFIG_VERSION:
+            # 旧版本仍按已知字段尽力恢复；保存时自然升级，禁止静默删除。
+            print(
+                f"[UI] 检测到旧配置版本 {cfg.get('version')!r}，执行兼容恢复。",
+                flush=True,
+            )
+        self._apply_config_state(cfg)
 
     # ══════════════════════════════════════════════════════════════════════
     # 页面构建
@@ -657,16 +811,24 @@ class DanbooruSearchUI:
             # ── 2. 搜索卡片 ──
             self._build_search_card()
 
-            # ── 3~5. 结果区域（搜索前隐藏）──
+            # ── 3. 工作区工具和已选标签（无需搜索即可恢复）──
+            self.workspace_card = ui.card().classes(
+                'w-full p-0 gap-0 overflow-hidden bg-blue-50 border border-blue-200'
+            )
+            with self.workspace_card:
+                self._build_workspace_toolbar()
+                self._build_selection_bar()
+
+            # ── 4~5. 搜索结果区域（搜索前隐藏）──
             self.results_section = ui.column().classes('w-full gap-4')
             self.results_section.set_visibility(False)
 
             with self.results_section:
-                # ── 3. 已选标签栏 ──
-                self._build_selection_bar()
-
                 # ── 4. 分词筛选 chips ──
                 self.keywords_container = ui.row().classes('gap-2 items-center flex-wrap')
+
+                # ── 4.1 概念覆盖 ──
+                self.coverage_container = ui.column().classes('w-full gap-2')
 
                 # ── 5. 两栏结果 ──
                 self._build_results_columns()
@@ -883,10 +1045,897 @@ class DanbooruSearchUI:
                             ui.label('每组最大标签数（diverse 模式）').classes('text-xs text-gray-500')
                             self.input_max_per_group.on('update:model-value', self._on_param_changed)
 
+    # ── 工作区工具 ────────────────────────────────────────────────────────
+
+    def _build_workspace_toolbar(self):
+        with ui.element('div').classes(
+            'w-full bg-slate-50 border-b border-blue-100 px-4 py-2'
+        ):
+            with ui.row().classes('w-full items-center gap-2 flex-wrap'):
+                ui.icon('workspaces', color='primary')
+                ui.label('标签工作区').classes('font-bold text-slate-700 mr-2')
+                self.undo_btn = ui.button(
+                    '撤销', icon='undo', on_click=self._undo_workspace,
+                ).props('dense flat color=grey-7')
+                self.redo_btn = ui.button(
+                    '恢复', icon='redo', on_click=self._redo_workspace,
+                ).props('dense flat color=grey-7')
+                self.undo_btn.disable()
+                self.redo_btn.disable()
+                ui.separator().props('vertical').classes('h-7 mx-1')
+                ui.button(
+                    '历史', icon='history', on_click=self._open_history_dialog,
+                ).props('dense flat color=primary')
+                self.history_count_label = ui.label('0').classes('text-xs text-gray-500 -ml-2')
+                ui.button(
+                    '收藏', icon='star_outline', on_click=self._open_favorites_dialog,
+                ).props('dense flat color=amber-8')
+                self.favorites_count_label = ui.label('0').classes('text-xs text-gray-500 -ml-2')
+                ui.button(
+                    '保存收藏', icon='bookmark_add', on_click=self._open_save_favorite_dialog,
+                ).props('dense flat color=teal-7')
+                ui.button(
+                    '导入 Prompt', icon='playlist_add', on_click=self._open_prompt_import_dialog,
+                ).props('dense flat color=purple-7')
+                ui.button(
+                    '备份 / 迁移', icon='swap_horiz', on_click=self._open_backup_dialog,
+                ).props('dense flat color=grey-7')
+        self._update_workspace_counts()
+
+    def _update_workspace_counts(self):
+        if self.history_count_label is not None:
+            self.history_count_label.text = str(len(self.search_history.get('items', [])))
+        if self.favorites_count_label is not None:
+            self.favorites_count_label.text = str(len(self.favorites.get('items', [])))
+
+    def _current_search_settings(self) -> dict:
+        return {
+            'search_mode': self.input_search_mode.value if self.input_search_mode else '自定义',
+            'top_k': int(self.input_top_k.value) if self.input_top_k else 10,
+            'limit': int(self.input_limit.value) if self.input_limit else 80,
+            'popularity_weight': float(self.input_weight.value) if self.input_weight else 0.15,
+            'show_nsfw': bool(self.input_nsfw.value) if self.input_nsfw else False,
+            'use_segmentation': bool(self.input_segment.value) if self.input_segment else True,
+            'target_layers': [k for k, v in self.selected_layers.items() if v],
+            'target_categories': [k for k, v in self.selected_cats.items() if v],
+            'group_mode': self.input_group_mode.value if self.input_group_mode else 'off',
+            'max_per_group': int(self.input_max_per_group.value) if self.input_max_per_group else 2,
+        }
+
+    def _apply_search_settings(self, settings: dict):
+        if not isinstance(settings, dict):
+            return
+        self._applying_preset = True
+        try:
+            mode = settings.get('search_mode')
+            if self.input_search_mode and mode in _SEARCH_MODE_OPTIONS:
+                self.input_search_mode.set_value(mode)
+            if self.input_top_k and isinstance(settings.get('top_k'), int):
+                self.input_top_k.set_value(settings['top_k'])
+            if self.input_limit and isinstance(settings.get('limit'), int):
+                self.input_limit.set_value(settings['limit'])
+            if self.input_weight and isinstance(settings.get('popularity_weight'), (int, float)):
+                self.input_weight.set_value(settings['popularity_weight'])
+            if self.input_segment and isinstance(settings.get('use_segmentation'), bool):
+                self.input_segment.set_value(settings['use_segmentation'])
+            if self.input_group_mode and settings.get('group_mode') in ('off', 'expand', 'diverse'):
+                self.input_group_mode.set_value(settings['group_mode'])
+            if self.input_max_per_group and isinstance(settings.get('max_per_group'), int):
+                self.input_max_per_group.set_value(settings['max_per_group'])
+            if nsfw_allowed() and self.input_nsfw and isinstance(settings.get('show_nsfw'), bool):
+                self.input_nsfw.set_value(settings['show_nsfw'])
+
+            layers = settings.get('target_layers')
+            if isinstance(layers, list):
+                selected = set(layers)
+                for layer in self.selected_layers:
+                    value = layer in selected
+                    self.selected_layers[layer] = value
+                    if layer in self._layer_checkboxes:
+                        self._layer_checkboxes[layer].set_value(value)
+            categories = settings.get('target_categories')
+            if isinstance(categories, list):
+                selected = set(categories)
+                for category in self.selected_cats:
+                    value = category in selected
+                    self.selected_cats[category] = value
+                    if category in self._cat_checkboxes:
+                        self._cat_checkboxes[category].set_value(value)
+        finally:
+            self._applying_preset = False
+        self._save_config()
+
+    def _record_search_history(self, query: str):
+        settings = self._current_search_settings()
+        self.workspace_state = append_workspace_query(
+            self.workspace_state,
+            query,
+            settings,
+        )
+        self._save_staged_tags()
+        self.search_history = add_history_entry(
+            self.search_history,
+            query,
+            settings,
+            self.workspace_state,
+        )
+        self._save_history()
+        self._update_workspace_counts()
+
+    def _open_history_dialog(self):
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-4xl max-h-[85vh]'):
+            with ui.row().classes('w-full items-center justify-between'):
+                ui.label('搜索历史').classes('text-lg font-bold')
+                with ui.row().classes('gap-2'):
+                    if self.search_history.get('items'):
+                        ui.button(
+                            '清空全部', icon='delete_sweep',
+                            on_click=lambda: self._confirm_clear_history(dialog),
+                        ).props('flat dense color=red-7')
+                    ui.button(icon='close', on_click=dialog.close).props('flat round dense')
+
+            with ui.scroll_area().classes('w-full h-[65vh]'):
+                items = self.search_history.get('items', [])
+                if not items:
+                    ui.label('暂无搜索历史').classes('text-sm text-gray-400 p-6')
+                for item in items:
+                    with ui.card().classes('w-full mb-2 p-3 border border-gray-200 shadow-none'):
+                        with ui.row().classes('w-full items-start justify-between gap-3'):
+                            with ui.column().classes('gap-1 flex-grow min-w-0'):
+                                ui.label(item['query']).classes('font-medium text-gray-800 break-all')
+                                selected_count = len(item['workspace'].get('selected', []))
+                                ui.label(
+                                    f"{_format_history_time(item.get('searched_at'))} · "
+                                    f"工作区内有 {selected_count} 个标签"
+                                ).classes('text-xs text-gray-400')
+                                ui.label(
+                                    _format_history_settings(item.get('settings'))
+                                ).classes('text-xs text-gray-400')
+                            with ui.row().classes('gap-1 flex-wrap justify-end'):
+                                ui.button(
+                                    '重新搜索', icon='search',
+                                    on_click=lambda i=item, d=dialog: self._history_research(i, d),
+                                ).props('flat dense color=primary')
+                                ui.button(
+                                    '恢复工作区', icon='restore',
+                                    on_click=lambda i=item, d=dialog: self._history_restore(i, d),
+                                ).props('flat dense color=teal-7')
+                                ui.button(
+                                    '追加查询', icon='playlist_add',
+                                    on_click=lambda i=item, d=dialog: self._history_append(i, d),
+                                ).props('flat dense color=purple-7')
+                                ui.button(
+                                    icon='delete_outline',
+                                    on_click=lambda i=item, d=dialog: self._delete_history_entry(i, d),
+                                ).props('flat round dense color=red-6')
+        dialog.open()
+
+    async def _history_research(self, item: dict, dialog):
+        dialog.close()
+        self._apply_search_settings(item.get('settings', {}))
+        self.search_input.set_value(item['query'])
+        await self.perform_search()
+
+    async def _history_restore(self, item: dict, dialog):
+        normalized = await self._canonicalize_workspace_for_load(
+            item['workspace'],
+            source='历史工作区恢复',
+        )
+        self._push_undo_snapshot()
+        self._apply_workspace_state(normalized.workspace)
+        self.search_input.set_value(item['query'])
+        dialog.close()
+        ui.notify('已恢复历史工作区；未重新发起搜索', type='positive')
+        self._show_workspace_canonicalization(normalized, '历史工作区')
+
+    async def _history_append(self, item: dict, dialog):
+        dialog.close()
+        self.search_input.set_value(item['query'])
+        await self.perform_search()
+
+    def _delete_history_entry(self, item: dict, dialog):
+        history_id = item.get('history_id')
+        self.search_history['items'] = [
+            entry for entry in self.search_history.get('items', [])
+            if entry.get('history_id') != history_id
+        ]
+        self._save_history()
+        self._update_workspace_counts()
+        dialog.close()
+        self._open_history_dialog()
+
+    def _confirm_clear_history(self, parent_dialog):
+        with ui.dialog() as confirm, ui.card():
+            ui.label('确定清空全部搜索历史吗？收藏和当前工作区不会受到影响。')
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('取消', on_click=confirm.close).props('flat')
+                def clear():
+                    self.search_history = empty_history()
+                    self._save_history()
+                    self._update_workspace_counts()
+                    confirm.close()
+                    parent_dialog.close()
+                    ui.notify('搜索历史已清空', type='positive')
+                ui.button('清空', on_click=clear).props('unelevated color=red-7')
+        confirm.open()
+
+    def _open_prompt_import_dialog(self):
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-3xl'):
+            ui.label('导入 Prompt').classes('text-lg font-bold')
+            ui.label(
+                '支持半角/全角逗号或换行分隔，以及 (tag:1.2)、1.2::tag::、{tag}、[tag] 和 @artist。'
+                '无法确认的内容会保留在待确认区，不会进入最终 Prompt。'
+            ).classes('text-sm text-gray-600')
+            prompt_input = ui.textarea(
+                label='粘贴 Prompt',
+                placeholder='1girl, (white_serafuku:1.2), {rain}, @artist_name',
+            ).props('outlined autogrow maxlength=20000').classes('w-full min-h-48')
+            import_btn = None
+
+            async def submit_import():
+                text = str(prompt_input.value or '').strip()
+                if not text:
+                    ui.notify('请先粘贴 Prompt', type='warning')
+                    return
+                import_btn.disable()
+                try:
+                    tagger = await DanbooruTagger.get_instance()
+                    allow_nsfw = bool(
+                        nsfw_allowed() and self.input_nsfw and self.input_nsfw.value
+                    )
+                    result = await asyncio.to_thread(
+                        resolve_prompt_text,
+                        text,
+                        resolve_tag=tagger.resolve_tag_name,
+                        resolve_artist=tagger.resolve_artist_name,
+                        lookup_tag=tagger.get_tag_workspace_metadata,
+                        allow_nsfw=allow_nsfw,
+                    )
+                    if result.parsed_count == 0:
+                        ui.notify('没有解析到可导入内容', type='warning')
+                        import_btn.enable()
+                        return
+                    added_count, duplicate_count = self._apply_prompt_import_result(result)
+                    dialog.close()
+                    self._show_prompt_import_summary(result, added_count, duplicate_count)
+                except Exception as exc:
+                    print(f'[UI] Prompt 导入异常: {exc}', flush=True)
+                    ui.notify('Prompt 导入失败，请检查输入内容', type='negative')
+                    import_btn.enable()
+
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('取消', on_click=dialog.close).props('flat')
+                import_btn = ui.button(
+                    '解析并导入', icon='playlist_add', on_click=submit_import,
+                ).props('unelevated color=purple-7')
+        dialog.open()
+
+    def _apply_prompt_import_result(self, result: PromptImportResult) -> tuple[int, int]:
+        current = self._get_selected_tags()
+        existing = set(current)
+        existing_pending = {
+            (
+                item.get('normalized'),
+                bool(item.get('is_artist')),
+                item.get('reason'),
+                item.get('alias_target'),
+            )
+            for item in self.workspace_state.get('dismissed', [])
+            if isinstance(item, dict) and item.get('kind') == 'prompt_import_pending'
+        }
+        pending_to_add = []
+        duplicate_count = result.duplicate_count
+
+        for pending in result.pending:
+            key = (
+                pending.normalized,
+                pending.is_artist,
+                pending.reason,
+                pending.alias_target,
+            )
+            if key in existing_pending:
+                duplicate_count += 1
+                continue
+            existing_pending.add(key)
+            pending_to_add.append(pending_to_workspace_entry(pending))
+
+        new_items = [item for item in result.items if item.tag not in existing]
+        duplicate_count += len(result.items) - len(new_items)
+        if new_items or pending_to_add:
+            self._push_undo_snapshot()
+
+        for item in new_items:
+            existing.add(item.tag)
+            current.append(item.tag)
+            self.tag_weights[item.tag] = item.weight
+            self._set_selection_meta(
+                item.tag,
+                'prompt_import_artist' if item.is_artist else 'prompt_import',
+                item.original,
+            )
+
+        if pending_to_add:
+            self.workspace_state['dismissed'] = (
+                list(self.workspace_state.get('dismissed', [])) + pending_to_add
+            )[-2000:]
+
+        if new_items or pending_to_add:
+            self._set_selected_tags(current, record_undo=False)
+            self._render_prompt_pending()
+        return len(new_items), duplicate_count
+
+    @staticmethod
+    def _prompt_pending_reason(item: dict) -> str:
+        reason = item.get('reason')
+        if reason == 'alias_target_missing':
+            target = item.get('alias_target') or '未知目标'
+            return f'Alias 指向 {target}，但目标不在当前标签库范围内'
+        if reason == 'nsfw_filtered':
+            return '当前 NSFW 设置不允许加入该标签'
+        if reason == 'ambiguous_compact':
+            return '存在多个可能的规范标签，请人工选择'
+        if reason == 'not_found':
+            return '当前标签库中无法唯一识别'
+        if item.get('is_artist'):
+            return '画师共现库中无法唯一识别'
+        return f'无法识别（{reason or "unknown"}）'
+
+    def _show_prompt_import_summary(
+        self,
+        result: PromptImportResult,
+        added_count: int,
+        duplicate_count: int,
+    ):
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-3xl max-h-[85vh]'):
+            ui.label('Prompt 导入结果').classes('text-lg font-bold')
+            ui.label(
+                f'解析 {result.parsed_count} 项 · 新增 {added_count} 项 · '
+                f'纠正 {len(result.corrections)} 项 · 重复合并 {duplicate_count} 项 · '
+                f'待确认 {len(result.pending)} 项'
+            ).classes('text-sm text-gray-700 bg-slate-50 rounded p-3')
+            with ui.scroll_area().classes('w-full max-h-[58vh]'):
+                if result.corrections:
+                    ui.label('名称规范化').classes('font-bold text-teal-700 mt-2')
+                    for correction in result.corrections:
+                        ui.label(
+                            f'{correction.original} → {correction.canonical}'
+                        ).classes('text-sm font-mono text-teal-800')
+                if result.pending:
+                    ui.label('未加入，已进入待确认区').classes(
+                        'font-bold text-orange-700 mt-3'
+                    )
+                    for item in result.pending:
+                        pending_record = pending_to_workspace_entry(item)
+                        ui.label(
+                            f'{item.original}：{self._prompt_pending_reason(pending_record)}'
+                        ).classes('text-sm text-orange-800 break-all')
+            with ui.row().classes('w-full justify-end'):
+                ui.button('知道了', on_click=dialog.close).props('unelevated color=primary')
+        dialog.open()
+
+    def _render_prompt_pending(self):
+        if self.prompt_pending_container is None:
+            return
+        self.prompt_pending_container.clear()
+        pending_items = [
+            item for item in self.workspace_state.get('dismissed', [])
+            if isinstance(item, dict) and item.get('kind') == 'prompt_import_pending'
+        ]
+        if not pending_items:
+            return
+
+        with self.prompt_pending_container:
+            with ui.expansion(
+                f'待确认内容（{len(pending_items)}）', icon='help_outline', value=True,
+            ).classes('w-full bg-orange-50 border border-orange-200 rounded'):
+                ui.label(
+                    '以下内容不会出现在复制结果中。可选择可靠候选，或从待确认区移除。'
+                ).classes('text-xs text-orange-700 mb-2')
+                for item in pending_items:
+                    with ui.row().classes(
+                        'w-full items-center justify-between gap-2 border-t border-orange-100 py-2'
+                    ):
+                        with ui.column().classes('gap-0 min-w-0 flex-grow'):
+                            ui.label(str(item.get('original') or '')).classes(
+                                'text-sm font-mono text-gray-800 break-all'
+                            )
+                            ui.label(self._prompt_pending_reason(item)).classes(
+                                'text-xs text-orange-700'
+                            )
+                        with ui.row().classes('gap-1 flex-wrap justify-end'):
+                            if item.get('reason') not in {'alias_target_missing', 'nsfw_filtered'}:
+                                for candidate in item.get('candidates', [])[:5]:
+                                    ui.button(
+                                        str(candidate),
+                                        on_click=lambda i=item, c=str(candidate):
+                                            self._accept_prompt_candidate(i, c),
+                                    ).props('flat dense color=teal-7').classes('text-xs font-mono')
+                            ui.button(
+                                icon='close',
+                                on_click=lambda i=item: self._remove_prompt_pending(i),
+                            ).props('flat round dense color=grey-6')
+
+    def _remove_prompt_pending(self, pending: dict):
+        pending_id = pending.get('pending_id')
+        self._push_undo_snapshot()
+        self.workspace_state['dismissed'] = [
+            item for item in self.workspace_state.get('dismissed', [])
+            if not (
+                isinstance(item, dict)
+                and item.get('kind') == 'prompt_import_pending'
+                and item.get('pending_id') == pending_id
+            )
+        ]
+        self._save_staged_tags()
+        self._render_prompt_pending()
+
+    def _accept_prompt_candidate(self, pending: dict, candidate: str):
+        tagger = DanbooruTagger._instance
+        is_artist = bool(pending.get('is_artist'))
+        if tagger is None:
+            ui.notify('标签引擎尚未就绪，请稍后再试', type='warning')
+            return
+        if is_artist:
+            resolved = tagger.resolve_artist_name(candidate)
+            canonical = resolved.get('artist')
+        else:
+            resolved = tagger.resolve_tag_name(candidate)
+            canonical = resolved.get('tag')
+        if not canonical:
+            ui.notify('该候选目前无法加入工作区', type='warning')
+            return
+        if not is_artist:
+            metadata = tagger.get_tag_workspace_metadata(canonical) or {}
+            nsfw_blocked = (
+                str(metadata.get('nsfw', '0')) == '1'
+                and not bool(nsfw_allowed() and self.input_nsfw and self.input_nsfw.value)
+            )
+            if nsfw_blocked:
+                ui.notify('当前 NSFW 设置不允许加入该候选', type='warning')
+                return
+
+        self._push_undo_snapshot()
+        self.workspace_state['dismissed'] = [
+            item for item in self.workspace_state.get('dismissed', [])
+            if not (
+                isinstance(item, dict)
+                and item.get('kind') == 'prompt_import_pending'
+                and item.get('pending_id') == pending.get('pending_id')
+            )
+        ]
+        current = self._get_selected_tags()
+        if canonical not in current:
+            current.append(canonical)
+            self.tag_weights[canonical] = float(pending.get('weight', 1.0))
+            self._set_selection_meta(
+                canonical,
+                'prompt_import_artist' if is_artist else 'prompt_import',
+                str(pending.get('original') or ''),
+            )
+        self._set_selected_tags(current, record_undo=False)
+        self._render_prompt_pending()
+        ui.notify(
+            f"已确认：{pending.get('normalized') or pending.get('original')} → {canonical}",
+            type='positive',
+        )
+
+    async def _canonicalize_workspace_for_load(
+        self,
+        workspace: dict,
+        *,
+        source: str,
+    ) -> WorkspaceCanonicalizationResult:
+        tagger = await DanbooruTagger.get_instance()
+        return await asyncio.to_thread(
+            canonicalize_workspace_tags,
+            workspace,
+            resolve_tag=tagger.resolve_tag_name,
+            resolve_artist=tagger.resolve_artist_name,
+            lookup_tag=tagger.get_tag_workspace_metadata,
+            artist_origins=_ARTIST_ORIGINS,
+            source=source,
+        )
+
+    def _show_workspace_canonicalization(
+        self,
+        result: WorkspaceCanonicalizationResult,
+        label: str,
+    ):
+        if not result.corrections and not result.pending and not result.duplicate_count:
+            return
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
+            ui.label(f'{label}标签规范化结果').classes('text-lg font-bold')
+            ui.label(
+                f'纠正 {len(result.corrections)} 项 · '
+                f'重复合并 {result.duplicate_count} 项 · '
+                f'待确认 {len(result.pending)} 项'
+            ).classes('text-sm text-gray-600')
+            if result.corrections:
+                with ui.column().classes('w-full gap-1'):
+                    for correction in result.corrections:
+                        ui.label(
+                            f'{correction.original} → {correction.canonical}'
+                        ).classes('text-sm font-mono text-teal-800')
+            if result.pending:
+                ui.label('未识别内容已移入工作区待确认区，不会进入复制结果。').classes(
+                    'text-sm text-orange-700'
+                )
+            with ui.row().classes('w-full justify-end'):
+                ui.button('知道了', on_click=dialog.close).props('unelevated color=primary')
+        dialog.open()
+
+    def _open_save_favorite_dialog(self):
+        if not self._get_selected_tags():
+            ui.notify('当前工作区没有可收藏的标签', type='warning')
+            return
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-lg'):
+            ui.label('保存当前工作区为收藏').classes('text-lg font-bold')
+            name_input = ui.input('收藏名称').props('outlined maxlength=80').classes('w-full')
+            notes_input = ui.textarea('备注（可选）').props(
+                'outlined autogrow maxlength=500'
+            ).classes('w-full')
+
+            def save():
+                name = (name_input.value or '').strip()
+                if not name:
+                    ui.notify('请输入收藏名称', type='warning')
+                    return
+                if any(item['name'] == name for item in self.favorites.get('items', [])):
+                    ui.notify('已存在同名收藏，请在收藏列表中使用“覆盖”', type='warning')
+                    return
+                favorite = favorite_from_workspace(
+                    self.workspace_state,
+                    name,
+                    notes=(notes_input.value or '').strip(),
+                )
+                candidate = {
+                    'schema_version': 1,
+                    'items': [favorite] + self.favorites.get('items', [])[:199],
+                }
+                if not self._replace_favorites_safely(candidate):
+                    return
+                dialog.close()
+                ui.notify(f'已保存收藏：{name}', type='positive')
+
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('取消', on_click=dialog.close).props('flat')
+                ui.button('保存', icon='bookmark_add', on_click=save).props(
+                    'unelevated color=teal-7'
+                )
+        dialog.open()
+
+    def _open_favorites_dialog(self):
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-5xl max-h-[88vh]'):
+            with ui.row().classes('w-full items-center justify-between'):
+                ui.label('收藏').classes('text-lg font-bold')
+                ui.button(icon='close', on_click=dialog.close).props('flat round dense')
+            with ui.scroll_area().classes('w-full h-[70vh]'):
+                items = self.favorites.get('items', [])
+                if not items:
+                    ui.label('暂无收藏').classes('text-sm text-gray-400 p-6')
+                for item in items:
+                    with ui.card().classes('w-full mb-2 p-3 border border-amber-100 shadow-none'):
+                        with ui.row().classes('w-full items-start justify-between gap-3'):
+                            with ui.column().classes('gap-1 flex-grow min-w-0'):
+                                ui.label(item['name']).classes('font-bold text-gray-800')
+                                ui.label(
+                                    f"{len(item['selected'])} 个标签 · {item['prompt_format'].upper()} · "
+                                    f"更新于 {item['updated_at']}"
+                                ).classes('text-xs text-gray-400')
+                                if item.get('source_query'):
+                                    ui.label(f"来源：{item['source_query']}").classes(
+                                        'text-xs text-gray-500 break-all'
+                                    )
+                                if item.get('notes'):
+                                    ui.label(item['notes']).classes('text-xs text-gray-600')
+                            with ui.row().classes('gap-1 flex-wrap justify-end max-w-xl'):
+                                ui.button(
+                                    '替换载入', icon='file_open',
+                                    on_click=lambda i=item, d=dialog: self._load_favorite(i, False, d),
+                                ).props('flat dense color=teal-7')
+                                ui.button(
+                                    '合并', icon='merge',
+                                    on_click=lambda i=item, d=dialog: self._load_favorite(i, True, d),
+                                ).props('flat dense color=primary')
+                                ui.button(
+                                    '复制', icon='content_copy',
+                                    on_click=lambda i=item: self._copy_favorite(i),
+                                ).props('flat dense color=grey-7')
+                                ui.button(
+                                    '重命名', icon='edit',
+                                    on_click=lambda i=item, d=dialog: self._rename_favorite(i, d),
+                                ).props('flat dense color=grey-7')
+                                ui.button(
+                                    '覆盖', icon='save',
+                                    on_click=lambda i=item, d=dialog: self._overwrite_favorite(i, d),
+                                ).props('flat dense color=amber-8')
+                                ui.button(
+                                    '导出', icon='download',
+                                    on_click=lambda i=item: self._export_favorite(i),
+                                ).props('flat dense color=purple-7')
+                                ui.button(
+                                    icon='delete_outline',
+                                    on_click=lambda i=item, d=dialog: self._confirm_delete_favorite(i, d),
+                                ).props('flat round dense color=red-6')
+        dialog.open()
+
+    async def _load_favorite(self, favorite: dict, merge: bool, dialog):
+        if merge:
+            workspace = merge_favorite_into_workspace(self.workspace_state, favorite)
+            message = f"已合并收藏：{favorite['name']}"
+        else:
+            workspace = replace_with_favorite(favorite)
+            message = f"已载入收藏：{favorite['name']}"
+        normalized = await self._canonicalize_workspace_for_load(
+            workspace,
+            source=f"收藏恢复：{favorite['name']}",
+        )
+        self._push_undo_snapshot()
+        self._apply_workspace_state(normalized.workspace)
+        dialog.close()
+        ui.notify(message, type='positive')
+        self._show_workspace_canonicalization(normalized, f"收藏“{favorite['name']}”")
+
+    def _copy_favorite(self, favorite: dict):
+        parts: list[str] = []
+        for item in favorite.get('selected', []):
+            tag = item['tag']
+            if favorite.get('prompt_format') == 'anima' and item.get('origin') in _ARTIST_ORIGINS:
+                tag = f'@{tag}'
+            parts.append(_format_tag_with_weight(
+                tag,
+                item.get('weight', 1.0),
+                favorite.get('prompt_format', 'sdxl'),
+            ))
+        ui.clipboard.write(', '.join(parts))
+        ui.notify(f"已复制收藏：{favorite['name']}", type='positive')
+
+    def _rename_favorite(self, favorite: dict, parent_dialog):
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-md'):
+            ui.label('重命名收藏').classes('font-bold')
+            name_input = ui.input('新名称', value=favorite['name']).props(
+                'outlined maxlength=80'
+            ).classes('w-full')
+            def rename():
+                name = (name_input.value or '').strip()
+                if not name:
+                    ui.notify('请输入名称', type='warning')
+                    return
+                if any(
+                    item['favorite_id'] != favorite['favorite_id'] and item['name'] == name
+                    for item in self.favorites.get('items', [])
+                ):
+                    ui.notify('已存在同名收藏', type='warning')
+                    return
+                candidate = normalize_favorites(self.favorites)[0]
+                for item in candidate['items']:
+                    if item['favorite_id'] == favorite['favorite_id']:
+                        item['name'] = name
+                        item['updated_at'] = utc_now_iso()
+                        break
+                if not self._replace_favorites_safely(candidate):
+                    return
+                dialog.close()
+                parent_dialog.close()
+                self._open_favorites_dialog()
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('取消', on_click=dialog.close).props('flat')
+                ui.button('保存', on_click=rename).props('unelevated color=primary')
+        dialog.open()
+
+    def _overwrite_favorite(self, favorite: dict, parent_dialog):
+        if not self._get_selected_tags():
+            ui.notify('当前工作区没有标签，不能覆盖收藏', type='warning')
+            return
+        replacement = favorite_from_workspace(
+            self.workspace_state,
+            favorite['name'],
+            notes=favorite.get('notes', ''),
+            favorite_id=favorite['favorite_id'],
+            created_at=favorite.get('created_at'),
+        )
+        candidate = {
+            'schema_version': 1,
+            'items': [
+                replacement if item['favorite_id'] == favorite['favorite_id'] else item
+                for item in self.favorites.get('items', [])
+            ],
+        }
+        if not self._replace_favorites_safely(candidate):
+            return
+        parent_dialog.close()
+        ui.notify(f"已覆盖收藏：{favorite['name']}", type='positive')
+
+    def _export_favorite(self, favorite: dict):
+        payload = {
+            'schema_version': 1,
+            'exported_at': favorite.get('updated_at', ''),
+            'favorite': favorite,
+        }
+        raw = dump_collection(payload, label='favorite export').encode('utf-8')
+        safe_name = re.sub(r'[^0-9A-Za-z\u4e00-\u9fff_-]+', '_', favorite['name'])[:60]
+        ui.download(raw, filename=f'danbooru_favorite_{safe_name or "export"}.json', media_type='application/json')
+
+    def _confirm_delete_favorite(self, favorite: dict, parent_dialog):
+        with ui.dialog() as dialog, ui.card():
+            ui.label(f"确定删除收藏“{favorite['name']}”吗？")
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('取消', on_click=dialog.close).props('flat')
+                def delete():
+                    candidate = {
+                        'schema_version': 1,
+                        'items': [
+                            item for item in self.favorites.get('items', [])
+                            if item['favorite_id'] != favorite['favorite_id']
+                        ],
+                    }
+                    if not self._replace_favorites_safely(candidate):
+                        return
+                    dialog.close()
+                    parent_dialog.close()
+                    ui.notify('收藏已删除', type='positive')
+                ui.button('删除', on_click=delete).props('unelevated color=red-7')
+        dialog.open()
+
+    def _open_backup_dialog(self):
+        with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
+            ui.label('本地数据备份与迁移').classes('text-lg font-bold')
+            ui.label(
+                '导出文件包含当前配置、工作区、原始搜索查询、历史和收藏。'
+                '文件只会在你主动下载或上传时离开浏览器。'
+            ).classes('text-sm text-orange-700 bg-orange-50 rounded p-3')
+            ui.button(
+                '导出完整 JSON', icon='download', on_click=self._export_backup,
+            ).props('unelevated color=primary').classes('w-full')
+            ui.separator()
+            import_mode = ui.select(
+                {
+                    'merge': '合并：保留当前权重和配置',
+                    'overwrite': '覆盖：使用备份中的全部数据',
+                    'favorites_only': '只导入收藏',
+                },
+                value='merge',
+                label='导入方式',
+            ).props('outlined').classes('w-full')
+
+            pending_import = {'raw': None, 'name': ''}
+            pending_label = ui.label(
+                '选择文件后，请检查文件名和导入方式，再点击“确认导入”。'
+            ).classes('text-sm text-gray-500')
+            confirm_import_btn = None
+
+            async def handle_upload(event):
+                try:
+                    raw = await event.file.text('utf-8')
+                    _json.loads(raw)
+                    pending_import['raw'] = raw
+                    pending_import['name'] = event.file.name
+                    pending_label.text = f'已选择：{event.file.name}；尚未执行导入'
+                    confirm_import_btn.enable()
+                except (UnicodeDecodeError, _json.JSONDecodeError) as exc:
+                    pending_import['raw'] = None
+                    pending_import['name'] = ''
+                    pending_label.text = '文件读取失败，请重新选择有效的 JSON 文件。'
+                    confirm_import_btn.disable()
+                    ui.notify(f'文件读取失败：{exc}', type='negative', timeout=5000)
+                except Exception as exc:
+                    pending_import['raw'] = None
+                    pending_import['name'] = ''
+                    pending_label.text = '文件读取失败，请重新选择。'
+                    confirm_import_btn.disable()
+                    print(f'[UI] JSON 文件读取异常: {exc}', flush=True)
+                    ui.notify('文件读取失败，请检查文件格式', type='negative')
+
+            async def confirm_import():
+                raw = pending_import.get('raw')
+                if not isinstance(raw, str):
+                    ui.notify('请先选择 JSON 文件', type='warning')
+                    return
+                confirm_import_btn.disable()
+                try:
+                    await self._import_backup_text(raw, import_mode.value)
+                    dialog.close()
+                except (WorkspaceDataError, ValueError) as exc:
+                    ui.notify(f'导入失败：{exc}', type='negative', timeout=5000)
+                    confirm_import_btn.enable()
+                except Exception as exc:
+                    print(f'[UI] JSON 导入异常: {exc}', flush=True)
+                    ui.notify('导入失败，请检查文件格式', type='negative')
+                    confirm_import_btn.enable()
+
+            ui.upload(
+                label='选择 JSON 文件',
+                on_upload=handle_upload,
+                auto_upload=True,
+                max_file_size=12_000_000,
+                on_rejected=lambda: ui.notify('文件过大，仅支持 12 MB 以内的 JSON', type='warning'),
+            ).props('accept=.json').classes('w-full')
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('关闭', on_click=dialog.close).props('flat')
+                confirm_import_btn = ui.button(
+                    '确认导入', icon='check', on_click=confirm_import,
+                ).props('unelevated color=primary')
+                confirm_import_btn.disable()
+        dialog.open()
+
+    def _export_backup(self):
+        backup = build_backup(
+            config=self._collect_config_state(),
+            workspace=self.workspace_state,
+            history=self.search_history,
+            favorites=self.favorites,
+        )
+        raw = _json.dumps(backup, ensure_ascii=False, indent=2).encode('utf-8')
+        filename = f"danbooru_workspace_backup_{utc_now_iso()[:10]}.json"
+        ui.download(raw, filename=filename, media_type='application/json')
+
+    async def _import_backup_text(self, raw: str, mode: str):
+        # 单个收藏导出文件也可直接从这里重新导入。
+        try:
+            parsed = _json.loads(raw)
+        except _json.JSONDecodeError as exc:
+            raise WorkspaceDataError('文件不是有效 JSON') from exc
+        if isinstance(parsed, dict) and 'favorite' in parsed:
+            incoming = {
+                'schema_version': 1,
+                'items': [parsed['favorite']],
+            }
+            normalized, warnings = normalize_favorites(incoming)
+            candidate = merge_favorites(self.favorites, normalized)
+            if not self._replace_favorites_safely(candidate):
+                return
+            ui.notify('收藏已导入', type='positive')
+            if warnings:
+                print(f'[UI] 收藏导入提示: {warnings}', flush=True)
+            return
+
+        backup, warnings = normalize_backup(parsed)
+        workspace_normalization = None
+        if mode != 'favorites_only':
+            workspace_normalization = await self._canonicalize_workspace_for_load(
+                backup['workspace'],
+                source='JSON 备份导入',
+            )
+            backup['workspace'] = workspace_normalization.workspace
+        if mode == 'favorites_only':
+            candidate = merge_favorites(self.favorites, backup['favorites'])
+            if not self._replace_favorites_safely(candidate):
+                return
+            message = '收藏已合并导入'
+        elif mode == 'overwrite':
+            if not self._replace_favorites_safely(backup['favorites']):
+                return
+            self._push_undo_snapshot()
+            self.search_history = backup['history']
+            self._apply_config_state(backup['config'])
+            self._apply_workspace_state(backup['workspace'])
+            self._save_history()
+            message = '本地数据已由备份覆盖'
+        else:
+            workspace = merge_workspaces(self.workspace_state, backup['workspace'])
+            merged_history = merge_history(self.search_history, backup['history'])
+            candidate = merge_favorites(self.favorites, backup['favorites'])
+            if not self._replace_favorites_safely(candidate):
+                return
+            self._push_undo_snapshot()
+            self.search_history = merged_history
+            self._apply_workspace_state(workspace)
+            self._save_history()
+            message = '备份已合并；当前标签权重和配置保持不变'
+        self._update_workspace_counts()
+        ui.notify(message, type='positive', timeout=4000)
+        if workspace_normalization is not None:
+            self._show_workspace_canonicalization(
+                workspace_normalization,
+                'JSON 备份工作区',
+            )
+        if warnings:
+            print(f'[UI] 备份导入提示: {sorted(set(warnings))}', flush=True)
+
     # ── 已选标签栏 ────────────────────────────────────────────────────────
 
     def _build_selection_bar(self):
-        self.selection_bar_card = ui.card().classes('w-full bg-blue-50 border border-blue-200')
+        self.selection_bar_card = ui.element('div').classes('w-full bg-blue-50 p-4')
         with self.selection_bar_card:
             with ui.row().classes('w-full items-center justify-between'):
                 with ui.row().classes('items-center gap-2'):
@@ -927,11 +1976,12 @@ class DanbooruSearchUI:
 
             # chip 容器：每个已选标签渲染为一个带加减按钮的 chip
             self.selected_chips_container = ui.element('div').classes(
-                'w-full mt-2 min-h-10 p-1 rounded bg-white border border-blue-100 flex flex-wrap'
+                'w-full mt-2 min-h-10 p-1 rounded bg-white border border-blue-100'
             )
+            self.prompt_pending_container = ui.column().classes('w-full gap-2 mt-2')
 
     def _render_selected_chips(self):
-        """重新渲染已选标签的 chip 列表。"""
+        """按稳定 Tag Group 规则渲染；复制顺序仍使用原始选择顺序。"""
         if self.selected_chips_container is None:
             return
         self.selected_chips_container.clear()
@@ -940,43 +1990,87 @@ class DanbooruSearchUI:
             with self.selected_chips_container:
                 ui.label('暂无已选标签').classes('text-xs text-gray-400 italic p-2 self-center')
             return
+
+        grouped: dict[str, list[str]] = {name: [] for name in WORKSPACE_GROUP_ORDER}
+        for tag in tags:
+            grouped[self._workspace_group_for_tag(tag)].append(tag)
+
         with self.selected_chips_container:
             step = 0.5 if self.prompt_format == 'anima' else 0.1
-            for tag in tags:
-                w = self.tag_weights.get(tag, 1.0)
-                extra_cls = 'boosted' if w > 1.0 else ('reduced' if w < 1.0 else '')
-                w_str = f'{w:.1f}'
-                display_label = _format_selected_tag_label(tag, self._get_cn_name_for_tag(tag))
-                with ui.element('div').classes(f'weight-chip {extra_cls}'):
-                    # 删除按钮（×）
-                    with ui.element('button').classes('weight-btn').props(f'title="移除 {tag}"').on(
-                        'click', lambda t=tag: self._remove_selected_tag(t)
-                    ):
-                        ui.html('&times;')
-                    # 减号
-                    with ui.element('button').classes('weight-btn').on(
-                        'click', lambda t=tag, s=step: self._adjust_weight(t, -s)
-                    ):
-                        ui.html('&minus;')
-                    # 标签名
-                    ui.label(display_label).style(
-                        'font-family:Consolas,Monaco,monospace;font-size:12px;'
-                        'color:#2c5282;max-width:240px;overflow:hidden;'
-                        'text-overflow:ellipsis;white-space:nowrap;'
+            for group_name in WORKSPACE_GROUP_ORDER:
+                group_tags = grouped[group_name]
+                if not group_tags:
+                    continue
+                with ui.element('div').classes('w-full px-1 py-1'):
+                    ui.label(f'{group_name} · {len(group_tags)}').classes(
+                        'text-xs font-bold text-slate-500 mb-1'
                     )
-                    # 权重值（仅非 1.0 时显示）
-                    if w != 1.0:
-                        ui.label(w_str).classes('weight-label').style('color:#e65100;font-weight:bold;')
-                    # 加号
-                    plus_btn = ui.element('button').classes('weight-btn').on(
-                        'click', lambda t=tag, s=step: self._adjust_weight(t, +s)
-                    )
-                    if self.prompt_format == 'anima':
-                        with plus_btn:
-                            with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
-                                ui.html('Anima模型所需要的权重数值较大').style('font-size:12px;')
-                    with plus_btn:
-                        ui.html('&plus;')
+                    with ui.row().classes('w-full gap-1 flex-wrap'):
+                        for tag in group_tags:
+                            self._render_selected_tag_chip(tag, step)
+
+    def _workspace_group_for_tag(self, tag: str) -> str:
+        is_artist = tag in self._workspace_artist_tags
+        category = 'Artist' if is_artist else 'Other'
+        groups: set[str] = set()
+
+        tagger = DanbooruTagger._instance
+        if tagger is not None:
+            metadata = tagger.get_tag_workspace_metadata(tag)
+            if metadata:
+                category = str(metadata.get('category') or category)
+                groups = set(metadata.get('groups') or [])
+        elif self.result_table is not None:
+            for row in self.result_table.rows:
+                if row.get('tag') == tag:
+                    category = str(row.get('category') or category)
+                    break
+
+        return classify_workspace_tag(
+            category=category,
+            tag_groups=groups,
+            is_artist=is_artist,
+        )
+
+    def _render_selected_tag_chip(self, tag: str, step: float):
+        w = self.tag_weights.get(tag, 1.0)
+        extra_cls = 'boosted' if w > 1.0 else ('reduced' if w < 1.0 else '')
+        w_str = f'{w:.1f}'
+        display_label = _format_selected_tag_label(tag, self._get_cn_name_for_tag(tag))
+        with ui.element('div').classes(f'weight-chip {extra_cls}'):
+            metadata = self._pending_selection_meta.get(tag, {})
+            reason = selected_tag_reason(
+                metadata.get('origin'),
+                metadata.get('source'),
+            )
+            with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
+                ui.label(reason).style('font-size:13px;')
+            with ui.element('button').classes('weight-btn').props(f'title="移除 {tag}"').on(
+                'click', lambda t=tag: self._remove_selected_tag(t)
+            ):
+                ui.html('&times;')
+            with ui.element('button').classes('weight-btn').on(
+                'click', lambda t=tag, s=step: self._adjust_weight(t, -s)
+            ):
+                ui.html('&minus;')
+            ui.label(display_label).style(
+                'font-family:Consolas,Monaco,monospace;font-size:12px;'
+                'color:#2c5282;max-width:240px;overflow:hidden;'
+                'text-overflow:ellipsis;white-space:nowrap;'
+            )
+            if w != 1.0:
+                ui.label(w_str).classes('weight-label').style(
+                    'color:#e65100;font-weight:bold;'
+                )
+            plus_btn = ui.element('button').classes('weight-btn').on(
+                'click', lambda t=tag, s=step: self._adjust_weight(t, +s)
+            )
+            if self.prompt_format == 'anima':
+                with plus_btn:
+                    with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
+                        ui.html('Anima模型所需要的权重数值较大').style('font-size:12px;')
+            with plus_btn:
+                ui.html('&plus;')
 
     def _adjust_weight(self, tag: str, delta: float):
         """调整单个标签权重。Anima 模式范围 [0.5, 5.0]，其他模式 [0.1, 1.9]。"""
@@ -992,6 +2086,7 @@ class DanbooruSearchUI:
         if new_w > max_w:
             ui.notify(f'权重范围为 {min_w} ~ {max_w}，已到达最大值', type='warning', timeout=2000)
             return
+        self._push_undo_snapshot()
         self.tag_weights[tag] = new_w
         self._save_staged_tags()
         self._render_selected_chips()
@@ -1006,6 +2101,10 @@ class DanbooruSearchUI:
         for item in self.current_related:
             if getattr(item, 'tag', None) == tag:
                 return str(getattr(item, 'cn_name', '') or '')
+
+        for item in self.workspace_state.get('selected', []):
+            if item.get('tag') == tag:
+                return str(item.get('cn_name') or '')
 
         try:
             tagger = DanbooruTagger._instance
@@ -1027,53 +2126,317 @@ class DanbooruSearchUI:
 
     # ── 备选区持久化 ─────────────────────────────────────────────────────
 
-    _STAGED_LS_KEY = 'danbooru_staged_tags'
+    _STAGED_LS_KEY = LEGACY_STAGED_STORAGE_KEY
+
+    def _set_selection_meta(self, tag: str, origin: str, source: str = ''):
+        self._pending_selection_meta[tag] = {
+            'origin': origin,
+            'source': source,
+        }
+
+    def _push_undo_snapshot(self):
+        snapshot = clone_workspace(self.workspace_state)
+        signature = workspace_signature(snapshot)
+        if self._undo_stack and workspace_signature(self._undo_stack[-1]) == signature:
+            return
+        self._undo_stack.append(snapshot)
+        self._undo_stack = self._undo_stack[-30:]
+        self._redo_stack.clear()
+        self._update_undo_buttons()
+
+    def _update_undo_buttons(self):
+        if self.undo_btn is not None:
+            self.undo_btn.enable() if self._undo_stack else self.undo_btn.disable()
+        if self.redo_btn is not None:
+            self.redo_btn.enable() if self._redo_stack else self.redo_btn.disable()
+
+    def _apply_workspace_state(
+        self,
+        workspace: dict,
+        *,
+        persist: bool = True,
+        refresh_recommendations: bool = True,
+    ):
+        self.workspace_state = clone_workspace(workspace)
+        selected = self.workspace_state['selected']
+        tags = [item['tag'] for item in selected]
+        tag_set = set(tags)
+        self._selected_order = list(tags)
+        self.tag_weights = {item['tag']: item.get('weight', 1.0) for item in selected}
+        self._pending_selection_meta = {
+            item['tag']: {
+                'origin': item.get('origin', 'unknown'),
+                'source': item.get('source', ''),
+            }
+            for item in selected
+        }
+        self._workspace_artist_tags = {
+            item['tag'] for item in selected
+            if item.get('origin') in _ARTIST_ORIGINS
+        }
+
+        table_tags = {row['tag'] for row in self.result_table.rows} if self.result_table else set()
+        self.chip_extra_selected.clear()
+        self.chip_extra_selected.update(tag for tag in tags if tag not in table_tags)
+        if self.result_table is not None:
+            self.result_table.selected = [
+                row for row in self.result_table.rows if row.get('tag') in tag_set
+            ]
+        self._apply_prompt_format(self.workspace_state.get('prompt_format', 'sdxl'))
+        self._render_selected_chips()
+        self._render_prompt_pending()
+        self._render_concept_coverage()
+        if self.selection_count_label is not None:
+            self.selection_count_label.text = str(len(tags))
+        if self.results_section is not None:
+            self.results_section.set_visibility(bool(tags) or bool(self.full_table_data))
+
+        if persist:
+            self._save_staged_tags()
+            self._save_config()
+        if refresh_recommendations:
+            show_nsfw = bool(self.input_nsfw.value) if self.input_nsfw else False
+            self._last_recommendation_seed_tags = []
+            self._refresh_recommendations_if_seed_changed(tags, show_nsfw)
+
+    def _undo_workspace(self):
+        if not self._undo_stack:
+            ui.notify('没有可撤销的操作', type='info', timeout=1500)
+            return
+        self._redo_stack.append(clone_workspace(self.workspace_state))
+        target = self._undo_stack.pop()
+        self._apply_workspace_state(target)
+        self._update_undo_buttons()
+        ui.notify('已撤销', type='positive', timeout=1500)
+
+    def _redo_workspace(self):
+        if not self._redo_stack:
+            ui.notify('没有可恢复的操作', type='info', timeout=1500)
+            return
+        self._undo_stack.append(clone_workspace(self.workspace_state))
+        self._undo_stack = self._undo_stack[-30:]
+        target = self._redo_stack.pop()
+        self._apply_workspace_state(target)
+        self._update_undo_buttons()
+        ui.notify('已恢复', type='positive', timeout=1500)
 
     def _save_staged_tags(self):
-        """将已选标签及其权重保存到 localStorage。"""
+        """将实时选择同步到版本化 WorkspaceState 并写入 localStorage。"""
         tags = self._get_selected_tags()
-        weights = {t: self.tag_weights.get(t, 1.0) for t in tags}
-        data = _json.dumps({'tags': tags, 'weights': weights}, ensure_ascii=False)
+        self._selected_order = list(tags)
+        cn_names = {t: self._get_cn_name_for_tag(t) for t in tags}
+        self.workspace_state['prompt_format'] = self.prompt_format
+        self.workspace_state = sync_selected_entries(
+            self.workspace_state,
+            tags,
+            self.tag_weights,
+            cn_names,
+            self._pending_selection_meta,
+        )
+        self._workspace_artist_tags = {
+            item['tag'] for item in self.workspace_state['selected']
+            if item.get('origin') in _ARTIST_ORIGINS
+        }
+        try:
+            data = dump_workspace(self.workspace_state)
+        except WorkspaceDataError as exc:
+            print(f'[UI] 工作区保存前校验失败: {exc}', flush=True)
+            return
         try:
             if getattr(ui.context.client, '_deleted', False):
                 return
-            ui.run_javascript(f"localStorage.setItem('{self._STAGED_LS_KEY}', {_json.dumps(data)});")
+            ui.run_javascript(
+                f"localStorage.setItem('{WORKSPACE_STORAGE_KEY}', {_json.dumps(data)});"
+            )
         except RuntimeError:
             pass  # 事件上下文已销毁（UI 重建中），数据仍在内存里，下次保存时会同步
 
+    def _save_history(self):
+        while True:
+            try:
+                data = dump_collection(self.search_history, label='history')
+                ui.run_javascript(
+                    f"localStorage.setItem('{HISTORY_STORAGE_KEY}', {_json.dumps(data)});"
+                )
+                return
+            except WorkspaceDataError as exc:
+                if not self.search_history.get('items'):
+                    print(f'[UI] 搜索历史保存失败: {exc}', flush=True)
+                    return
+                self.search_history['items'].pop()
+                print('[UI] 搜索历史超过本地大小限制，已移除最旧记录。', flush=True)
+            except RuntimeError as exc:
+                print(f'[UI] 搜索历史保存失败: {exc}', flush=True)
+                return
+
+    def _save_favorites(self):
+        try:
+            data = dump_collection(self.favorites, label='favorites')
+            ui.run_javascript(
+                f"localStorage.setItem('{FAVORITES_STORAGE_KEY}', {_json.dumps(data)});"
+            )
+            return True
+        except (WorkspaceDataError, RuntimeError) as exc:
+            print(f'[UI] 收藏保存失败: {exc}', flush=True)
+            return False
+
+    def _replace_favorites_safely(self, favorites: dict) -> bool:
+        previous = self.favorites
+        self.favorites = favorites
+        if self._save_favorites():
+            self._update_workspace_counts()
+            return True
+        self.favorites = previous
+        ui.notify('收藏数据过大或无法写入，操作已取消', type='negative')
+        return False
+
     async def _restore_staged_tags(self):
-        """从 localStorage 恢复已选标签。"""
+        """恢复 WorkspaceState；首次升级时兼容迁移旧已选标签。"""
         try:
             if getattr(ui.context.client, '_deleted', False):
                 return
-            raw = await ui.run_javascript(
-                f"localStorage.getItem('{self._STAGED_LS_KEY}');",
+            stored = await ui.run_javascript(
+                "({"
+                f"workspace: localStorage.getItem('{WORKSPACE_STORAGE_KEY}'),"
+                f"legacy: localStorage.getItem('{self._STAGED_LS_KEY}'),"
+                f"config: localStorage.getItem('{_CONFIG_LS_KEY}'),"
+                f"history: localStorage.getItem('{HISTORY_STORAGE_KEY}'),"
+                f"favorites: localStorage.getItem('{FAVORITES_STORAGE_KEY}')"
+                "})",
                 timeout=5.0,
             )
         except Exception:
             return
-        if not raw:
+
+        if not isinstance(stored, dict):
+            stored = {}
+        raw_workspace = stored.get('workspace')
+        warnings: list[str] = []
+        should_persist = False
+        try:
+            if raw_workspace:
+                workspace, warnings = normalize_workspace(raw_workspace)
+                should_persist = bool(warnings)
+            else:
+                workspace, warnings = migrate_legacy_workspace(
+                    stored.get('legacy'),
+                    stored.get('config'),
+                )
+                should_persist = True
+        except WorkspaceDataError as exc:
+            print(f'[UI] 工作区数据损坏，回退到旧状态迁移: {exc}', flush=True)
+            # 保留原始损坏内容供用户恢复，不直接删除或覆盖唯一副本。
+            if raw_workspace:
+                try:
+                    backup_key = f'{WORKSPACE_STORAGE_KEY}_corrupt_backup'
+                    ui.run_javascript(
+                        f"if (!localStorage.getItem('{backup_key}')) "
+                        f"localStorage.setItem('{backup_key}', {_json.dumps(raw_workspace)});"
+                    )
+                except RuntimeError:
+                    pass
+            workspace, migration_warnings = migrate_legacy_workspace(
+                stored.get('legacy'),
+                stored.get('config'),
+            )
+            warnings = ['workspace_corrupt'] + migration_warnings
+            should_persist = True
+
+        self._apply_workspace_state(
+            workspace,
+            persist=False,
+            refresh_recommendations=False,
+        )
+        if should_persist:
+            self._save_staged_tags()
+
+        try:
+            self.search_history, history_warnings = normalize_history(stored.get('history'))
+        except WorkspaceDataError as exc:
+            print(f'[UI] 搜索历史损坏，已使用空历史: {exc}', flush=True)
+            self._backup_corrupt_storage(HISTORY_STORAGE_KEY, stored.get('history'))
+            self.search_history, history_warnings = empty_history(), ['history_corrupt']
+        if history_warnings:
+            self._save_history()
+            warnings.extend(history_warnings)
+
+        try:
+            self.favorites, favorite_warnings = normalize_favorites(stored.get('favorites'))
+        except WorkspaceDataError as exc:
+            print(f'[UI] 收藏数据损坏，已使用空收藏: {exc}', flush=True)
+            self._backup_corrupt_storage(FAVORITES_STORAGE_KEY, stored.get('favorites'))
+            self.favorites, favorite_warnings = empty_favorites(), ['favorites_corrupt']
+        if favorite_warnings:
+            self._save_favorites()
+            warnings.extend(favorite_warnings)
+
+        self._install_workspace_storage_listener()
+        self._update_undo_buttons()
+        self._update_workspace_counts()
+        if warnings:
+            print(f'[UI] 工作区恢复提示: {sorted(set(warnings))}', flush=True)
+
+    def _backup_corrupt_storage(self, key: str, raw_value):
+        if not raw_value:
             return
         try:
-            data = _json.loads(raw)
-        except Exception:
+            backup_key = f'{key}_corrupt_backup'
+            ui.run_javascript(
+                f"if (!localStorage.getItem('{backup_key}')) "
+                f"localStorage.setItem('{backup_key}', {_json.dumps(raw_value)});"
+            )
+        except RuntimeError:
+            pass
+
+    def _install_workspace_storage_listener(self):
+        """其他标签页修改工作区时提示刷新，避免静默覆盖。"""
+        if self._workspace_storage_listener_installed:
             return
-        tags = data.get('tags', [])
-        weights = data.get('weights', {})
-        if not tags:
-            return
-        self.chip_extra_selected.update(tags)
-        for t in tags:
-            self.tag_weights[t] = weights.get(t, 1.0)
-        self._render_selected_chips()
-        if self.selection_count_label is not None:
-            self.selection_count_label.text = str(len(tags))
+        self._workspace_storage_listener_installed = True
+        try:
+            ui.run_javascript(f"""
+                if (!window.__danbooruWorkspaceStorageListenerV1) {{
+                    window.__danbooruWorkspaceStorageListenerV1 = true;
+                    window.addEventListener('storage', (event) => {{
+                        const watchedKeys = new Set([
+                            '{WORKSPACE_STORAGE_KEY}',
+                            '{HISTORY_STORAGE_KEY}',
+                            '{FAVORITES_STORAGE_KEY}',
+                        ]);
+                        if (watchedKeys.has(event.key) && event.newValue !== event.oldValue) {{
+                            const reload = window.confirm(
+                                '工作区数据已在另一个标签页更新。是否重新加载当前页面以同步最新内容？'
+                            );
+                            if (reload) window.location.reload();
+                        }}
+                    }});
+                }}
+            """)
+        except RuntimeError:
+            pass
 
     def _clear_all_staged(self):
         """清空所有已选标签。"""
         self._mark_interaction()
+        pending_items = [
+            item for item in self.workspace_state.get('dismissed', [])
+            if isinstance(item, dict) and item.get('kind') == 'prompt_import_pending'
+        ]
+        if self._get_selected_tags() or pending_items:
+            self._push_undo_snapshot()
+        if pending_items:
+            self.workspace_state['dismissed'] = [
+                item for item in self.workspace_state.get('dismissed', [])
+                if not (
+                    isinstance(item, dict)
+                    and item.get('kind') == 'prompt_import_pending'
+                )
+            ]
         self.chip_extra_selected.clear()
+        self._selected_order.clear()
         self.tag_weights.clear()
+        self._pending_selection_meta.clear()
+        self._workspace_artist_tags.clear()
         if self.result_table is not None:
             self.result_table.selected = []
         self._artist_rec_checkboxes.clear()
@@ -1081,6 +2444,8 @@ class DanbooruSearchUI:
         self._artist_result_tags.clear()
         self._last_recommendation_seed_tags = []
         self._render_selected_chips()
+        self._render_prompt_pending()
+        self._render_concept_coverage()
         if self.selection_count_label is not None:
             self.selection_count_label.text = '0'
         show_nsfw_val = self.input_nsfw.value
@@ -1341,6 +2706,9 @@ class DanbooruSearchUI:
 
                         if cn_first:
                             ui.label(cn_first).classes('text-xs text-gray-500 truncate')
+                        ui.label(
+                            related_candidate_reason(r.sources)
+                        ).classes('text-xs text-slate-500 truncate')
 
                     # 关联分数
                     score_color = 'green' if r.cooc_score > 0.6 else ('teal' if r.cooc_score > 0.3 else 'grey')
@@ -1355,6 +2723,9 @@ class DanbooruSearchUI:
             await asyncio.sleep(1)
         if self.init_banner:
             self.init_banner.set_visibility(False)
+        # 工作区可能早于引擎恢复；引擎就绪后用真实 Category / Tag Group
+        # 元数据重新分组，避免重启期间首次渲染的标签全部停留在“其他”。
+        self._render_selected_chips()
 
     def _client_alive(self) -> bool:
         try:
@@ -1390,6 +2761,79 @@ class DanbooruSearchUI:
                 else:
                     chip_color, text_color = 'grey-4', 'black'
                 child.props(f'color={chip_color} text-color={text_color}')
+
+    def _render_concept_coverage(self):
+        if self.coverage_container is None:
+            return
+        self.coverage_container.clear()
+        if not self.current_query_str:
+            return
+
+        segments = list(dict.fromkeys(self.current_segments + self.current_keywords))
+        if not segments:
+            segments = [self.current_query_str]
+        coverage = compute_concept_coverage(
+            segments,
+            self.full_table_data,
+            self._get_selected_tags(),
+        )
+        if not coverage:
+            return
+
+        status_counts = {
+            COVERED: sum(item.status == COVERED for item in coverage),
+            CANDIDATE_UNSELECTED: sum(
+                item.status == CANDIDATE_UNSELECTED for item in coverage
+            ),
+            UNCOVERED: sum(item.status == UNCOVERED for item in coverage),
+        }
+        with self.coverage_container:
+            with ui.element('div').classes(
+                'w-full rounded border border-slate-200 bg-slate-50 px-3 py-2'
+            ):
+                with ui.row().classes('w-full items-center gap-2 flex-wrap'):
+                    ui.icon('fact_check', color='primary', size='sm')
+                    ui.label('概念覆盖').classes('text-sm font-bold text-slate-700')
+                    ui.label(
+                        f"已覆盖 {status_counts[COVERED]} · "
+                        f"有候选 {status_counts[CANDIDATE_UNSELECTED]} · "
+                        f"未覆盖 {status_counts[UNCOVERED]}"
+                    ).classes('text-xs text-slate-500')
+                    with ui.icon('info_outline', size='xs', color='grey').classes('cursor-help'):
+                        with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
+                            ui.label(
+                                '根据当前结果的真实匹配来源近似判断；未覆盖不代表标签库一定不存在。'
+                            ).style('font-size:13px;')
+
+                with ui.row().classes('w-full gap-2 flex-wrap mt-2'):
+                    for item in coverage:
+                        if item.status == COVERED:
+                            chip = ui.chip(
+                                f'已覆盖：{item.segment}', icon='check_circle'
+                            ).props('color=green-1 text-color=green-9')
+                            detail = f"已选择：{'、'.join(item.selected_tags)}"
+                        elif item.status == CANDIDATE_UNSELECTED:
+                            chip = ui.chip(
+                                f'有候选：{item.segment}', icon='radio_button_unchecked'
+                            ).props('color=amber-1 text-color=amber-9')
+                            detail = f"候选：{'、'.join(item.candidate_tags[:5])}"
+                        else:
+                            chip = ui.chip(
+                                f'未覆盖：{item.segment}',
+                                icon='search',
+                                on_click=lambda s=item.segment: self._search_uncovered_segment(s),
+                            ).props('color=red-1 text-color=red-8 clickable')
+                            detail = '点击后沿用当前搜索设置进行补充搜索；工作区标签保持不变。'
+                        with chip:
+                            with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
+                                ui.label(detail).style('font-size:13px;')
+
+    async def _search_uncovered_segment(self, segment: str):
+        segment = str(segment or '').strip()
+        if not segment:
+            return
+        self.search_input.set_value(segment)
+        await self.perform_search()
 
     # ── 搜索 ──────────────────────────────────────────────────────────────
 
@@ -1469,6 +2913,7 @@ class DanbooruSearchUI:
             self.full_tags_str = response.tags_all
             self.full_tags_str_sfw = response.tags_sfw
             self.current_segments = list(response.segments) if response.segments else []
+            self.current_keywords = list(response.keywords) if response.keywords else []
 
             self.results_section.set_visibility(True)
 
@@ -1476,6 +2921,7 @@ class DanbooruSearchUI:
             self.result_table.rows = apply_nsfw_filter(table_data, show_nsfw_val)
             self._set_rows_per_page(_saved_rpp)
             all_selected = self._get_selected_tags()
+            self._selected_order = list(all_selected)
             self.chip_extra_selected.clear()
             self.chip_extra_selected.update(all_selected)
             self.result_table.selected = []
@@ -1516,6 +2962,8 @@ class DanbooruSearchUI:
                 else:
                     ui.label('(分词已关闭)').classes('text-xs text-gray-400')
 
+            self._render_concept_coverage()
+            self._record_search_history(query)
             ui.notify(f'找到 {len(table_data)} 个标签', type='positive')
             self.current_search_interacted = False
 
@@ -1546,11 +2994,18 @@ class DanbooruSearchUI:
     def _get_selected_tags(self) -> list[str]:
         table_tags = [row['tag'] for row in self.result_table.selected] if self.result_table else []
         seen = set(table_tags)
-        extra = [t for t in self.chip_extra_selected if t not in seen]
+        extra_pool = set(self.chip_extra_selected)
+        extra = [t for t in self._selected_order if t in extra_pool and t not in seen]
+        seen.update(extra)
+        extra.extend(sorted(t for t in extra_pool if t not in seen))
         return table_tags + extra
 
     def _get_recommendation_seed_tags(self, selected_tags: list[str]) -> list[str]:
-        artist_tags = set(self._current_artist_rec_tags) | set(self._artist_result_tags)
+        artist_tags = (
+            set(self._current_artist_rec_tags)
+            | set(self._artist_result_tags)
+            | set(self._workspace_artist_tags)
+        )
         if self.result_table is not None:
             for row in self.result_table.rows:
                 if row.get('layer') != 'artist':
@@ -1569,7 +3024,17 @@ class DanbooruSearchUI:
         self._refresh_group_from_selection(seed_tags, show_nsfw)
         self._refresh_artist_from_selection(seed_tags, show_nsfw)
 
-    def _set_selected_tags(self, tags: list[str], skip_refresh: bool = False):
+    def _set_selected_tags(
+        self,
+        tags: list[str],
+        skip_refresh: bool = False,
+        record_undo: bool = True,
+    ):
+        tags = list(dict.fromkeys(tags))
+        previous_tags = [item['tag'] for item in self.workspace_state.get('selected', [])]
+        if record_undo and tags != previous_tags:
+            self._push_undo_snapshot()
+        self._selected_order = list(tags)
         tag_set = set(tags)
         table_tag_set = {row['tag'] for row in self.result_table.rows} if self.result_table else set()
         self.chip_extra_selected.clear()
@@ -1578,6 +3043,7 @@ class DanbooruSearchUI:
         for t in list(self.tag_weights):
             if t not in tag_set:
                 del self.tag_weights[t]
+                self._pending_selection_meta.pop(t, None)
 
         if self.result_table is not None:
             self.result_table.selected = [row for row in self.result_table.rows if row.get('tag') in tag_set]
@@ -1587,10 +3053,12 @@ class DanbooruSearchUI:
             cb.set_value(t in tag_set)
 
         all_tags = self._get_selected_tags()
+        self._selected_order = list(all_tags)
         if self.selection_count_label is not None:
             self.selection_count_label.text = str(len(all_tags))
         self._save_staged_tags()
         self._render_selected_chips()
+        self._render_concept_coverage()
         # 显式刷新关联推荐和 Group 区域（不依赖 table.on('selection') 事件，
         # 因为在 chip 点击回调上下文中该事件可能不可靠）。
         # 从关联推荐/同类标签勾选时跳过，由各自动态刷新或手动按钮触发。
@@ -1606,11 +3074,23 @@ class DanbooruSearchUI:
         self._mark_interaction()
 
         all_tags = self._get_selected_tags()
+        previous_tags = [item['tag'] for item in self.workspace_state.get('selected', [])]
+        if all_tags != previous_tags:
+            self._push_undo_snapshot()
+        existing = set(previous_tags)
+        for row in self.result_table.rows:
+            tag = row.get('tag')
+            if not tag or tag in existing or tag not in all_tags:
+                continue
+            origin = 'artist_search' if row.get('layer') == 'artist' else 'semantic_search'
+            self._set_selection_meta(tag, origin, str(row.get('source') or self.current_query_str))
+        self._selected_order = list(all_tags)
         # clean up weights for deselected tags
         tag_set = set(all_tags)
         for t in list(self.tag_weights):
             if t not in tag_set:
                 del self.tag_weights[t]
+                self._pending_selection_meta.pop(t, None)
         # init weight for newly selected tags
         for t in all_tags:
             self.tag_weights.setdefault(t, 1.0)
@@ -1628,12 +3108,19 @@ class DanbooruSearchUI:
         if not all_tags:
             self.chip_extra_selected.clear()
         self._save_staged_tags()
+        self._render_concept_coverage()
 
     def _on_related_checkbox_change(self, tag: str, checked: bool):
         self._mark_interaction()
         current = self._get_selected_tags()
         if checked:
             if tag not in current:
+                source = ''
+                for item in self.current_related:
+                    if getattr(item, 'tag', None) == tag:
+                        source = ', '.join(getattr(item, 'sources', []) or [])
+                        break
+                self._set_selection_meta(tag, 'related_recommendation', source)
                 current.append(tag)
                 self.tag_weights.setdefault(tag, 1.0)
                 self._set_selected_tags(current, skip_refresh=True)
@@ -1654,6 +3141,11 @@ class DanbooruSearchUI:
         current = self._get_selected_tags()
         if checked:
             if tag not in current:
+                self._set_selection_meta(
+                    tag,
+                    'tag_group',
+                    self._group_candidate_sources.get(tag, ''),
+                )
                 current.append(tag)
                 self.tag_weights.setdefault(tag, 1.0)
                 self._set_selected_tags(current, skip_refresh=True)
@@ -1675,6 +3167,11 @@ class DanbooruSearchUI:
         current = self._get_selected_tags()
         if checked:
             if tag not in current:
+                self._set_selection_meta(
+                    tag,
+                    'artist_recommendation',
+                    self._artist_rec_sources.get(tag, ''),
+                )
                 current.append(tag)
                 self.tag_weights.setdefault(tag, 1.0)
                 self._set_selected_tags(current, skip_refresh=True)
@@ -1834,6 +3331,7 @@ class DanbooruSearchUI:
         self._artist_rec_prev_button = None
         self._artist_rec_next_button = None
         self._current_artist_rec_tags.clear()
+        self._artist_rec_sources.clear()
 
         if not artist_results:
             with self.artist_rec_list:
@@ -1851,7 +3349,8 @@ class DanbooruSearchUI:
                 # 归一化：除以命中标签数，cap 到 100%
                 normalized = min(r.score / max(r.hit_count, 1), 1.0)
                 score_pct = f'+{normalized * 100:.0f}%'
-                sources_str = '、'.join(r.sources[:3]) if r.sources else '—'
+                reason = artist_candidate_reason(r.sources)
+                self._artist_rec_sources[artist] = '、'.join(r.sources[:3])
                 post_str = f'{r.post_count:,}' if r.post_count else '—'
 
                 # tooltip：画师擅长标签
@@ -1886,7 +3385,8 @@ class DanbooruSearchUI:
                             f'https://danbooru.donmai.us/posts?tags={artist}',
                             new_tab=True,
                         ).classes('text-primary font-bold text-xs')
-                        ui.label(f'{sources_str} · 作品 {post_str}').classes('text-xs text-gray-500')
+                        ui.label(reason).classes('text-xs text-slate-500')
+                        ui.label(f'作品 {post_str}').classes('text-xs text-gray-400')
 
                     # 分值
                     score_color = 'green' if normalized > 0.6 else ('teal' if normalized > 0.3 else 'grey')
@@ -1916,6 +3416,7 @@ class DanbooruSearchUI:
             return
         self.group_expansion_container.clear()
         self._group_checkboxes.clear()
+        self._group_candidate_sources.clear()
         group_key = _group_names_key(group_data)
         if group_key != self._group_render_key:
             self._group_render_key = group_key
@@ -1942,6 +3443,11 @@ class DanbooruSearchUI:
             for group_info in group_data:
                 group_name = group_info['group']
                 group_cn = group_info.get('group_cn_name', group_name.replace('tag_group:', ''))
+                group_sources = list(group_info.get('sources') or [])
+                group_reason = tag_group_candidate_reason(group_cn, group_sources)
+                group_source_detail = group_cn
+                if group_sources:
+                    group_source_detail += f"；触发标签：{'、'.join(group_sources[:3])}"
                 tags = group_info['tags']
                 visible_limit = self._group_render_limits.get(group_name, GROUP_RENDER_TAG_LIMIT)
                 visible_tags, hidden_count = _limit_group_render_tags(tags, visible_limit)
@@ -1962,6 +3468,7 @@ class DanbooruSearchUI:
                     ).classes('w-full grid grid-cols-2 gap-1 p-1').style('max-height: 600px; overflow-y: auto;'):
                         for t in visible_tags:
                             tag = t['tag']
+                            self._group_candidate_sources.setdefault(tag, group_source_detail)
                             cn_first = t['cn_name'].split(',')[0].strip() if t['cn_name'] else ''
                             cn_full = t.get('cn_name', '')
                             cat = t['category']
@@ -2000,6 +3507,9 @@ class DanbooruSearchUI:
                                     ).classes('tag-link text-primary font-bold text-xs truncate')
                                     if cn_first:
                                         ui.label(cn_first).classes('text-xs text-gray-500 truncate')
+                                    ui.label(group_reason).classes(
+                                        'text-xs text-slate-500 truncate'
+                                    )
 
                                 # 热度
                                 count = t['post_count']
@@ -2161,27 +3671,24 @@ class DanbooruSearchUI:
 
     def _toggle_prompt_format(self):
         if self.prompt_format == 'sdxl':
-            self.prompt_format = 'nai'
-            if self.format_toggle_btn:
-                self.format_toggle_btn.text = 'NAI'
-                self.format_toggle_btn.props('color=purple-7')
+            self._apply_prompt_format('nai')
         elif self.prompt_format == 'nai':
-            self.prompt_format = 'anima'
-            if self.format_toggle_btn:
-                self.format_toggle_btn.text = 'Anima'
-                self.format_toggle_btn.props('color=teal-7')
+            self._apply_prompt_format('anima')
         else:
-            self.prompt_format = 'sdxl'
-            if self.format_toggle_btn:
-                self.format_toggle_btn.text = 'SDXL'
-                self.format_toggle_btn.props('color=grey-7')
+            self._apply_prompt_format('sdxl')
+        self._save_config()
+        self._save_staged_tags()
         self._render_selected_chips()
 
     def copy_selection(self):
         self._mark_interaction()
         tags = self._get_selected_tags()
         parts = []
-        artist_tags = set(self._current_artist_rec_tags) | set(self._artist_result_tags)
+        artist_tags = (
+            set(self._current_artist_rec_tags)
+            | set(self._artist_result_tags)
+            | set(self._workspace_artist_tags)
+        )
         for t in tags:
             w = self.tag_weights.get(t, 1.0)
             if self.prompt_format == 'anima' and t in artist_tags:

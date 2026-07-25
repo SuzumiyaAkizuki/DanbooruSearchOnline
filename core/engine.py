@@ -31,6 +31,11 @@ from safetensors import safe_open
 from sentence_transformers import SentenceTransformer
 
 from .models import SearchRequest, SearchResponse, TagResult
+from .tag_aliases import (
+    TagAliasRecord,
+    TagAliasSnapshotError,
+    load_tag_alias_snapshot,
+)
 from platform_utils import (
     PLATFORM,
     is_cloud,
@@ -222,6 +227,8 @@ class DanbooruTagger:
         cooc_file:          str = 'origin_database/cooccurrence_clean.csv',
         group_file:         str = 'origin_database/tag_groups.json',
         tag_artist_file:    str = 'origin_database/tag_artist_cooc.parquet',
+        tag_alias_file:     str = 'origin_database/tag_aliases.parquet',
+        tag_alias_meta_file: str = 'origin_database/tag_aliases_metadata.json',
     ):
         # 模型路径：优先使用显式传入，否则交由 platform_utils 解析
         self.model_path = model_path or resolve_model_path()
@@ -232,6 +239,8 @@ class DanbooruTagger:
         self.cooc_file = cooc_file
         self.group_file = group_file
         self.tag_artist_file = tag_artist_file
+        self.tag_alias_file = tag_alias_file
+        self.tag_alias_meta_file = tag_alias_meta_file
 
         self.model:         Optional[SentenceTransformer]         = None
         self.df:            Optional[pd.DataFrame]                = None
@@ -248,6 +257,8 @@ class DanbooruTagger:
         self._tag_artist_index: dict[str, list[tuple]]           = {}
         self._artist_top_tags: dict[str, list[tuple]]            = {}  # artist → [(tag, npmi, cn_short), ...]
         self._artist_post_count: dict[str, int]                  = {}
+        self._tag_aliases: dict[str, TagAliasRecord]             = {}
+        self._tag_alias_metadata: dict[str, Any]                 = {}
         self.is_loaded:     bool                                  = False
 
         # 预提取的列数组，避免热点路径上反复执行 df.iloc[idx]
@@ -305,6 +316,7 @@ class DanbooruTagger:
         self._load_tag_artist_cooc()
         self._name_to_idx = {n: i for i, n in enumerate(self.df['name'])}
         self._tag_names_set: set[str] = set(self._name_to_idx.keys())
+        self._load_tag_aliases()
         self._rebuild_arrays_from_df()
         self._normalize_embeddings()
         self._load_groups()
@@ -366,6 +378,14 @@ class DanbooruTagger:
         self.cooc_file        = pull('origin_database/cooccurrence_clean.parquet')
         self.group_file       = pull('origin_database/tag_groups.json')
         self.tag_artist_file  = pull('origin_database/tag_artist_cooc.parquet')
+
+        alias_path = pull('origin_database/tag_aliases.parquet')
+        alias_meta_path = pull('origin_database/tag_aliases_metadata.json')
+        if Path(alias_path).is_file() and Path(alias_meta_path).is_file():
+            self.tag_alias_file = alias_path
+            self.tag_alias_meta_file = alias_meta_path
+        else:
+            print('[Engine] Tag Alias 快照不完整，本次启动不启用 Alias。')
 
         meta_path = pull('tags_embedding/tags_metadata.parquet')
         emb_path  = pull('tags_embedding/danbooru_multiview_embeddings.safetensors')
@@ -1240,21 +1260,21 @@ class DanbooruTagger:
         if not self._tag_to_groups or not selected_tags:
             return []
 
-        group_hit_count: dict[str, int] = {}
+        group_sources: dict[str, list[str]] = {}
         for tag_name in selected_tags:
             groups = self._tag_to_groups.get(tag_name)
             if groups:
                 for g in groups:
-                    group_hit_count[g] = group_hit_count.get(g, 0) + 1
+                    group_sources.setdefault(g, []).append(tag_name)
 
-        if not group_hit_count:
+        if not group_sources:
             return []
 
         selected_set = set(selected_tags)
-        sorted_groups = sorted(group_hit_count.items(), key=lambda x: -x[1])
+        sorted_groups = sorted(group_sources.items(), key=lambda x: -len(x[1]))
 
         results = []
-        for group_name, hit_count in sorted_groups:
+        for group_name, sources in sorted_groups:
             member_idxs = self._group_to_tags_idx.get(group_name)
             if member_idxs is None:
                 continue
@@ -1282,7 +1302,8 @@ class DanbooruTagger:
             results.append({
                 'group': group_name,
                 'group_cn_name': cn_name,
-                'hit_count': hit_count,
+                'hit_count': len(sources),
+                'sources': sources,
                 'tags': tags,
             })
 
@@ -1523,6 +1544,26 @@ class DanbooruTagger:
                 "candidates": [],
             }
 
+        # 官方 Alias 是确定性名称替换，优先于复数、紧凑拼写与模糊纠错。
+        alias = self._tag_aliases.get(normalized)
+        if alias is not None:
+            target = alias.consequent_name
+            if alias.target_in_tag_db and target in tags:
+                return {
+                    "tag": target,
+                    "matched_by": "alias",
+                    "candidates": [],
+                    "alias_from": normalized,
+                    "alias_target": target,
+                }
+            return {
+                "tag": None,
+                "matched_by": "alias_target_missing",
+                "candidates": [target],
+                "alias_from": normalized,
+                "alias_target": target,
+            }
+
         plural = f"{normalized}s"
         if plural in tags:
             return {
@@ -1566,6 +1607,22 @@ class DanbooruTagger:
             "tag": None,
             "matched_by": "not_found",
             "candidates": close,
+        }
+
+    def get_tag_workspace_metadata(self, tag_name: str) -> dict[str, Any] | None:
+        """Return stable local metadata used by Prompt import and workspace grouping."""
+        if tag_name not in self._name_to_idx:
+            return None
+        idx = self._name_to_idx[tag_name]
+        return {
+            "tag": tag_name,
+            "cn_name": str(self._arr_cn_name[idx]) if self._arr_cn_name is not None else "",
+            "category": CAT_MAP.get(
+                str(self._arr_category[idx]) if self._arr_category is not None else "",
+                "Other",
+            ),
+            "nsfw": str(self._arr_nsfw[idx]) if self._arr_nsfw is not None else "0",
+            "groups": sorted(self._tag_to_groups.get(tag_name, set())),
         }
 
     def get_artist_profile(self, artist_name: str, top_n: int = 20,
@@ -1817,6 +1874,25 @@ class DanbooruTagger:
             )
         except Exception as e:
             print(f'[Engine] 标签-画师共现表加载失败: {e}')
+
+    def _load_tag_aliases(self) -> None:
+        """加载并校验本地 Alias 快照；失败时保留已有的有效快照。"""
+        try:
+            snapshot = load_tag_alias_snapshot(
+                self.tag_alias_file,
+                self.tag_alias_meta_file,
+            )
+        except TagAliasSnapshotError as exc:
+            print(f'[Engine] Tag Alias 快照不可用，继续使用 canonical 解析: {exc}')
+            return
+
+        self._tag_aliases = snapshot.alias_by_name
+        self._tag_alias_metadata = snapshot.metadata
+        fetched_at = snapshot.metadata.get('fetched_at', 'unknown')
+        print(
+            f'[Engine] Tag Alias loaded, {snapshot.count:,} aliases, '
+            f'fetched_at={fetched_at}'
+        )
 
     def _load_groups(self) -> None:
         """加载 Tag Group 数据，构建 tag→group 和 group→idx 索引。"""
