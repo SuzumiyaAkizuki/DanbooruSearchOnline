@@ -2675,7 +2675,8 @@ class DanbooruSearchUI:
 
                 # 整行容器，tooltip 挂在行上
                 with ui.row().classes(
-                    'w-full items-center gap-2 px-3 py-2 related-item border-b border-gray-100'
+                    'w-full flex-nowrap items-center gap-2 px-3 py-2 overflow-hidden '
+                    'related-item border-b border-gray-100'
                 ).style(row_bg):
                     # 整行 wiki tooltip
                     if tooltip_html:
@@ -2686,17 +2687,19 @@ class DanbooruSearchUI:
                     cb = ui.checkbox(
                         '', value=is_selected,
                         on_change=lambda e, t=tag: self._on_related_checkbox_change(t, e.value)
-                    ).props('dense')
+                    ).props('dense').classes('flex-none')
                     self._related_checkboxes[tag] = cb
 
                     # 标签名（可点击跳转）+ 中文名
-                    with ui.column().classes('flex-grow gap-0 min-w-0'):
-                        with ui.row().classes('items-center gap-1'):
+                    with ui.column().classes('flex-1 gap-0 min-w-0 overflow-hidden'):
+                        with ui.row().classes('w-full flex-nowrap items-center gap-1 min-w-0 overflow-hidden'):
                             link = ui.link(
                                 tag,
                                 f'https://danbooru.donmai.us/wiki_pages/{tag}',
                                 new_tab=True
-                            ).classes('tag-link text-primary font-bold text-xs')
+                            ).classes(
+                                'tag-link text-primary font-bold text-xs flex-1 min-w-0 truncate'
+                            )
                             link.on('click', self._mark_interaction)
                             if r.sources and r.sources[0].startswith('tag_group:'):
                                 group_display = r.sources[0].replace('tag_group:', '')
@@ -2705,14 +2708,17 @@ class DanbooruSearchUI:
                                 )
 
                         if cn_first:
-                            ui.label(cn_first).classes('text-xs text-gray-500 truncate')
+                            ui.label(cn_first).classes('w-full text-xs text-gray-500 truncate')
                         ui.label(
                             related_candidate_reason(r.sources)
-                        ).classes('text-xs text-slate-500 truncate')
+                        ).classes('w-full text-xs text-slate-500 truncate')
 
                     # 关联分数
                     score_color = 'green' if r.cooc_score > 0.6 else ('teal' if r.cooc_score > 0.3 else 'grey')
-                    ui.label(score_pct).classes(f'text-sm font-bold text-{score_color}-600 whitespace-nowrap')
+                    ui.label(score_pct).classes(
+                        f'flex-none ml-auto self-center text-sm font-bold '
+                        f'text-{score_color}-600 whitespace-nowrap'
+                    )
 
     # ══════════════════════════════════════════════════════════════════════
     # 交互逻辑
@@ -3485,7 +3491,8 @@ class DanbooruSearchUI:
                                 tooltip_html += f'<div style="opacity:0.85;">{cn_full}</div>'
 
                             with ui.row().classes(
-                                'w-full items-center gap-1.5 px-2 py-1.5 rounded related-item'
+                                'w-full min-w-0 flex-nowrap items-center gap-1.5 px-2 py-1.5 '
+                                'rounded overflow-hidden related-item'
                             ).style(row_bg):
                                 if tooltip_html:
                                     with ui.tooltip().props('content-class="bg-black text-white shadow-4" max-width="500px"'):
@@ -3495,20 +3502,24 @@ class DanbooruSearchUI:
                                 cb = ui.checkbox(
                                     '', value=is_selected,
                                     on_change=lambda e, t=tag: self._on_group_checkbox_change(t, e.value),
-                                ).props('dense')
+                                ).props('dense').classes('flex-none')
                                 self._group_checkboxes[tag] = cb
 
                                 # 标签名 + 中文名（与关联推荐对齐方式一致）
-                                with ui.column().classes('flex-grow gap-0 min-w-0 overflow-hidden'):
+                                with ui.column().classes('flex-1 gap-0 min-w-0 overflow-hidden'):
                                     link = ui.link(
                                         tag,
                                         f'https://danbooru.donmai.us/wiki_pages/{tag}',
                                         new_tab=True,
-                                    ).classes('tag-link text-primary font-bold text-xs truncate')
+                                    ).classes(
+                                        'tag-link w-full min-w-0 text-primary font-bold text-xs truncate'
+                                    )
                                     if cn_first:
-                                        ui.label(cn_first).classes('text-xs text-gray-500 truncate')
+                                        ui.label(cn_first).classes(
+                                            'w-full text-xs text-gray-500 truncate'
+                                        )
                                     ui.label(group_reason).classes(
-                                        'text-xs text-slate-500 truncate'
+                                        'w-full text-xs text-slate-500 truncate'
                                     )
 
                                 # 热度
@@ -3520,7 +3531,10 @@ class DanbooruSearchUI:
                                         count_str = f'{count/1000:.1f}k'
                                     else:
                                         count_str = str(count)
-                                    ui.label(count_str).classes('text-sm font-bold text-grey-600 whitespace-nowrap')
+                                    ui.label(count_str).classes(
+                                        'flex-none ml-auto self-center text-sm font-bold '
+                                        'text-grey-600 whitespace-nowrap'
+                                    )
                         if hidden_count > 0:
                             async def _load_more(
                                 g=group_name,
