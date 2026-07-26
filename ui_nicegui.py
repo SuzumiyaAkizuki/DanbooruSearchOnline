@@ -14,6 +14,7 @@ print("[UI] 脚本开始执行", flush=True)
 import asyncio
 import os
 import re
+import time
 import json as _json
 import subprocess
 import traceback
@@ -29,7 +30,7 @@ def _excepthook(exc_type, exc_value, exc_tb):
 sys.excepthook = _excepthook
 
 from nicegui import ui, app, run
-from core import counter
+from core import counter, telemetry
 from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
 from core.models import RelatedTag, SearchRequest
@@ -376,6 +377,11 @@ class DanbooruSearchUI:
     def __init__(self):
         self.search_count_label = None
         self.current_search_interacted = True
+        self._telemetry_search_started_at: float | None = None
+        self._telemetry_selection_recorded = False
+        self._telemetry_copy_timing_recorded = False
+        self._telemetry_last_query = ''
+        self._telemetry_last_search_at = 0.0
 
         self.full_table_data: list[dict] = []
         self.current_segments: list[str] = []   # 从句级原始片段，用于区分 chip 颜色
@@ -523,6 +529,47 @@ class DanbooruSearchUI:
                 except Exception:
                     pass
             asyncio.create_task(silent_success_update())
+
+    def _record_first_selection_if_needed(
+        self,
+        previous_tags: list[str],
+        current_tags: list[str],
+    ) -> None:
+        if self._telemetry_search_started_at is None or self._telemetry_selection_recorded:
+            return
+        if not (set(current_tags) - set(previous_tags)):
+            return
+        self._telemetry_selection_recorded = True
+        duration_ms = (time.perf_counter() - self._telemetry_search_started_at) * 1000
+
+        async def record_selection() -> None:
+            try:
+                await telemetry.increment("ui_search_with_selection_session")
+                await telemetry.record_timing("search_to_first_selection", duration_ms)
+            except Exception as exc:
+                print(f"[UI] 首次选择统计失败: {exc}", flush=True)
+
+        asyncio.create_task(record_selection())
+
+    def _record_ui_copy(self, event_name: str) -> None:
+        duration_ms: float | None = None
+        if (
+            self._telemetry_search_started_at is not None
+            and not self._telemetry_copy_timing_recorded
+        ):
+            self._telemetry_copy_timing_recorded = True
+            duration_ms = (time.perf_counter() - self._telemetry_search_started_at) * 1000
+
+        async def record_copy() -> None:
+            try:
+                await counter.increment_copy()
+                await telemetry.increment(event_name)
+                if duration_ms is not None:
+                    await telemetry.record_timing("search_to_first_copy", duration_ms)
+            except Exception as exc:
+                print(f"[UI] 复制统计失败: {exc}", flush=True)
+
+        asyncio.create_task(record_copy())
 
     # ── 分页辅助 ──────────────────────────────────────────────────────────
 
@@ -2880,6 +2927,18 @@ class DanbooruSearchUI:
             self.spinner.classes(add='hidden')
             return
 
+        search_started_at = time.perf_counter()
+        search_invoked_at = time.monotonic()
+        normalized_telemetry_query = ' '.join(query.split()).casefold()
+        await telemetry.increment("ui_search")
+        if (
+            normalized_telemetry_query == self._telemetry_last_query
+            and search_invoked_at - self._telemetry_last_search_at <= 60
+        ):
+            await telemetry.increment("ui_repeat_search_60s")
+        self._telemetry_last_query = normalized_telemetry_query
+        self._telemetry_last_search_at = search_invoked_at
+
         try:
             tagger = await DanbooruTagger.get_instance()
 
@@ -2898,6 +2957,15 @@ class DanbooruSearchUI:
                 max_per_group=int(self.input_max_per_group.value) if self.input_max_per_group else 2,
             )
             response = await tagger.search_async(request)
+            await telemetry.record_timing(
+                "ui_search_latency",
+                (time.perf_counter() - search_started_at) * 1000,
+            )
+            if not response.results:
+                await telemetry.increment("ui_zero_result")
+            self._telemetry_search_started_at = search_started_at
+            self._telemetry_selection_recorded = False
+            self._telemetry_copy_timing_recorded = False
 
             # 后台计数
             async def silent_counter_update():
@@ -3060,6 +3128,7 @@ class DanbooruSearchUI:
 
         all_tags = self._get_selected_tags()
         self._selected_order = list(all_tags)
+        self._record_first_selection_if_needed(previous_tags, all_tags)
         if self.selection_count_label is not None:
             self.selection_count_label.text = str(len(all_tags))
         self._save_staged_tags()
@@ -3081,6 +3150,7 @@ class DanbooruSearchUI:
 
         all_tags = self._get_selected_tags()
         previous_tags = [item['tag'] for item in self.workspace_state.get('selected', [])]
+        self._record_first_selection_if_needed(previous_tags, all_tags)
         if all_tags != previous_tags:
             self._push_undo_snapshot()
         existing = set(previous_tags)
@@ -3713,13 +3783,8 @@ class DanbooruSearchUI:
         ui.clipboard.write(prompt)
         fmt_label = {'sdxl': 'SDXL', 'nai': 'NAI', 'anima': 'Anima'}.get(self.prompt_format, 'SDXL')
         ui.notify(f'已复制选中标签（{fmt_label} 格式）!', type='positive')
-
-        async def silent_copy_update():
-            try:
-                await counter.increment_copy()
-            except Exception:
-                pass
-        asyncio.create_task(silent_copy_update())
+        if prompt:
+            self._record_ui_copy("ui_copy_selected")
 
     def _copy_all_tags(self):
         self._mark_interaction()
@@ -3729,14 +3794,22 @@ class DanbooruSearchUI:
             tags_str = tags_str.replace('(', '\\(').replace(')', '\\)')
             ui.clipboard.write(tags_str)
             ui.notify('已复制全部标签!', type='positive')
+            self._record_ui_copy("ui_copy_all")
         else:
             ui.notify('暂无标签可复制', type='warning')
 
     def _feedback_settings(self) -> dict:
         return {
             'top_k': int(self.input_top_k.value) if self.input_top_k else None,
-            'segmentation': self.input_segment.value if self.input_segment else None,
-            'nsfw': self.input_nsfw.value if self.input_nsfw else None,
+            'limit': int(self.input_limit.value) if self.input_limit else None,
+            'popularity_weight': float(self.input_weight.value) if self.input_weight else None,
+            'show_nsfw': self.input_nsfw.value if self.input_nsfw else None,
+            'use_segmentation': self.input_segment.value if self.input_segment else None,
+            'search_mode': self.input_search_mode.value if self.input_search_mode else '自定义',
+            'target_layers': [key for key, enabled in self.selected_layers.items() if enabled],
+            'target_categories': [key for key, enabled in self.selected_cats.items() if enabled],
+            'group_mode': self.input_group_mode.value if self.input_group_mode else 'off',
+            'max_per_group': int(self.input_max_per_group.value) if self.input_max_per_group else 2,
         }
 
     def report_bad_case(self):
@@ -3749,6 +3822,10 @@ class DanbooruSearchUI:
         with ui.dialog() as dialog, ui.card().classes('w-full max-w-lg'):
             ui.label('反馈搜索问题').classes('text-base font-bold text-gray-800')
             ui.label(f'当前搜索词：{query}').classes('text-sm text-gray-600')
+            ui.label(
+                '提交后会记录当前查询、搜索设置、应用版本和提交时间；'
+                '不会上传账号信息、浏览器指纹、搜索历史或收藏。'
+            ).classes('text-xs text-slate-500 bg-slate-50 rounded p-2')
             detail_input = ui.textarea(
                 label='具体问题（可选）',
                 placeholder='例如：结果偏题、缺少某个关键标签、召回了不相关角色/作品...',
@@ -3759,12 +3836,13 @@ class DanbooruSearchUI:
 
                 submit_btn.disable()
                 try:
-                    await counter.add_bad_case(
-                        query,
-                        platform=PLATFORM,
-                        settings=self._feedback_settings(),
+                    await telemetry.add_feedback(
                         feedback_type='search_bad_case',
-                        detail=detail,
+                        query=query,
+                        search_settings=self._feedback_settings(),
+                        app_version=_get_git_commit(),
+                        platform=PLATFORM,
+                        details=detail,
                     )
                     if self.bad_case_btn is not None:
                         self.bad_case_btn.disable()
@@ -3804,6 +3882,10 @@ class DanbooruSearchUI:
             ui.label('反馈翻译错误').classes('text-base font-bold text-gray-800')
             ui.label(f'词条：{tag}').classes('text-sm font-mono text-gray-700')
             ui.label(f'当前中文名：{current_cn_first or current_cn_name or "（空）"}').classes('text-sm text-gray-600')
+            ui.label(
+                '提交后会记录当前查询、该词条、当前翻译、搜索设置、应用版本和提交时间；'
+                '不会上传账号信息、浏览器指纹、搜索历史或收藏。'
+            ).classes('text-xs text-slate-500 bg-slate-50 rounded p-2')
             suggested_input = ui.input(
                 label='建议中文名（可选）',
                 placeholder='如果有更合适的译名，可以填在这里',
@@ -3819,12 +3901,13 @@ class DanbooruSearchUI:
 
                 submit_btn.disable()
                 try:
-                    await counter.add_bad_case(
-                        query,
-                        platform=PLATFORM,
-                        settings=self._feedback_settings(),
+                    await telemetry.add_feedback(
                         feedback_type='translation_error',
-                        detail=detail,
+                        query=query,
+                        search_settings=self._feedback_settings(),
+                        app_version=_get_git_commit(),
+                        platform=PLATFORM,
+                        details=detail,
                         tag=tag,
                         current_cn_name=current_cn_name,
                         suggested_cn_name=suggested,
@@ -3852,6 +3935,7 @@ async def main_page():
     async def silent_visit_update():
         try:
             await counter.increment_visit()
+            await telemetry.increment("ui_visit")
             app_ui._update_footer_text()
         except Exception:
             pass
@@ -3874,18 +3958,37 @@ if __name__ in {'__main__', '__mp_main__'}:
             await asyncio.sleep(5)
             print("[UI] 开始预热计数器与引擎", flush=True)
             await counter.init()
-            await DanbooruTagger.get_instance()
+            await telemetry.init()
+            cold_start_started_at = time.perf_counter()
+            await telemetry.increment("engine_cold_start_attempt")
+            try:
+                await DanbooruTagger.get_instance()
+            except Exception:
+                await telemetry.increment("engine_cold_start_failure")
+                await telemetry.record_timing(
+                    "engine_cold_start",
+                    (time.perf_counter() - cold_start_started_at) * 1000,
+                )
+                raise
+            await telemetry.increment("engine_cold_start_success")
+            await telemetry.record_timing(
+                "engine_cold_start",
+                (time.perf_counter() - cold_start_started_at) * 1000,
+            )
             print("[UI] 后台预热全部完成！", flush=True)
         asyncio.create_task(background_init_tasks())
 
     @app.on_shutdown
     def _shutdown():
+        async def force_sync_all():
+            await asyncio.gather(counter.force_sync(), telemetry.force_sync())
+
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                loop.create_task(counter.force_sync())
+                loop.create_task(force_sync_all())
             else:
-                asyncio.run(counter.force_sync())
+                asyncio.run(force_sync_all())
         except Exception as e:
             print(f"[UI] 关机同步失败: {e}")
 

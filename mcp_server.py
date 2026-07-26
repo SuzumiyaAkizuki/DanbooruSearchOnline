@@ -27,6 +27,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from core.engine import DanbooruTagger
 from core.models import SearchRequest
 import core.counter as counter
+import core.telemetry as telemetry
 import re
 
 
@@ -182,6 +183,7 @@ search_tags，不要把画师名放进 query。
 JSON 对象，包含 prompt（逗号分隔 tag）、keywords、results。
 每个 result 包含 tag、cn_name；当 include_wiki=True 时额外包含 wiki。
     """
+    await telemetry.increment("mcp_search_tags")
     _SEARCH_MODE_PRESETS: dict[str, dict] = {
         "precise_lookup":   {"top_k": 10, "limit": 10, "popularity_weight": 0.15, "use_segmentation": False, "group_mode": "off",    "max_per_group": 2},
         "concept_explore":  {"top_k": 80, "limit": 80, "popularity_weight": 0.15, "use_segmentation": True,  "group_mode": "expand",  "max_per_group": 2},
@@ -219,10 +221,9 @@ JSON 对象，包含 prompt（逗号分隔 tag）、keywords、results。
         return json.dumps({
             "error": "搜索超时（120s），请简化查询或稍后重试",
         }, ensure_ascii=False, indent=2)
-    # 计数：每次 MCP 搜索调用均计入搜索、成功、复制；访问不变
+    # 旧累计口径继续保留，但 MCP 成功不再冒充真实 UI 复制。
     await counter.increment()
     await counter.increment_success()
-    await counter.increment_copy()
     await counter.increment_mcp()
 
     results = []
@@ -304,6 +305,7 @@ JSON 对象，results 按聚合 NPMI 分数降序排序。每个结果包含：
 - sources: 对该推荐有贡献的种子标签
 - wiki: 仅当 include_wiki=True 时返回
     """
+    await telemetry.increment("mcp_get_related_tags")
     tagger = await DanbooruTagger.get_instance()
 
     corrected_tags, invalid_tags, corrections, candidates = _resolve_canonical_tags(tagger, tags)
@@ -323,10 +325,9 @@ JSON 对象，results 按聚合 NPMI 分数降序排序。每个结果包含：
         limit,
         show_nsfw,
     )
-    # 计数：每次 MCP related 调用均计入搜索、成功、复制；访问不变
+    # 旧累计口径继续保留，但 MCP 成功不再冒充真实 UI 复制。
     await counter.increment()
     await counter.increment_success()
-    await counter.increment_copy()
     await counter.increment_mcp()
 
     output = []
@@ -386,6 +387,7 @@ async def get_artist_recommendations(
     - sources: 命中该画师的输入标签
     - top_tags: 该画师最常画的前 10 个标签（带中文名）
     """
+    await telemetry.increment("mcp_get_artist_recommendations")
     tagger = await DanbooruTagger.get_instance()
 
     if not tags:
@@ -424,7 +426,6 @@ async def get_artist_recommendations(
     # 计数
     await counter.increment()
     await counter.increment_success()
-    await counter.increment_copy()
     await counter.increment_mcp()
 
     payload = {"results": output}
@@ -475,6 +476,7 @@ JSON 对象，包含：
 如果没有找到唯一画师，会返回 artist_not_found 和候选画师名。这不代表该画师 tag 在 Danbooru
 不存在，也不要改用 search_tags 验证画师名。
     """
+    await telemetry.increment("mcp_get_artist_profile")
     tagger = await DanbooruTagger.get_instance()
     profile = tagger.get_artist_profile(
         artist_name,
@@ -486,7 +488,6 @@ JSON 对象，包含：
     await counter.increment_mcp()
     if "error" not in profile:
         await counter.increment_success()
-        await counter.increment_copy()
 
     return json.dumps(profile, ensure_ascii=False, indent=2)
 
@@ -859,6 +860,7 @@ async def get_anima_format() -> str:
     包含完整 Anima 提示词格式规范的 Markdown 文本，涵盖标签格式化规则、
     自然语言段落规则、权重语法、多人物防串扰规则等。
     """
+    await telemetry.increment("mcp_get_anima_format")
     return _ANIMA_FORMAT_INSTRUCTION
 
 
@@ -1092,4 +1094,5 @@ async def get_newbie_format() -> str:
 
     包含完整 NewBie 提示词格式规范的文本，涵盖 XML 结构、标签处理规则、多人物规则等。
     """
+    await telemetry.increment("mcp_get_newbie_format")
     return _NEWBIE_OUTPUT_FORMAT

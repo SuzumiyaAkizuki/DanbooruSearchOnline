@@ -35,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.engine import DanbooruTagger
 from core.models import SearchRequest, SearchResponse
 import core.counter as counter
+import core.telemetry as telemetry
 
 
 # ── Pydantic I/O 模型（API 层专用，与 core.models 解耦）──
@@ -190,6 +191,7 @@ app = FastAPI(
 
 @app.post("/search", response_model=SearchOut)
 async def search(body: SearchIn) -> SearchOut:
+    await telemetry.increment("rest_search")
     tagger = await DanbooruTagger.get_instance()
 
     # SearchIn → core.models.SearchRequest（两者字段一一对应，直接解包）
@@ -201,10 +203,9 @@ async def search(body: SearchIn) -> SearchOut:
     except asyncio.TimeoutError:
         raise HTTPException(status_code=503, detail="搜索超时（120s），请简化查询或稍后重试")
 
-    # 计数：每次 API 搜索调用均计入搜索、成功、复制；访问不变
+    # 旧累计口径继续保留，但接口成功不再冒充真实 UI 复制。
     await counter.increment()
     await counter.increment_success()
-    await counter.increment_copy()
 
     return SearchOut(
         tags_all=response.tags_all,
@@ -224,6 +225,7 @@ async def related(body: RelatedIn) -> dict[str, Any]:
     - show_nsfw：是否包含 NSFW 标签，默认 True
     - target_categories：仅返回指定类别；未传入时不过滤
     """
+    await telemetry.increment("rest_related")
     tagger = await DanbooruTagger.get_instance()
     corrected_tags, invalid_tags, corrections = await _correct_tags(tagger, body.tags)
     if not corrected_tags:
@@ -238,10 +240,9 @@ async def related(body: RelatedIn) -> dict[str, Any]:
         body.show_nsfw,
         set(body.target_categories) if body.target_categories is not None else None,
     )
-    # 计数：每次 API related 调用均计入搜索、成功、复制；访问不变
+    # 旧累计口径继续保留，但接口成功不再冒充真实 UI 复制。
     await counter.increment()
     await counter.increment_success()
-    await counter.increment_copy()
 
     output: list[dict[str, Any]] = []
     for result in results:
@@ -266,6 +267,7 @@ async def artists(body: ArtistIn) -> dict[str, Any]:
     - limit：最多返回条数，默认 30
     - min_cooc：单个 (tag, artist) 对的最小共现次数，默认 3
     """
+    await telemetry.increment("rest_artists")
     tagger = await DanbooruTagger.get_instance()
     if not body.tags:
         return {"error": "tags 列表不能为空"}
@@ -285,7 +287,6 @@ async def artists(body: ArtistIn) -> dict[str, Any]:
     # 计数
     await counter.increment()
     await counter.increment_success()
-    await counter.increment_copy()
 
     output = [
         {

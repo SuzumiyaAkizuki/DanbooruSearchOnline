@@ -8373,13 +8373,13 @@
     "colored_tips": [
       "tag_group:hair_color"
     ],
-    "roots_(hair)": [
-      "tag_group:hair_color"
-    ],
     "gradient_hair": [
       "tag_group:hair_color"
     ],
     "rainbow_hair": [
+      "tag_group:hair_color"
+    ],
+    "roots_(hair)": [
       "tag_group:hair_color"
     ],
     "split-color_hair": [
@@ -13825,7 +13825,7 @@
     "changpao": [
       "tag_group:attire"
     ],
-    "china_dress": [
+    "qipao": [
       "tag_group:attire"
     ],
     "fengguan": [
@@ -17244,6 +17244,9 @@
     "stealth_paizuri": [
       "tag_group:sex_acts"
     ],
+    "sideways_perpendicular_paizuri": [
+      "tag_group:sex_acts"
+    ],
     "thigh_sex": [
       "tag_group:sex_acts"
     ],
@@ -19995,13 +19998,13 @@
     "holding_unworn_scarf": [
       "tag_group:holding_tags"
     ],
-    "holding_boots": [
+    "holding_unworn_boots": [
       "tag_group:holding_tags"
     ],
-    "holding_sandals": [
+    "holding_unworn_sandals": [
       "tag_group:holding_tags"
     ],
-    "holding_shoes": [
+    "holding_unworn_shoes": [
       "tag_group:holding_tags"
     ],
     "holding_sock": [
@@ -23079,7 +23082,7 @@
     "shihouin_yoruichi_(cat)": [
       "tag_group:cats"
     ],
-    "shinjuku_cat": [
+    "cross_shinjuku_vision": [
       "tag_group:cats"
     ],
     "slugcat": [
@@ -25154,7 +25157,8 @@
       "tag_group:board_games"
     ],
     "umineko_no_naku_koro_ni": [
-      "tag_group:board_games"
+      "tag_group:board_games",
+      "tag_group:visual_novel_games"
     ],
     "playing_sports": [
       "tag_group:sports",
@@ -36825,7 +36829,7 @@
     "caipirinha_dears_dance_(meme)": [
       "tag_group:dances"
     ],
-    "caramelldansen": [
+    "caramelldansen_(meme)": [
       "tag_group:dances"
     ],
     "carson_shearer's_dance_(meme)": [
@@ -44913,10 +44917,16 @@
     "wholesome_monster_girl_academia": [
       "tag_group:visual_novel_games"
     ],
+    "after_(game)": [
+      "tag_group:visual_novel_games"
+    ],
     "aiyoku_no_eustia": [
       "tag_group:visual_novel_games"
     ],
     "akasen_gairo_~shouwa_33_nen_no_hatsuyuki~": [
+      "tag_group:visual_novel_games"
+    ],
+    "akatsuki_no_goei": [
       "tag_group:visual_novel_games"
     ],
     "akeiro_kaikitan": [
@@ -44926,6 +44936,18 @@
       "tag_group:visual_novel_games"
     ],
     "amatsutsumi": [
+      "tag_group:visual_novel_games"
+    ],
+    "ane_death.": [
+      "tag_group:visual_novel_games"
+    ],
+    "ane_to_boin": [
+      "tag_group:visual_novel_games"
+    ],
+    "anejiru": [
+      "tag_group:visual_novel_games"
+    ],
+    "aniyome_wa_ijippari": [
       "tag_group:visual_novel_games"
     ],
     "ao_no_kanata_no_four_rhythm": [
@@ -44940,13 +44962,37 @@
     "baldr_sky": [
       "tag_group:visual_novel_games"
     ],
+    "boku_to_gonee_to_umi_no_year!!": [
+      "tag_group:visual_novel_games"
+    ],
     "bondage_game": [
       "tag_group:visual_novel_games"
     ],
     "bra-ban!": [
       "tag_group:visual_novel_games"
     ],
+    "bunny's_mama_daikou_service": [
+      "tag_group:visual_novel_games"
+    ],
     "cartagra": [
+      "tag_group:visual_novel_games"
+    ],
+    "chijoku_shinsatsushitsu": [
+      "tag_group:visual_novel_games"
+    ],
+    "choukou_(alicesoft)": [
+      "tag_group:visual_novel_games"
+    ],
+    "choukou_tenshi_escalayer": [
+      "tag_group:visual_novel_games"
+    ],
+    "choukou_sennin_haruka": [
+      "tag_group:visual_novel_games"
+    ],
+    "choukou_shinki_ixseal": [
+      "tag_group:visual_novel_games"
+    ],
+    "circle_mate": [
       "tag_group:visual_novel_games"
     ],
     "cocoro@function!": [
@@ -44955,10 +45001,28 @@
     "cross_channel": [
       "tag_group:visual_novel_games"
     ],
+    "dai_(series)": [
+      "tag_group:visual_novel_games"
+    ],
+    "daiakuji": [
+      "tag_group:visual_novel_games"
+    ],
+    "daibanchou": [
+      "tag_group:visual_novel_games"
+    ],
+    "daiteikoku": [
+      "tag_group:visual_novel_games"
+    ],
     "daitoshokan_no_hitsujikai": [
       "tag_group:visual_novel_games"
     ],
     "deep_body": [
+      "tag_group:visual_novel_games"
+    ],
+    "desire_(c's_ware)": [
+      "tag_group:visual_novel_games"
+    ],
+    "double_teacher_life": [
       "tag_group:visual_novel_games"
     ],
     "dra+koi": [
@@ -44970,10 +45034,16 @@
     "draculius": [
       "tag_group:visual_novel_games"
     ],
+    "enjoi": [
+      "tag_group:visual_novel_games"
+    ],
     "enzai": [
       "tag_group:visual_novel_games"
     ],
     "eroge!": [
+      "tag_group:visual_novel_games"
+    ],
+    "erotica_yuuwaku_kenshuu_hajimaruyo": [
       "tag_group:visual_novel_games"
     ],
     "euphoria_(clockup)": [
@@ -44991,6 +45061,9 @@
     "fate/stay_night": [
       "tag_group:visual_novel_games"
     ],
+    "fault!!": [
+      "tag_group:visual_novel_games"
+    ],
     "figu@mate": [
       "tag_group:visual_novel_games"
     ],
@@ -45001,6 +45074,12 @@
       "tag_group:visual_novel_games"
     ],
     "galtia": [
+      "tag_group:visual_novel_games"
+    ],
+    "galzoo_island": [
+      "tag_group:visual_novel_games"
+    ],
+    "genmukan": [
       "tag_group:visual_novel_games"
     ],
     "gleam_garden_no_shoujo": [
@@ -45039,7 +45118,19 @@
     "happiness!": [
       "tag_group:visual_novel_games"
     ],
+    "heartful_maman": [
+      "tag_group:visual_novel_games"
+    ],
+    "hime_to_boin": [
+      "tag_group:visual_novel_games"
+    ],
     "hotel.": [
+      "tag_group:visual_novel_games"
+    ],
+    "ijira_rental": [
+      "tag_group:visual_novel_games"
+    ],
+    "imitation_lover": [
       "tag_group:visual_novel_games"
     ],
     "imouto_paradise!": [
@@ -45063,6 +45154,9 @@
     "kamidori_alchemy_meister": [
       "tag_group:visual_novel_games"
     ],
+    "kanojo_x_kanojo_x_kanojo": [
+      "tag_group:visual_novel_games"
+    ],
     "kanon": [
       "tag_group:visual_novel_games"
     ],
@@ -45076,6 +45170,9 @@
       "tag_group:visual_novel_games"
     ],
     "katawa_shoujo": [
+      "tag_group:visual_novel_games"
+    ],
+    "kateikyoushi_no_onee-san": [
       "tag_group:visual_novel_games"
     ],
     "kieta_sekai_to_tsuki_to_shoujo": [
@@ -45135,13 +45232,31 @@
     "little_busters!": [
       "tag_group:visual_novel_games"
     ],
+    "magical_witch_academy": [
+      "tag_group:visual_novel_games"
+    ],
+    "magical_witch_concerto": [
+      "tag_group:visual_novel_games"
+    ],
     "maji_de_watashi_ni_koi_shinasai!": [
+      "tag_group:visual_novel_games"
+    ],
+    "majo_no_shokuzai": [
       "tag_group:visual_novel_games"
     ],
     "megachu!": [
       "tag_group:visual_novel_games"
     ],
     "minna_de_nyan_nyan": [
+      "tag_group:visual_novel_games"
+    ],
+    "mirage_(discovery)": [
+      "tag_group:visual_novel_games"
+    ],
+    "mirage_1": [
+      "tag_group:visual_novel_games"
+    ],
+    "mirage_2": [
       "tag_group:visual_novel_games"
     ],
     "mon-musu_quest!": [
@@ -45153,7 +45268,16 @@
     "namaiki_~kissuisou_e_youkoso!~": [
       "tag_group:visual_novel_games"
     ],
+    "nami_no_manimani": [
+      "tag_group:visual_novel_games"
+    ],
     "nanairo_reincarnation": [
+      "tag_group:visual_novel_games"
+    ],
+    "natsuiro_no_sunadokei": [
+      "tag_group:visual_novel_games"
+    ],
+    "natsukami": [
       "tag_group:visual_novel_games"
     ],
     "natsuzora_kanata": [
@@ -45171,13 +45295,37 @@
     "noble_works": [
       "tag_group:visual_novel_games"
     ],
+    "nooch_(series)": [
+      "tag_group:visual_novel_games"
+    ],
+    "nooch_-_abakareta_inbou": [
+      "tag_group:visual_novel_games"
+    ],
+    "nurse_ni_omakase": [
+      "tag_group:visual_novel_games"
+    ],
+    "okusama_no_kaifuku-jutsu": [
+      "tag_group:visual_novel_games"
+    ],
+    "onna_kyoushi": [
+      "tag_group:visual_novel_games"
+    ],
     "ore_wa_kanojo_wo_shinjiteru!": [
+      "tag_group:visual_novel_games"
+    ],
+    "oyako_rankan": [
+      "tag_group:visual_novel_games"
+    ],
+    "oyakusoku_love": [
       "tag_group:visual_novel_games"
     ],
     "paradise_(visual_novel)": [
       "tag_group:visual_novel_games"
     ],
     "period": [
+      "tag_group:visual_novel_games"
+    ],
+    "pia_carrot_(series)": [
       "tag_group:visual_novel_games"
     ],
     "pia_carrot_e_youkoso!!": [
@@ -45201,10 +45349,19 @@
     "pretty_x_cation": [
       "tag_group:visual_novel_games"
     ],
+    "prima_stella": [
+      "tag_group:visual_novel_games"
+    ],
     "quartett!": [
       "tag_group:visual_novel_games"
     ],
+    "rance_(series)": [
+      "tag_group:visual_novel_games"
+    ],
     "reincarnation_shinsengumi": [
+      "tag_group:visual_novel_games"
+    ],
+    "ringetsu": [
       "tag_group:visual_novel_games"
     ],
     "rondo_leaflet": [
@@ -45219,6 +45376,9 @@
     "sanoba_witch": [
       "tag_group:visual_novel_games"
     ],
+    "sara_sara_sasara": [
+      "tag_group:visual_novel_games"
+    ],
     "saya_no_uta": [
       "tag_group:visual_novel_games"
     ],
@@ -45228,10 +45388,16 @@
     "senren_banka": [
       "tag_group:visual_novel_games"
     ],
+    "serina_(game)": [
+      "tag_group:visual_novel_games"
+    ],
     "sharin_no_kuni_himawari_no_shoujo": [
       "tag_group:visual_novel_games"
     ],
     "shin_genre_esudere!!": [
+      "tag_group:visual_novel_games"
+    ],
+    "shin'en_no_labyrinthos": [
       "tag_group:visual_novel_games"
     ],
     "shinju_no_yakata": [
@@ -45247,6 +45413,9 @@
       "tag_group:visual_novel_games"
     ],
     "shuusaku": [
+      "tag_group:visual_novel_games"
+    ],
+    "silvery_white": [
       "tag_group:visual_novel_games"
     ],
     "snoot_game": [
@@ -45276,6 +45445,9 @@
     "tenshinranman": [
       "tag_group:visual_novel_games"
     ],
+    "to_heart_(series)": [
+      "tag_group:visual_novel_games"
+    ],
     "to_heart": [
       "tag_group:visual_novel_games"
     ],
@@ -45288,10 +45460,43 @@
     "tomoyo_after": [
       "tag_group:visual_novel_games"
     ],
+    "tonari_no_love_juice": [
+      "tag_group:visual_novel_games"
+    ],
+    "toushin_toshi": [
+      "tag_group:visual_novel_games"
+    ],
+    "toushin_toshi_i": [
+      "tag_group:visual_novel_games"
+    ],
+    "toushin_toshi_ii": [
+      "tag_group:visual_novel_games"
+    ],
+    "toushin_toshi_girls_gift": [
+      "tag_group:visual_novel_games"
+    ],
+    "toushin_toshi_iii": [
+      "tag_group:visual_novel_games"
+    ],
+    "tsumamigui_(series)": [
+      "tag_group:visual_novel_games"
+    ],
+    "tsumamigui": [
+      "tag_group:visual_novel_games"
+    ],
+    "tsumamigui_2": [
+      "tag_group:visual_novel_games"
+    ],
+    "tsuma_shibori": [
+      "tag_group:visual_novel_games"
+    ],
+    "tsumamigui_3": [
+      "tag_group:visual_novel_games"
+    ],
     "tsujidou-san_no_jun'ai_road": [
       "tag_group:visual_novel_games"
     ],
-    "utawarerumono": [
+    "utawarerumono_(series)": [
       "tag_group:visual_novel_games"
     ],
     "walkure_romanze": [
@@ -45301,6 +45506,9 @@
       "tag_group:visual_novel_games"
     ],
     "wind_a_breath_of_heart": [
+      "tag_group:visual_novel_games"
+    ],
+    "yokubari_saboten": [
       "tag_group:visual_novel_games"
     ],
     "yotsunoha": [
@@ -49164,10 +49372,10 @@
       "multicolored_hair",
       "colored_inner_hair",
       "colored_tips",
-      "roots_(hair)",
       "gradient_hair",
       "patterned_hair",
       "rainbow_hair",
+      "roots_(hair)",
       "split-color_hair",
       "spotted_hair",
       "streaked_hair",
@@ -51077,7 +51285,7 @@
       "unitard",
       "chinese_clothes",
       "changpao",
-      "china_dress",
+      "qipao",
       "fengguan",
       "hanfu",
       "longpao",
@@ -52575,6 +52783,7 @@
       "perpendicular_paizuri",
       "stealth_paizuri",
       "straddling_paizuri",
+      "sideways_perpendicular_paizuri",
       "thigh_sex",
       "glansjob",
       "cloth_glansjob",
@@ -53595,10 +53804,10 @@
       "holding_unworn_helmet",
       "holding_unworn_necktie",
       "holding_unworn_scarf",
-      "holding_boots",
+      "holding_unworn_boots",
       "holding_legwear",
-      "holding_sandals",
-      "holding_shoes",
+      "holding_unworn_sandals",
+      "holding_unworn_shoes",
       "holding_sock",
       "holding_bag",
       "holding_briefcase",
@@ -54704,7 +54913,7 @@
       "serval_(kemono_friends)",
       "shamisen_(suzumiya_haruhi)",
       "shihouin_yoruichi_(cat)",
-      "shinjuku_cat",
+      "cross_shinjuku_vision",
       "slugcat",
       "sphinx_(toaru_majutsu_no_index)",
       "sylvester_(looney_tunes)",
@@ -59385,7 +59594,7 @@
       "buri_hamachi",
       "caipirinha_(meme)",
       "caipirinha_dears_dance_(meme)",
-      "caramelldansen",
+      "caramelldansen_(meme)",
       "carson_shearer's_dance_(meme)",
       "cat_breakdancing_(meme)",
       "chads_dancing_to_california_gurls_(meme)",
@@ -62569,40 +62778,66 @@
       "summer_pockets",
       "the_silver_case",
       "symphonic_rain",
+      "umineko_no_naku_koro_ni",
       "uta_no_prince-sama",
       "va-11_hall-a",
       "wholesome_monster_girl_academia",
+      "after_(game)",
       "air_(visual_novel)",
       "aiyoku_no_eustia",
       "akasen_gairo_~shouwa_33_nen_no_hatsuyuki~",
+      "akatsuki_no_goei",
       "akeiro_kaikitan",
       "amairo_islenauts",
       "amatsutsumi",
+      "ane_death.",
+      "ane_to_boin",
+      "anejiru",
+      "aniyome_wa_ijippari",
       "ao_no_kanata_no_four_rhythm",
       "aoiro_rinne",
       "ashita_no_kimi_to_au_tame_ni",
       "baldr_sky",
+      "boku_to_gonee_to_umi_no_year!!",
       "bondage_game",
       "bra-ban!",
+      "bunny's_mama_daikou_service",
       "cartagra",
+      "chijoku_shinsatsushitsu",
+      "choukou_(alicesoft)",
+      "choukou_tenshi_escalayer",
+      "choukou_sennin_haruka",
+      "choukou_shinki_ixseal",
+      "circle_mate",
       "cocoro@function!",
       "cross_channel",
+      "dai_(series)",
+      "daiakuji",
+      "daibanchou",
+      "daiteikoku",
       "daitoshokan_no_hitsujikai",
       "deep_body",
+      "desire_(c's_ware)",
+      "double_teacher_life",
       "dra+koi",
       "dracu-riot!",
       "draculius",
+      "enjoi",
       "enzai",
       "eroge!",
+      "erotica_yuuwaku_kenshuu_hajimaruyo",
       "euphoria_(clockup)",
       "existence",
       "everlasting_summer",
       "fate/hollow_ataraxia",
       "fate/stay_night",
+      "fault!!",
       "figu@mate",
       "france_shoujo",
       "g-senjou_no_maou",
       "galtia",
+      "galzoo_island",
+      "genmukan",
       "gleam_garden_no_shoujo",
       "gore_screaming_show",
       "grisaia_(series)",
@@ -62615,7 +62850,11 @@
       "hamidashi_creative",
       "hanachirasu",
       "happiness!",
+      "heartful_maman",
+      "hime_to_boin",
       "hotel.",
+      "ijira_rental",
+      "imitation_lover",
       "imouto_paradise!",
       "isaku",
       "josou_jinja",
@@ -62623,11 +62862,13 @@
       "josou_shinwa",
       "juukishi_cutie_bullet",
       "kamidori_alchemy_meister",
+      "kanojo_x_kanojo_x_kanojo",
       "kanon",
       "kara_no_shoujo",
       "kami_no_ue_no_mahou_tsukai",
       "katahane",
       "katawa_shoujo",
+      "kateikyoushi_no_onee-san",
       "kieta_sekai_to_tsuki_to_shoujo",
       "kikokugai",
       "kimi_ga_ita_kisetsu",
@@ -62647,21 +62888,38 @@
       "lamento",
       "like_a_butler",
       "little_busters!",
+      "magical_witch_academy",
+      "magical_witch_concerto",
       "maji_de_watashi_ni_koi_shinasai!",
+      "majo_no_shokuzai",
       "megachu!",
       "minna_de_nyan_nyan",
+      "mirage_(discovery)",
+      "mirage_1",
+      "mirage_2",
       "mon-musu_quest!",
       "muv-luv",
       "namaiki_~kissuisou_e_youkoso!~",
+      "nami_no_manimani",
       "nanairo_reincarnation",
+      "natsuiro_no_sunadokei",
+      "natsukami",
       "natsuzora_kanata",
       "negapoji",
       "nekopara",
       "no_thank_you!!!_(visual_novel)",
       "noble_works",
+      "nooch_(series)",
+      "nooch_-_abakareta_inbou",
+      "nurse_ni_omakase",
+      "okusama_no_kaifuku-jutsu",
+      "onna_kyoushi",
       "ore_wa_kanojo_wo_shinjiteru!",
+      "oyako_rankan",
+      "oyakusoku_love",
       "paradise_(visual_novel)",
       "period",
+      "pia_carrot_(series)",
       "pia_carrot_e_youkoso!!",
       "pia_carrot_e_youkoso!!_2",
       "pia_carrot_e_youkoso!!_3",
@@ -62669,22 +62927,29 @@
       "pia_carrot_e_youkoso!!_4",
       "pigeon_blood",
       "pretty_x_cation",
+      "prima_stella",
       "quartett!",
+      "rance_(series)",
       "reincarnation_shinsengumi",
+      "ringetsu",
       "rondo_leaflet",
       "ryuusei_world_actor",
       "sakaagari_hurricane",
       "sanoba_witch",
+      "sara_sara_sasara",
       "saya_no_uta",
       "seikishi_melty_lovers",
       "senren_banka",
+      "serina_(game)",
       "sharin_no_kuni_himawari_no_shoujo",
       "shin_genre_esudere!!",
+      "shin'en_no_labyrinthos",
       "shinju_no_yakata",
       "shizuku_(game)",
       "shuffle!",
       "shunki_gentei_poco_a_poco!",
       "shuusaku",
+      "silvery_white",
       "snoot_game",
       "soshite_ashita_no_sekai_yori",
       "soukou_akki_muramasa",
@@ -62694,16 +62959,29 @@
       "swan_song",
       "taimanin_(series)",
       "tenshinranman",
+      "to_heart_(series)",
       "to_heart",
       "to_heart_2",
       "tokeijikake_no_ley_line",
       "tomoyo_after",
+      "tonari_no_love_juice",
+      "toushin_toshi",
+      "toushin_toshi_i",
+      "toushin_toshi_ii",
+      "toushin_toshi_girls_gift",
+      "toushin_toshi_iii",
       "tsukihime",
+      "tsumamigui_(series)",
+      "tsumamigui",
+      "tsumamigui_2",
+      "tsuma_shibori",
+      "tsumamigui_3",
       "tsujidou-san_no_jun'ai_road",
-      "utawarerumono",
+      "utawarerumono_(series)",
       "walkure_romanze",
       "wanko_to_kurasou",
       "wind_a_breath_of_heart",
+      "yokubari_saboten",
       "yotsunoha",
       "yume_miru_kusuri"
     ],
