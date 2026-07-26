@@ -144,7 +144,8 @@ OPTIONAL_COLS = {
 
 # localStorage key 与配置版本，版本变更时自动丢弃旧配置
 _CONFIG_LS_KEY = 'danbooru_search_config'
-_CONFIG_VERSION = 6
+_CONFIG_VERSION = 7
+_ANNOUNCEMENT_VERSION = 'p0-workspace-2026-07'
 
 SPONSOR_IMAGE_URL = "https://akizukipic.oss-cn-beijing.aliyuncs.com/img/202501120027592.png"
 SPONSOR_TOOLCHAIN_URL = "http://intro.sakizuki.site/index.html"
@@ -258,6 +259,8 @@ def _sanitize_restored_config(cfg: dict) -> dict:
         safe['rows_per_page'] = cfg['rows_per_page']
     if isinstance(cfg.get('search_query'), str):
         safe['search_query'] = cfg['search_query'][:4_000]
+    if isinstance(cfg.get('dismissed_announcement_version'), str):
+        safe['dismissed_announcement_version'] = cfg['dismissed_announcement_version'][:100]
     return safe
 
 def _next_group_render_limit(current: int, total: int, page_size: int) -> int:
@@ -376,6 +379,7 @@ def _format_selected_tag_label(tag: str, cn_name: str = '') -> str:
 class DanbooruSearchUI:
     def __init__(self):
         self.search_count_label = None
+        self.service_status_container = None
         self.current_search_interacted = True
         self._telemetry_search_started_at: float | None = None
         self._telemetry_selection_recorded = False
@@ -386,6 +390,7 @@ class DanbooruSearchUI:
         self.full_table_data: list[dict] = []
         self.current_segments: list[str] = []   # 从句级原始片段，用于区分 chip 颜色
         self.current_keywords: list[str] = []
+        self.current_cached_queries: set[str] = set()
         self.current_filter_keyword: str = 'ALL'  # 当前选中的分词筛选 keyword（NSFW 切换时复用）
         self.current_query_str: str = ""
         self.full_tags_str: str = ""
@@ -454,6 +459,9 @@ class DanbooruSearchUI:
 
         self.mcp_notice = None
         self.notice_expansion = None
+        self.announcement_banner = None
+        self.dismissed_announcement_version = ''
+        self.help_dialog = None
         self.sponsor_dialog = None
 
         # 表格显示选项开关
@@ -504,6 +512,24 @@ class DanbooruSearchUI:
             except AttributeError:
                 pass
 
+    def _update_service_status(self):
+        if self.service_status_container is None:
+            return
+        self.service_status_container.clear()
+        with self.service_status_container:
+            if DanbooruTagger.is_ready():
+                with ui.row().classes(
+                    'w-full items-center gap-2 service-state-panel ready'
+                ):
+                    ui.icon('check_circle', size='18px', color='positive')
+                    ui.label('服务可用').classes('font-medium')
+            else:
+                with ui.row().classes(
+                    'w-full items-center gap-2 service-state-panel loading'
+                ):
+                    ui.spinner(size='18px', color='primary')
+                    ui.label('引擎初始化中，请稍候…约需 5~10 分钟').classes('font-medium')
+
     def _build_sponsor_dialog(self):
         with ui.dialog() as self.sponsor_dialog, ui.card().classes('w-full max-w-sm'):
             with ui.column().classes('w-full items-center gap-2 text-center'):
@@ -518,6 +544,215 @@ class DanbooruSearchUI:
                 ).classes('text-xs text-blue-500 hover:text-blue-700 hover:underline')
             with ui.row().classes('w-full justify-end'):
                 ui.button('关闭', on_click=self.sponsor_dialog.close).props('flat color=grey-7')
+
+    def _build_help_dialog(self):
+        from platform_utils import PLATFORM
+
+        alternate_url = (
+            'https://www.modelscope.cn/studios/SAkizuki/DanbooruSearchOnline'
+            if PLATFORM == 'hf' else
+            'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
+        )
+        with ui.dialog() as self.help_dialog, ui.card().classes('w-full max-w-3xl max-h-[90vh] p-0 gap-0'):
+            with ui.row().classes('w-full items-center justify-between px-5 py-4 border-b border-slate-200'):
+                with ui.row().classes('items-center gap-2'):
+                    ui.icon('help_outline', color='primary')
+                    ui.label('帮助 / 关于').classes('text-lg font-bold text-slate-800')
+                ui.button(icon='close', on_click=self.help_dialog.close).props('flat dense round color=grey-7')
+
+            with ui.scroll_area().classes('w-full h-[72vh]'):
+                with ui.column().classes('w-full gap-4 px-5 py-4'):
+                    with ui.element('div').classes(
+                        'w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-3'
+                    ):
+                        ui.label('最近更新：标签工作区与查询理解').classes(
+                            'text-base font-bold text-blue-900'
+                        )
+                        ui.label(
+                            '本次更新优化了标签已选区，现已支持历史记录、收藏等功能。这些信息始终保存在本地。'
+                        ).classes('text-sm text-blue-800 mt-1')
+
+                    ui.markdown("""
+### 1. 搜索与查询理解
+
+搜索后的“查询理解”优化了原先的分词筛选功能，增加了是否覆盖的标记：
+
+- **绿色**：这个概念已有标签被加入工作区。
+- **黄色**：搜索结果中存在候选，但你还没有选择。
+- **红色**：当前结果没有覆盖；点击它会沿用当前参数发起补充搜索，不会清空工作区。
+- 点击绿色或黄色概念，可以只查看来自该概念的搜索结果；点击“全部结果”恢复完整列表。
+
+### 2. 标签工作区
+
+勾选搜索结果、关联标签、同类标签或推荐画师后，它们都会进入同一个工作区，并自动保存在当前浏览器中。
+
+- 使用标签两侧的 `− / +` 调整 Prompt 权重。
+- 使用“撤销 / 恢复”回退最近的工作区修改。
+- “清空已选”只清空当前工作区标签，不会删除历史和收藏。
+- SDXL、NAI、Anima 复制格式会随工作区保存；画师标签在 Anima 格式下会自动使用 `@画师名`。
+
+### 3. 历史与继续搜索
+
+每次搜索都会记录查询、当时的搜索设置和工作区快照：
+
+- **重新搜索**：恢复历史查询和当时的搜索参数，然后立即搜索。
+- **恢复工作区**：恢复当时的已选标签、权重和格式。
+- **追加查询**：使用当前页面的搜索参数重新执行历史查询，并保留当前工作区。
+
+### 4. 收藏
+
+“保存收藏”会保存当前标签组合、权重、来源和 Prompt 格式。收藏可以恢复、合并或直接复制；合并时，同名标签保留当前工作区已有权重。
+
+### 5. Prompt 导入与 Alias 纠错
+
+点击“导入 Prompt”后粘贴标签字符串。全角逗号和半角逗号会等价解析；上传或粘贴完成后，需要再次点击确认才会导入。
+
+- Alias 是 Danbooru 中标记弃用标签的数据接口，导入 Prompt 后，系统将自动替换弃用标签，并展示替换关系。
+- 重复标签会合并，不会重复加入。
+- 无法唯一识别或目标不在当前标签库中的内容进入“待确认”，不会被强行加入。
+
+### 6. 关联、同类与画师推荐
+
+- **关联推荐**根据标签共现关系补充经常一起出现的标签。
+- **同类标签**根据 Tag Group 展示同一语义组中的其他标签。
+- **推荐擅长画师**根据标签与画师的共现数据推荐画师，每页显示 8 位；悬停可查看常见标签。
+
+推荐原因只展示系统实际使用的数据来源，不会虚构标签关系。
+
+### 7. 备份与迁移
+
+“备份 / 迁移”可以导出完整 JSON，内容包括当前配置、工作区、原始搜索查询、历史和收藏。文件仅在你主动下载或上传时离开浏览器。导入时可以选择合并或替换。
+
+### 8. 反馈与隐私
+
+你可以提交整次搜索问题或标签翻译错误。反馈只记录当前查询、搜索设置、应用版本和你主动填写的说明；不会上传浏览器指纹、收藏、完整历史或未经提交的工作区等任何个人信息。
+                    """).classes('w-full text-sm text-slate-700 leading-relaxed')
+
+                    ui.separator()
+
+                    with ui.column().classes('w-full gap-2'):
+                        ui.label('文档与集成').classes('text-sm font-bold text-slate-700')
+                        with ui.row().classes('w-full gap-3 flex-wrap'):
+                            ui.link('工具链使用指南', 'http://intro.sakizuki.site/index.html', new_tab=True) \
+                                .classes('text-sm text-blue-600')
+                            ui.link('API 文档', '/api/docs', new_tab=True).classes('text-sm text-blue-600')
+                            ui.link(
+                                'MCP 接入',
+                                'https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline#mcp-接口',
+                                new_tab=True,
+                            ).classes('text-sm text-blue-600')
+                            ui.link(
+                                'ComfyUI 插件',
+                                'https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher',
+                                new_tab=True,
+                            ).classes('text-sm text-blue-600')
+                            ui.link('备用服务', alternate_url, new_tab=True).classes('text-sm text-blue-600')
+                            ui.link(
+                                'GitHub',
+                                'https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline',
+                                new_tab=True,
+                            ).classes('text-sm text-blue-600')
+
+                    ui.separator()
+
+                    with ui.element('div').classes(
+                        'w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3'
+                    ):
+                        ui.label('本地个人数据').classes('text-sm font-bold text-red-900')
+                        ui.label(
+                            '历史、收藏、当前工作区和搜索配置只保存在这个浏览器中。'
+                        ).classes('text-xs text-red-800 mt-1')
+                        ui.button(
+                            '删除所有本地个人数据',
+                            icon='delete_forever',
+                            on_click=self._confirm_delete_all_personal_data,
+                        ).props('outline color=negative no-caps').classes('mt-3')
+
+                    with ui.row().classes('w-full items-center justify-between gap-3 flex-wrap'):
+                        ui.label('DanbooruSearch 将持续免费开放。').classes('text-xs text-slate-500')
+                        ui.button(
+                            SPONSOR_NOTICE_TEXT,
+                            icon='volunteer_activism',
+                            on_click=self.sponsor_dialog.open,
+                        ).props('flat dense no-caps color=grey-7').classes('text-xs')
+
+    def _confirm_delete_all_personal_data(self):
+        with ui.dialog() as confirm, ui.card().classes('w-full max-w-lg'):
+            with ui.row().classes('items-center gap-2'):
+                ui.icon('warning', color='negative')
+                ui.label('删除所有本地个人数据？').classes('text-lg font-bold text-red-900')
+            ui.label(
+                '将删除当前浏览器中保存的搜索配置、搜索输入、工作区、已选标签、权重、'
+                '搜索历史、收藏以及旧版或损坏数据备份。'
+            ).classes('text-sm text-slate-700 leading-relaxed')
+            ui.label(
+                '此操作无法撤销，但不会删除你已经下载到电脑上的 JSON 备份，也不会修改服务器端匿名聚合统计。'
+            ).classes('text-xs text-red-700 bg-red-50 rounded p-3')
+
+            async def delete_all_personal_data():
+                delete_btn.disable()
+                storage_keys = [
+                    _CONFIG_LS_KEY,
+                    WORKSPACE_STORAGE_KEY,
+                    HISTORY_STORAGE_KEY,
+                    FAVORITES_STORAGE_KEY,
+                    LEGACY_STAGED_STORAGE_KEY,
+                    f'{WORKSPACE_STORAGE_KEY}_corrupt_backup',
+                    f'{HISTORY_STORAGE_KEY}_corrupt_backup',
+                    f'{FAVORITES_STORAGE_KEY}_corrupt_backup',
+                ]
+                keys_json = _json.dumps(storage_keys, ensure_ascii=False)
+                try:
+                    await ui.run_javascript(
+                        f"""(() => {{
+                            const keys = {keys_json};
+                            keys.forEach((key) => localStorage.removeItem(key));
+                            return keys.length;
+                        }})()""",
+                        timeout=5.0,
+                    )
+                    confirm.close()
+                    self.help_dialog.close()
+                    ui.notify('本地个人数据已删除，页面即将刷新', type='positive', timeout=2000)
+                    await ui.run_javascript(
+                        "(() => { setTimeout(() => window.location.reload(), 500); return true; })()",
+                        timeout=5.0,
+                    )
+                except Exception as exc:
+                    print(f'[UI] 删除本地个人数据失败: {exc}', flush=True)
+                    delete_btn.enable()
+                    ui.notify('删除失败，请稍后重试', type='negative')
+
+            with ui.row().classes('w-full justify-end gap-2 mt-2'):
+                ui.button('取消', on_click=confirm.close).props('flat color=grey-7')
+                delete_btn = ui.button(
+                    '确认删除',
+                    icon='delete_forever',
+                    on_click=delete_all_personal_data,
+                ).props('unelevated color=negative no-caps')
+        confirm.open()
+
+    def _build_release_announcement(self):
+        self.announcement_banner = ui.element('div').classes('w-full release-notice px-3 py-2')
+        with self.announcement_banner:
+            with ui.row().classes('w-full items-center justify-between gap-2'):
+                with ui.row().classes('items-center gap-2 min-w-0 flex-wrap'):
+                    ui.icon('new_releases', size='18px', color='primary')
+                    ui.label(
+                        '新版已加入标签工作区、Prompt 导入、Alias 纠错和分渠道统计。'
+                    ).classes('text-sm text-slate-700')
+                    ui.button(
+                        '查看详情', on_click=self.help_dialog.open,
+                    ).props('flat dense no-caps color=primary').classes('text-xs')
+                ui.button(
+                    icon='close', on_click=self._dismiss_release_announcement,
+                ).props('flat dense round color=grey-6')
+
+    def _dismiss_release_announcement(self):
+        self.dismissed_announcement_version = _ANNOUNCEMENT_VERSION
+        if self.announcement_banner:
+            self.announcement_banner.set_visibility(False)
+        self._save_config()
 
     def _mark_interaction(self, e=None):
         if not self.current_search_interacted:
@@ -629,8 +864,7 @@ class DanbooruSearchUI:
             'prompt_format': self.prompt_format,
             'rows_per_page': self._get_rows_per_page(),
             'search_query': self.search_input.value if self.search_input else '',
-            'notice_expanded': bool(self.notice_expansion.value) if self.notice_expansion else True,
-            'mcp_notice_dismissed': not bool(self.mcp_notice.visible) if self.mcp_notice else False,
+            'dismissed_announcement_version': self.dismissed_announcement_version,
             'search_mode': self.input_search_mode.value if self.input_search_mode else '自定义',
             'group_mode': self.input_group_mode.value if self.input_group_mode else 'off',
             'max_per_group': int(self.input_max_per_group.value) if self.input_max_per_group else 2,
@@ -644,6 +878,13 @@ class DanbooruSearchUI:
 
     def _apply_config_state(self, cfg: dict):
         cfg = _sanitize_restored_config(cfg if isinstance(cfg, dict) else {})
+
+        dismissed_version = cfg.get('dismissed_announcement_version', '')
+        self.dismissed_announcement_version = dismissed_version
+        if self.announcement_banner:
+            self.announcement_banner.set_visibility(
+                dismissed_version != _ANNOUNCEMENT_VERSION
+            )
 
         # 模式可能触发预设填充，因此随后再覆盖各个具体参数。
         if self.input_search_mode and 'search_mode' in cfg:
@@ -686,10 +927,6 @@ class DanbooruSearchUI:
             self._set_rows_per_page(cfg['rows_per_page'])
         if self.search_input and cfg.get('search_query'):
             self.search_input.set_value(cfg['search_query'])
-        if self.notice_expansion and 'notice_expanded' in cfg:
-            self.notice_expansion.set_value(cfg['notice_expanded'])
-        if self.mcp_notice and cfg.get('mcp_notice_dismissed'):
-            self.mcp_notice.set_visibility(False)
         self._update_table_columns()
 
     async def _restore_config(self):
@@ -758,6 +995,39 @@ class DanbooruSearchUI:
                 .weight-label { font-family: Consolas, Monaco, monospace; font-size: 11px;
                                 color: #888; min-width: 28px; text-align: center; }
 
+                .product-search-card {
+                    border: 1px solid #d8e4f1;
+                    border-top: 4px solid #4a90e2;
+                    box-shadow: 0 6px 20px rgba(38, 76, 115, 0.08);
+                }
+                .service-state-panel {
+                    border-radius: 8px;
+                    padding: 7px 10px;
+                    font-size: 12px;
+                }
+                .service-state-panel.loading {
+                    background: #eff6ff;
+                    border: 1px solid #bfdbfe;
+                    color: #1d4ed8;
+                }
+                .service-state-panel.ready {
+                    background: #ecfdf5;
+                    border: 1px solid #a7f3d0;
+                    color: #047857;
+                }
+                .query-insight-panel {
+                    background: #f8fafc;
+                    border: 1px solid #dbe4ee;
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                }
+                .release-notice {
+                    background: #f8fbff;
+                    border: 1px solid #dbeafe;
+                    border-left: 3px solid #4a90e2;
+                    border-radius: 8px;
+                }
+
                 /* 强制双栏并排 */
                 .two-col-layout {
                     display: flex !important;
@@ -819,44 +1089,17 @@ class DanbooruSearchUI:
         ''')
 
         self._build_sponsor_dialog()
+        self._build_help_dialog()
 
-        with ui.column().classes('w-full max-w-7xl mx-auto p-4 gap-4'):
+        with ui.column().classes('w-full max-w-7xl mx-auto p-4 gap-3'):
 
-            # ── 初始化提示 ──
-            self.init_banner = ui.card().classes(
-                'w-full bg-blue-50 border-l-4 border-blue-400'
-            )
-            with self.init_banner:
-                with ui.row().classes('items-center gap-3 p-2'):
-                    ui.spinner(size='sm')
-                    ui.label('引擎初始化中，请稍候…约需 5~10 分钟').classes('text-sm text-blue-700')
-                from platform_utils import PLATFORM
-                _alt_url = (
-                    'https://www.modelscope.cn/studios/SAkizuki/DanbooruSearchOnline'
-                    if PLATFORM == 'hf' else
-                    'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
-                )
-                ui.html(
-                    f'初始化期间，您可以使用'
-                    f'<a href="{_alt_url}" target="_blank" rel="noopener noreferrer" '
-                    f'class="text-blue-600 hover:text-blue-800 underline font-bold">备用服务</a>'
-                    f'，或先查看'
-                    f'<a href="http://intro.sakizuki.site/index.html" '
-                    f'target="_blank" rel="noopener noreferrer" '
-                    f'class="text-blue-600 hover:text-blue-800 underline font-bold">使用指南</a>'
-                ).classes('text-xs text-blue-600 px-6 pb-3')
-            self.init_banner.set_visibility(not DanbooruTagger.is_ready())
+            # ── 1. 搜索主路径 ──
+            self._build_search_card()
             if not DanbooruTagger.is_ready():
                 asyncio.ensure_future(self._hide_banner_when_ready())
 
-            # ── 0. 公告栏（同类标签 + MCP）──
-            self._build_group_notice()
-
-            # ── 1. 注意事项 ──
-            self._build_notice()
-
-            # ── 2. 搜索卡片 ──
-            self._build_search_card()
+            # ── 2. 紧凑版本公告 ──
+            self._build_release_announcement()
 
             # ── 3. 工作区工具和已选标签（无需搜索即可恢复）──
             self.workspace_card = ui.card().classes(
@@ -871,16 +1114,13 @@ class DanbooruSearchUI:
             self.results_section.set_visibility(False)
 
             with self.results_section:
-                # ── 4. 分词筛选 chips ──
-                self.keywords_container = ui.row().classes('gap-2 items-center flex-wrap')
-
-                # ── 4.1 概念覆盖 ──
+                # ── 4. 查询理解：来源筛选 + 概念覆盖 ──
                 self.coverage_container = ui.column().classes('w-full gap-2')
 
                 # ── 5. 两栏结果 ──
                 self._build_results_columns()
 
-            # ── 6. 底部 ──
+            # ── 6. 页脚 ──
             with ui.element('div').classes('w-full text-center py-4 mt-2'):
                 self.search_count_label = ui.html('正在加载数据...').classes('text-xs text-gray-400')
                 self._update_footer_text()
@@ -961,10 +1201,14 @@ class DanbooruSearchUI:
     # ── 搜索卡片 ─────────────────────────────────────────────────────────
 
     def _build_search_card(self):
-        with ui.card().classes('w-full'):
-            with ui.row().classes('items-center gap-2 mb-2'):
-                ui.icon('search', size='2em', color='primary')
-                ui.label('Danbooru 标签模糊搜索').classes('text-2xl font-bold text-gray-800')
+        with ui.card().classes('w-full product-search-card'):
+            with ui.row().classes('w-full items-start justify-between gap-3 mb-1'):
+                with ui.row().classes('items-center gap-2'):
+                    ui.icon('search', size='2em', color='primary')
+                    ui.label('Danbooru 标签模糊搜索').classes('text-2xl font-bold text-gray-800')
+                ui.button(
+                    '帮助 / 关于', icon='help_outline', on_click=self.help_dialog.open,
+                ).props('flat dense no-caps color=grey-7').classes('text-sm')
             ui.label(
                 '基于语义匹配的标签搜索引擎，支持多维匹配与共现关联推荐。'
             ).classes('text-sm text-gray-500 -mt-1 mb-1')
@@ -1012,13 +1256,6 @@ class DanbooruSearchUI:
                         .props('outlined dense')
                     self.input_limit.on('update:model-value', self._on_param_changed)
 
-                with ui.row().classes('items-center gap-2'):
-                    ui.label('热度权重').classes('text-sm text-gray-600')
-                    self.input_weight = ui.slider(min=0.0, max=1.0, value=0.15, step=0.05).classes('w-32')
-                    ui.label().bind_text_from(self.input_weight, 'value', lambda v: f"{v:.2f}") \
-                        .classes('text-sm font-mono text-gray-700 w-8')
-                    self.input_weight.on('update:model-value', self._on_param_changed)
-
                 with ui.switch('显示 NSFW(成人) 内容', value=False).props('color=red') as _nsfw_sw:
                     if not nsfw_allowed():
                         with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
@@ -1038,6 +1275,16 @@ class DanbooruSearchUI:
             self.advanced_options = ui.expansion('高级选项', icon='tune').classes('w-full mt-2')
             with self.advanced_options:
                 with ui.column().classes('w-full p-3 gap-4'):
+                    with ui.row().classes('items-center gap-2'):
+                        ui.label('热度权重').classes('text-sm font-bold text-gray-700')
+                        self.input_weight = ui.slider(
+                            min=0.0, max=1.0, value=0.15, step=0.05,
+                        ).classes('w-40')
+                        ui.label().bind_text_from(
+                            self.input_weight, 'value', lambda v: f"{v:.2f}",
+                        ).classes('text-sm font-mono text-gray-700 w-8')
+                        self.input_weight.on('update:model-value', self._on_param_changed)
+
                     with ui.row().classes('w-full gap-8 flex-wrap'):
                         with ui.column().classes('gap-2'):
                             ui.label('匹配层筛选').classes('font-bold text-sm text-gray-700')
@@ -1091,6 +1338,10 @@ class DanbooruSearchUI:
                             ).classes('w-20').props('outlined dense')
                             ui.label('每组最大标签数（diverse 模式）').classes('text-xs text-gray-500')
                             self.input_max_per_group.on('update:model-value', self._on_param_changed)
+
+            with ui.element('div').classes('w-full border-t border-slate-100 pt-3 mt-1'):
+                self.service_status_container = ui.column().classes('w-full gap-0')
+                self._update_service_status()
 
     # ── 工作区工具 ────────────────────────────────────────────────────────
 
@@ -2637,7 +2888,7 @@ class DanbooruSearchUI:
                                     '基于标签-画师 NPMI 共现数据，根据您当前已选的标签，推荐擅长这些元素的画师。<br>悬停画师行可查看与该画师共现关联最强的标签。').style(
                                     'font-size:14px;line-height:1.5;')
 
-                self.artist_rec_list = ui.column().classes('w-full gap-0').style('max-height: 420px; overflow-y: auto;')
+                self.artist_rec_list = ui.column().classes('w-full gap-0')
                 with self.artist_rec_list:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
                 self.artist_rec_pagination = ui.column().classes('w-full')
@@ -2776,6 +3027,8 @@ class DanbooruSearchUI:
             await asyncio.sleep(1)
         if self.init_banner:
             self.init_banner.set_visibility(False)
+        self._update_service_status()
+        self._update_footer_text()
         # 工作区可能早于引擎恢复；引擎就绪后用真实 Category / Tag Group
         # 元数据重新分组，避免重启期间首次渲染的标签全部停留在“其他”。
         self._render_selected_chips()
@@ -2798,22 +3051,7 @@ class DanbooruSearchUI:
             filtered = [r for r in self.full_table_data if r['source'] == keyword]
 
         self.result_table.rows = apply_nsfw_filter(filtered, show_nsfw_val)
-
-        for child in self.keywords_container.default_slot.children:
-            if isinstance(child, ui.chip):
-                selected = (
-                    (keyword == 'ALL' and child.text == '全部')
-                    or (keyword == self.current_query_str and child.text == '整句')
-                    or (child.text == keyword)
-                )
-                is_segment = child.text in self.current_segments
-                if selected:
-                    chip_color, text_color = 'primary', 'white'
-                elif is_segment:
-                    chip_color, text_color = 'blue-1', 'blue-8'
-                else:
-                    chip_color, text_color = 'grey-4', 'black'
-                child.props(f'color={chip_color} text-color={text_color}')
+        self._render_concept_coverage()
 
     def _render_concept_coverage(self):
         if self.coverage_container is None:
@@ -2840,13 +3078,20 @@ class DanbooruSearchUI:
             ),
             UNCOVERED: sum(item.status == UNCOVERED for item in coverage),
         }
+
+        def decorate_chip(chip, source: str) -> None:
+            if source in self.current_cached_queries:
+                chip.style(
+                    'outline: 1px dashed rgba(100,116,139,0.45); outline-offset: 1px;'
+                )
+            if source == self.current_filter_keyword:
+                chip.style('box-shadow: 0 0 0 2px #4a90e2;')
+
         with self.coverage_container:
-            with ui.element('div').classes(
-                'w-full rounded border border-slate-200 bg-slate-50 px-3 py-2'
-            ):
+            with ui.element('div').classes('w-full query-insight-panel'):
                 with ui.row().classes('w-full items-center gap-2 flex-wrap'):
-                    ui.icon('fact_check', color='primary', size='sm')
-                    ui.label('概念覆盖').classes('text-sm font-bold text-slate-700')
+                    ui.icon('manage_search', color='primary', size='sm')
+                    ui.label('查询理解').classes('text-sm font-bold text-slate-700')
                     ui.label(
                         f"已覆盖 {status_counts[COVERED]} · "
                         f"有候选 {status_counts[CANDIDATE_UNSELECTED]} · "
@@ -2855,28 +3100,56 @@ class DanbooruSearchUI:
                     with ui.icon('info_outline', size='xs', color='grey').classes('cursor-help'):
                         with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
                             ui.label(
-                                '根据当前结果的真实匹配来源近似判断；未覆盖不代表标签库一定不存在。'
+                                '点击概念可筛选对应结果；红色未覆盖项点击后会发起补充搜索。'
+                                '覆盖状态根据当前结果来源和工作区已选标签近似判断。'
                             ).style('font-size:13px;')
 
                 with ui.row().classes('w-full gap-2 flex-wrap mt-2'):
+                    all_chip = ui.chip(
+                        '全部结果', on_click=lambda: self._filter_by_source('ALL')
+                    )
+                    if self.current_filter_keyword == 'ALL':
+                        all_chip.props('color=primary text-color=white clickable')
+                    else:
+                        all_chip.props('color=grey-3 text-color=grey-9 clickable')
+
+                    use_segmentation = self.input_segment.value if self.input_segment else True
+                    if use_segmentation and self.current_query_str not in segments:
+                        whole_chip = ui.chip(
+                            '整句',
+                            on_click=lambda: self._filter_by_source(self.current_query_str),
+                        ).props('color=blue-grey-1 text-color=blue-grey-9 clickable')
+                        decorate_chip(whole_chip, self.current_query_str)
+
                     for item in coverage:
                         if item.status == COVERED:
                             chip = ui.chip(
-                                f'已覆盖：{item.segment}', icon='check_circle'
-                            ).props('color=green-1 text-color=green-9')
-                            detail = f"已选择：{'、'.join(item.selected_tags)}"
+                                item.segment,
+                                icon='check_circle',
+                                on_click=lambda s=item.segment: self._filter_by_source(s),
+                            ).props('color=green-1 text-color=green-9 clickable')
+                            detail = (
+                                f"已覆盖；已选择：{'、'.join(item.selected_tags)}。"
+                                '点击筛选此概念的搜索结果。'
+                            )
                         elif item.status == CANDIDATE_UNSELECTED:
                             chip = ui.chip(
-                                f'有候选：{item.segment}', icon='radio_button_unchecked'
-                            ).props('color=amber-1 text-color=amber-9')
-                            detail = f"候选：{'、'.join(item.candidate_tags[:5])}"
+                                item.segment,
+                                icon='radio_button_unchecked',
+                                on_click=lambda s=item.segment: self._filter_by_source(s),
+                            ).props('color=amber-1 text-color=amber-9 clickable')
+                            detail = (
+                                f"有候选：{'、'.join(item.candidate_tags[:5])}。"
+                                '点击筛选此概念的搜索结果。'
+                            )
                         else:
                             chip = ui.chip(
-                                f'未覆盖：{item.segment}',
+                                item.segment,
                                 icon='search',
                                 on_click=lambda s=item.segment: self._search_uncovered_segment(s),
                             ).props('color=red-1 text-color=red-8 clickable')
                             detail = '点击后沿用当前搜索设置进行补充搜索；工作区标签保持不变。'
+                        decorate_chip(chip, item.segment)
                         with chip:
                             with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
                                 ui.label(detail).style('font-size:13px;')
@@ -2988,6 +3261,7 @@ class DanbooruSearchUI:
             self.full_tags_str_sfw = response.tags_sfw
             self.current_segments = list(response.segments) if response.segments else []
             self.current_keywords = list(response.keywords) if response.keywords else []
+            self.current_cached_queries = set(response.cached_queries or [])
 
             self.results_section.set_visibility(True)
 
@@ -3006,36 +3280,8 @@ class DanbooruSearchUI:
             self._refresh_related([], show_nsfw_val)
             self._last_recommendation_seed_tags = []
 
-            # 分词筛选 chips
+            # 查询理解：分词来源筛选与概念覆盖共用同一组 chips
             self.current_filter_keyword = 'ALL'
-            self.keywords_container.clear()
-            cached_set = set(response.cached_queries) if response.cached_queries else set()
-            with self.keywords_container:
-                ui.label('分词筛选:').classes('text-sm text-gray-500 font-bold mr-2')
-                ui.chip('全部', on_click=lambda: self._filter_by_source('ALL')) \
-                    .props('color=primary text-color=white clickable')
-                use_seg = self.input_segment.value if self.input_segment else True
-                if use_seg:
-                    whole = ui.chip('整句',
-                            on_click=lambda: self._filter_by_source(self.current_query_str))
-                    whole.props('color=grey-4 text-color=black clickable')
-                    if self.current_query_str in cached_set:
-                        whole.style('outline: 1px dashed rgba(128,128,128,0.3); outline-offset: 1px;')
-                    for seg in response.segments:
-                        sc = ui.chip(seg,
-                                on_click=lambda s=seg: self._filter_by_source(s))
-                        sc.props('color=blue-1 text-color=blue-8 clickable')
-                        if seg in cached_set:
-                            sc.style('outline: 1px dashed rgba(128,128,128,0.3); outline-offset: 1px;')
-                    for kw in response.keywords:
-                        kc = ui.chip(kw,
-                                on_click=lambda k=kw: self._filter_by_source(k))
-                        kc.props('color=grey-4 text-color=black clickable')
-                        if kw in cached_set:
-                            kc.style('outline: 1px dashed rgba(128,128,128,0.3); outline-offset: 1px;')
-                else:
-                    ui.label('(分词已关闭)').classes('text-xs text-gray-400')
-
             self._render_concept_coverage()
             self._record_search_history(query)
             ui.notify(f'找到 {len(table_data)} 个标签', type='positive')
