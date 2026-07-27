@@ -15,7 +15,8 @@ from typing import Any
 
 
 WORKSPACE_SCHEMA_VERSION = 1
-HISTORY_SCHEMA_VERSION = 1
+HISTORY_SCHEMA_VERSION = 2
+LEGACY_HISTORY_SCHEMA_VERSION = 1
 FAVORITES_SCHEMA_VERSION = 1
 BACKUP_SCHEMA_VERSION = 1
 WORKSPACE_STORAGE_KEY = "danbooru_workspace_v1"
@@ -347,6 +348,23 @@ def _history_signature(query: str, settings: dict[str, Any]) -> str:
     )
 
 
+def _history_workspace_snapshot(
+    workspace: dict[str, Any],
+    query: str,
+    settings: dict[str, Any],
+    searched_at: str,
+) -> dict[str, Any]:
+    """Create a restorable workspace snapshot without accumulated query history."""
+    snapshot = clone_workspace(workspace)
+    snapshot["queries"] = [{
+        "query": query,
+        "searched_at": searched_at,
+        "settings": settings,
+    }]
+    snapshot["updated_at"] = searched_at
+    return snapshot
+
+
 def empty_history() -> dict[str, Any]:
     return {"schema_version": HISTORY_SCHEMA_VERSION, "items": []}
 
@@ -359,7 +377,8 @@ def normalize_history(value: Any) -> tuple[dict[str, Any], list[str]]:
         label="history",
         max_bytes=MAX_COLLECTION_JSON_BYTES,
     )
-    if data.get("schema_version") != HISTORY_SCHEMA_VERSION:
+    schema_version = data.get("schema_version")
+    if schema_version not in {LEGACY_HISTORY_SCHEMA_VERSION, HISTORY_SCHEMA_VERSION}:
         raise WorkspaceDataError("unsupported history schema_version")
     raw_items = data.get("items", [])
     if not isinstance(raw_items, list):
@@ -367,6 +386,8 @@ def normalize_history(value: Any) -> tuple[dict[str, Any], list[str]]:
 
     items: list[dict[str, Any]] = []
     warnings: list[str] = []
+    if schema_version == LEGACY_HISTORY_SCHEMA_VERSION:
+        warnings.append("history_schema_migrated")
     seen: set[str] = set()
     for raw in raw_items:
         if len(items) >= MAX_HISTORY_ITEMS:
@@ -379,11 +400,21 @@ def normalize_history(value: Any) -> tuple[dict[str, Any], list[str]]:
         if not query or not isinstance(settings, dict):
             warnings.append("history_entry_invalid")
             continue
+        searched_at = _clean_text(raw.get("searched_at"), max_length=100) or utc_now_iso()
         try:
             workspace, workspace_warnings = normalize_workspace(raw.get("workspace"))
         except WorkspaceDataError:
             warnings.append("history_workspace_invalid")
             continue
+        snapshot = _history_workspace_snapshot(
+            workspace,
+            query,
+            settings,
+            searched_at,
+        )
+        if workspace["queries"] != snapshot["queries"]:
+            if "history_workspace_queries_compacted" not in warnings:
+                warnings.append("history_workspace_queries_compacted")
         signature = _history_signature(query, settings)
         if signature in seen:
             warnings.append("history_entry_duplicate")
@@ -394,11 +425,10 @@ def normalize_history(value: Any) -> tuple[dict[str, Any], list[str]]:
             "history_id": _clean_text(raw.get("history_id"), max_length=100)
             or f"hist_{uuid.uuid4().hex}",
             "query": query,
-            "searched_at": _clean_text(raw.get("searched_at"), max_length=100)
-            or utc_now_iso(),
+            "searched_at": searched_at,
             "settings": settings,
-            "workspace_id": workspace["workspace_id"],
-            "workspace": workspace,
+            "workspace_id": snapshot["workspace_id"],
+            "workspace": snapshot,
         })
     return {"schema_version": HISTORY_SCHEMA_VERSION, "items": items}, warnings
 
@@ -412,11 +442,17 @@ def add_history_entry(
     searched_at: str | None = None,
 ) -> dict[str, Any]:
     normalized_history, _ = normalize_history(history)
-    normalized_workspace = clone_workspace(workspace)
     query = _clean_text(query, max_length=4_000)
     if not query:
         return normalized_history
     settings = settings if isinstance(settings, dict) else {}
+    searched_at = searched_at or utc_now_iso()
+    normalized_workspace = _history_workspace_snapshot(
+        workspace,
+        query,
+        settings,
+        searched_at,
+    )
     signature = _history_signature(query, settings)
     remaining = [
         item for item in normalized_history["items"]
@@ -425,7 +461,7 @@ def add_history_entry(
     entry = {
         "history_id": f"hist_{uuid.uuid4().hex}",
         "query": query,
-        "searched_at": searched_at or utc_now_iso(),
+        "searched_at": searched_at,
         "settings": settings,
         "workspace_id": normalized_workspace["workspace_id"],
         "workspace": normalized_workspace,

@@ -163,6 +163,9 @@ OPTIONAL_COLS = {
 _CONFIG_LS_KEY = 'danbooru_search_config'
 _CONFIG_VERSION = 7
 _ANNOUNCEMENT_VERSION = 'p0-workspace-2026-07'
+_LOCAL_STORAGE_READ_CHUNK_CHARS = 200_000
+_LOCAL_STORAGE_MAX_READ_CHARS = 4_000_000
+_HISTORY_PRE_COMPACTION_BACKUP_KEY = f'{HISTORY_STORAGE_KEY}_pre_compaction_backup'
 
 SPONSOR_IMAGE_URL = "https://akizukipic.oss-cn-beijing.aliyuncs.com/img/202501120027592.png"
 SPONSOR_TOOLCHAIN_URL = "http://intro.sakizuki.site/index.html"
@@ -751,6 +754,7 @@ class DanbooruSearchUI:
                     f'{WORKSPACE_STORAGE_KEY}_corrupt_backup',
                     f'{HISTORY_STORAGE_KEY}_corrupt_backup',
                     f'{FAVORITES_STORAGE_KEY}_corrupt_backup',
+                    _HISTORY_PRE_COMPACTION_BACKUP_KEY,
                 ]
                 keys_json = _json.dumps(storage_keys, ensure_ascii=False)
                 try:
@@ -2624,13 +2628,97 @@ class DanbooruSearchUI:
         }
         self._schedule_workspace_persist()
 
+    async def _read_local_storage_value(self, key: str) -> str | None:
+        """Read one localStorage value in transport-safe chunks."""
+        client = self.client
+        if client is None or getattr(client, '_deleted', False):
+            raise RuntimeError('client is unavailable')
+
+        key_js = _json.dumps(key, ensure_ascii=False)
+        length = await client.run_javascript(
+            f"""(() => {{
+                const value = localStorage.getItem({key_js});
+                return value === null ? null : value.length;
+            }})()""",
+            timeout=5.0,
+        )
+        if length is None:
+            return None
+        if isinstance(length, bool) or not isinstance(length, (int, float)):
+            raise RuntimeError(f'localStorage key {key!r} returned an invalid length')
+        length = int(length)
+        if length < 0 or length > _LOCAL_STORAGE_MAX_READ_CHARS:
+            raise WorkspaceDataError(f'localStorage key {key!r} exceeds the read limit')
+
+        chunks: list[str] = []
+        offset = 0
+        while offset < length:
+            if not self._client_alive():
+                raise RuntimeError('client disconnected during localStorage restore')
+            result = await client.run_javascript(
+                f"""(() => {{
+                    const value = localStorage.getItem({key_js});
+                    if (value === null) return null;
+                    let end = Math.min(value.length, {offset + _LOCAL_STORAGE_READ_CHUNK_CHARS});
+                    if (end < value.length) {{
+                        const lastCodeUnit = value.charCodeAt(end - 1);
+                        if (lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF) end += 1;
+                    }}
+                    return {{chunk: value.slice({offset}, end), next_offset: end}};
+                }})()""",
+                timeout=5.0,
+            )
+            if not isinstance(result, dict):
+                raise RuntimeError(f'localStorage key {key!r} disappeared during restore')
+            chunk = result.get('chunk')
+            next_offset = result.get('next_offset')
+            if not isinstance(chunk, str) or not isinstance(next_offset, (int, float)):
+                raise RuntimeError(f'localStorage key {key!r} returned an invalid chunk')
+            next_offset = int(next_offset)
+            if next_offset <= offset or next_offset > length:
+                raise RuntimeError(f'localStorage key {key!r} returned an invalid offset')
+            chunks.append(chunk)
+            offset = next_offset
+        return ''.join(chunks)
+
+    async def _backup_history_before_compaction(self) -> bool:
+        """Preserve the original history in-browser before replacing it with v2."""
+        client = self.client
+        if client is None or getattr(client, '_deleted', False):
+            return False
+        source_key = _json.dumps(HISTORY_STORAGE_KEY, ensure_ascii=False)
+        backup_key = _json.dumps(_HISTORY_PRE_COMPACTION_BACKUP_KEY, ensure_ascii=False)
+        try:
+            status = await client.run_javascript(
+                f"""(() => {{
+                    const source = localStorage.getItem({source_key});
+                    if (source === null) return 'missing';
+                    if (localStorage.getItem({backup_key}) !== null) return 'exists';
+                    try {{
+                        localStorage.setItem({backup_key}, source);
+                        return 'created';
+                    }} catch (error) {{
+                        return `error:${{error && error.name ? error.name : 'unknown'}}`;
+                    }}
+                }})()""",
+                timeout=5.0,
+            )
+        except Exception as exc:
+            print(f'[UI] 旧版搜索历史备份失败: {exc}', flush=True)
+            return False
+        if status in {'created', 'exists'}:
+            return True
+        print(f'[UI] 旧版搜索历史备份失败: {status}', flush=True)
+        return False
+
     def _save_history(self):
         if not self._client_alive():
             return
+        client = self.client
         while True:
             try:
                 data = dump_collection(self.search_history, label='history')
-                ui.run_javascript(
+                client.run_javascript(
                     f"localStorage.setItem('{HISTORY_STORAGE_KEY}', {_json.dumps(data)});"
                 )
                 return
@@ -2647,9 +2735,10 @@ class DanbooruSearchUI:
     def _save_favorites(self):
         if not self._client_alive():
             return False
+        client = self.client
         try:
             data = dump_collection(self.favorites, label='favorites')
-            ui.run_javascript(
+            client.run_javascript(
                 f"localStorage.setItem('{FAVORITES_STORAGE_KEY}', {_json.dumps(data)});"
             )
             return True
@@ -2669,83 +2758,118 @@ class DanbooruSearchUI:
 
     async def _restore_staged_tags(self):
         """恢复 WorkspaceState；首次升级时兼容迁移旧已选标签。"""
-        try:
-            if getattr(ui.context.client, '_deleted', False):
-                return
-            stored = await ui.run_javascript(
-                "({"
-                f"workspace: localStorage.getItem('{WORKSPACE_STORAGE_KEY}'),"
-                f"legacy: localStorage.getItem('{self._STAGED_LS_KEY}'),"
-                f"config: localStorage.getItem('{_CONFIG_LS_KEY}'),"
-                f"history: localStorage.getItem('{HISTORY_STORAGE_KEY}'),"
-                f"favorites: localStorage.getItem('{FAVORITES_STORAGE_KEY}')"
-                "})",
-                timeout=5.0,
-            )
-        except Exception:
+        if not self._client_alive():
             return
 
-        if not isinstance(stored, dict):
-            stored = {}
+        stored: dict[str, str | None] = {}
+        read_failures: set[str] = set()
+        storage_keys = {
+            'workspace': WORKSPACE_STORAGE_KEY,
+            'legacy': self._STAGED_LS_KEY,
+            'config': _CONFIG_LS_KEY,
+            'history': HISTORY_STORAGE_KEY,
+            'favorites': FAVORITES_STORAGE_KEY,
+        }
+        for name, key in storage_keys.items():
+            try:
+                stored[name] = await self._read_local_storage_value(key)
+            except Exception as exc:
+                read_failures.add(name)
+                print(f'[UI] localStorage 恢复失败 ({name}): {exc}', flush=True)
+                if not self._client_alive():
+                    return
+
         raw_workspace = stored.get('workspace')
         warnings: list[str] = []
-        should_persist = False
-        try:
-            if raw_workspace:
-                workspace, warnings = normalize_workspace(raw_workspace)
-                should_persist = bool(warnings)
-            else:
-                workspace, warnings = migrate_legacy_workspace(
-                    stored.get('legacy'),
-                    stored.get('config'),
-                )
-                should_persist = True
-        except WorkspaceDataError as exc:
-            print(f'[UI] 工作区数据损坏，回退到旧状态迁移: {exc}', flush=True)
-            # 保留原始损坏内容供用户恢复，不直接删除或覆盖唯一副本。
-            if raw_workspace:
-                try:
-                    backup_key = f'{WORKSPACE_STORAGE_KEY}_corrupt_backup'
-                    ui.run_javascript(
-                        f"if (!localStorage.getItem('{backup_key}')) "
-                        f"localStorage.setItem('{backup_key}', {_json.dumps(raw_workspace)});"
+        if 'workspace' not in read_failures:
+            should_persist = False
+            workspace = None
+            try:
+                if raw_workspace:
+                    workspace, workspace_warnings = normalize_workspace(raw_workspace)
+                    warnings.extend(workspace_warnings)
+                    should_persist = bool(workspace_warnings)
+                elif 'legacy' in read_failures:
+                    print('[UI] 旧版工作区读取失败，保留当前空状态且不覆盖浏览器数据。', flush=True)
+                else:
+                    workspace, workspace_warnings = migrate_legacy_workspace(
+                        stored.get('legacy'),
+                        stored.get('config'),
                     )
-                except RuntimeError:
-                    pass
-            workspace, migration_warnings = migrate_legacy_workspace(
-                stored.get('legacy'),
-                stored.get('config'),
-            )
-            warnings = ['workspace_corrupt'] + migration_warnings
-            should_persist = True
+                    warnings.extend(workspace_warnings)
+                    should_persist = True
+            except WorkspaceDataError as exc:
+                print(f'[UI] 工作区数据损坏，回退到旧状态迁移: {exc}', flush=True)
+                # 保留原始损坏内容供用户恢复，不直接删除或覆盖唯一副本。
+                if raw_workspace:
+                    try:
+                        backup_key = f'{WORKSPACE_STORAGE_KEY}_corrupt_backup'
+                        self.client.run_javascript(
+                            f"if (!localStorage.getItem('{backup_key}')) "
+                            f"localStorage.setItem('{backup_key}', {_json.dumps(raw_workspace)});"
+                        )
+                    except RuntimeError:
+                        pass
+                if 'legacy' in read_failures:
+                    warnings.append('workspace_corrupt')
+                else:
+                    workspace, migration_warnings = migrate_legacy_workspace(
+                        stored.get('legacy'),
+                        stored.get('config'),
+                    )
+                    warnings.extend(['workspace_corrupt'] + migration_warnings)
+                    should_persist = True
 
-        self._apply_workspace_state(
-            workspace,
-            persist=False,
-            refresh_recommendations=False,
-        )
-        if should_persist:
-            self._save_staged_tags()
+            if workspace is not None:
+                self._apply_workspace_state(
+                    workspace,
+                    persist=False,
+                    refresh_recommendations=False,
+                )
+                if should_persist:
+                    self._save_staged_tags()
 
-        try:
-            self.search_history, history_warnings = normalize_history(stored.get('history'))
-        except WorkspaceDataError as exc:
-            print(f'[UI] 搜索历史损坏，已使用空历史: {exc}', flush=True)
-            self._backup_corrupt_storage(HISTORY_STORAGE_KEY, stored.get('history'))
-            self.search_history, history_warnings = empty_history(), ['history_corrupt']
-        if history_warnings:
-            self._save_history()
-            warnings.extend(history_warnings)
+        if 'history' not in read_failures:
+            raw_history = stored.get('history')
+            try:
+                self.search_history, history_warnings = normalize_history(raw_history)
+            except WorkspaceDataError as exc:
+                print(f'[UI] 搜索历史损坏，已使用空历史: {exc}', flush=True)
+                self._backup_corrupt_storage(HISTORY_STORAGE_KEY, raw_history)
+                self.search_history, history_warnings = empty_history(), ['history_corrupt']
+            if history_warnings:
+                needs_backup = any(
+                    warning in {
+                        'history_schema_migrated',
+                        'history_workspace_queries_compacted',
+                    }
+                    for warning in history_warnings
+                )
+                can_persist = True
+                if raw_history and needs_backup:
+                    can_persist = await self._backup_history_before_compaction()
+                if can_persist:
+                    self._save_history()
+                else:
+                    print('[UI] 已在当前页面压缩旧版历史，但未覆盖浏览器原始数据。', flush=True)
+                    ui.notify(
+                        '旧版历史已恢复，但浏览器空间不足，未自动保存迁移结果；请先导出备份。',
+                        type='warning',
+                        timeout=5000,
+                    )
+                warnings.extend(history_warnings)
 
-        try:
-            self.favorites, favorite_warnings = normalize_favorites(stored.get('favorites'))
-        except WorkspaceDataError as exc:
-            print(f'[UI] 收藏数据损坏，已使用空收藏: {exc}', flush=True)
-            self._backup_corrupt_storage(FAVORITES_STORAGE_KEY, stored.get('favorites'))
-            self.favorites, favorite_warnings = empty_favorites(), ['favorites_corrupt']
-        if favorite_warnings:
-            self._save_favorites()
-            warnings.extend(favorite_warnings)
+        if 'favorites' not in read_failures:
+            raw_favorites = stored.get('favorites')
+            try:
+                self.favorites, favorite_warnings = normalize_favorites(raw_favorites)
+            except WorkspaceDataError as exc:
+                print(f'[UI] 收藏数据损坏，已使用空收藏: {exc}', flush=True)
+                self._backup_corrupt_storage(FAVORITES_STORAGE_KEY, raw_favorites)
+                self.favorites, favorite_warnings = empty_favorites(), ['favorites_corrupt']
+            if favorite_warnings:
+                self._save_favorites()
+                warnings.extend(favorite_warnings)
 
         self._install_workspace_storage_listener()
         self._update_undo_buttons()
@@ -2758,7 +2882,7 @@ class DanbooruSearchUI:
             return
         try:
             backup_key = f'{key}_corrupt_backup'
-            ui.run_javascript(
+            self.client.run_javascript(
                 f"if (!localStorage.getItem('{backup_key}')) "
                 f"localStorage.setItem('{backup_key}', {_json.dumps(raw_value)});"
             )
@@ -3124,6 +3248,20 @@ class DanbooruSearchUI:
             return client is not None and not bool(getattr(client, '_deleted', False))
         except (AttributeError, RuntimeError):
             return False
+
+    def _dispose(self):
+        """Stop page-owned resources before NiceGUI deletes their parent slots."""
+        timer = self.service_status_timer
+        self.service_status_timer = None
+        if timer is None:
+            return
+        try:
+            timer.cancel()
+        except (AttributeError, RuntimeError):
+            try:
+                timer.deactivate()
+            except (AttributeError, RuntimeError):
+                pass
 
     # ── 分词筛选 ──────────────────────────────────────────────────────────
 
@@ -4336,17 +4474,18 @@ class DanbooruSearchUI:
 async def main_page():
     client = ui.context.client
     client_id = client.id
+    app_ui = DanbooruSearchUI()
 
     def mark_connected(*_):
         _mark_ui_session_active(client_id)
 
     def mark_disconnected(*_):
         _mark_ui_session_inactive(client_id)
+        app_ui._dispose()
 
     client.on_connect(mark_connected)
     client.on_disconnect(mark_disconnected)
 
-    app_ui = DanbooruSearchUI()
     app_ui.build_page()
 
     async def silent_visit_update():
