@@ -1400,7 +1400,7 @@ class DanbooruSearchUI:
             with ui.element('div').classes('w-full border-t border-slate-100 pt-3 mt-1'):
                 self.service_status_container = ui.column().classes('w-full gap-0')
                 self._update_service_status()
-                self.service_status_timer = ui.timer(1.0, self._update_service_status)
+                self.service_status_timer = ui.timer(5.0, self._update_service_status)
 
     # ── 工作区工具 ────────────────────────────────────────────────────────
 

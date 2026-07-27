@@ -646,7 +646,7 @@ class DanbooruTagger:
         cached_queries = [q for q, hit in zip(queries, hit_mask) if hit]
         return valid, keywords, extra_segments, cached_queries
 
-    # ── CPU 并发闸门（类级信号量，所有 CPU 密集型操作共享）───────────────
+    # ── 并发闸门（语义搜索与轻量推荐分通道）─────────────────────────────
 
     @classmethod
     def _get_cpu_sem(cls) -> asyncio.Semaphore:
@@ -787,8 +787,8 @@ class DanbooruTagger:
         show_nsfw: bool = True,
         target_categories: set[str] | None = None,
     ) -> list:
-        """get_related() 的并发安全异步封装，共享同一个 CPU 闸门。"""
-        async with self._cpu_slot():
+        """get_related() 的异步封装，使用轻量推荐通道。"""
+        async with self._get_recommendation_sem():
             return await asyncio.to_thread(
                 self.get_related, seed_tags, exclude, limit, show_nsfw, target_categories,
             )
@@ -798,8 +798,8 @@ class DanbooruTagger:
         selected_tags: list[str],
         show_nsfw: bool = True,
     ) -> list[dict]:
-        """get_group_candidates() 的并发安全异步封装，共享同一个 CPU 闸门。"""
-        async with self._cpu_slot():
+        """get_group_candidates() 的异步封装，使用轻量推荐通道。"""
+        async with self._get_recommendation_sem():
             return await asyncio.to_thread(
                 self.get_group_candidates, selected_tags, show_nsfw,
             )
@@ -810,8 +810,8 @@ class DanbooruTagger:
         limit: int = 30,
         min_cooc: int = 5,
     ) -> list:
-        """search_artists_by_tags() 的并发安全异步封装。"""
-        async with self._cpu_slot():
+        """search_artists_by_tags() 的异步封装，使用轻量推荐通道。"""
+        async with self._get_recommendation_sem():
             return await asyncio.to_thread(
                 self.search_artists_by_tags, tags, limit, min_cooc,
             )
