@@ -188,6 +188,8 @@ def _resolve_group_render_limit(default: int = 80) -> int:
 GROUP_RENDER_TAG_LIMIT = _resolve_group_render_limit()
 ARTIST_REC_LIMIT = 64
 ARTIST_REC_PAGE_SIZE = 8
+RECOMMENDATION_DEBOUNCE_SECONDS = 0.1
+WORKSPACE_SAVE_DEBOUNCE_SECONDS = 0.3
 
 # 搜索模式预设
 _SEARCH_MODE_PRESETS: dict[str, dict] = {
@@ -445,10 +447,12 @@ class DanbooruSearchUI:
         self.history_count_label = None
         self.favorites_count_label = None
         self._workspace_storage_listener_installed = False
-        # 去抖任务句柄（取消旧任务避免 CPU 洪峰）
-        self._debounce_related_task = None  # type: asyncio.Task | None
-        self._debounce_group_task = None    # type: asyncio.Task | None
-        self._debounce_artist_task = None   # type: asyncio.Task | None
+        # 选择刷新只保留最新快照；运行中的线程不取消，完成后丢弃过期结果。
+        self._recommendation_task = None  # type: asyncio.Task | None
+        self._pending_recommendation_request = None
+        self._recommendation_generation = 0
+        self._workspace_save_task = None  # type: asyncio.Task | None
+        self._coverage_render_task = None  # type: asyncio.Task | None
 
         # tag -> prompt 权重，范围 [0.1, 1.9]，默认 1.0
         self.tag_weights: dict[str, float] = {}
@@ -495,6 +499,9 @@ class DanbooruSearchUI:
         # 推荐画师的 checkbox 引用
         self._artist_rec_checkboxes: dict[str, ui.checkbox] = {}
         self._artist_rec_rows: list = []
+        self._artist_rec_results: list = []
+        self._artist_rec_top_tags: dict[str, list[str]] = {}
+        self._artist_rec_show_nsfw = True
         self._artist_rec_sources: dict[str, str] = {}
         self._group_candidate_sources: dict[str, str] = {}
         self._artist_rec_page = 1
@@ -2570,8 +2577,36 @@ class DanbooruSearchUI:
         self._update_undo_buttons()
         ui.notify('已恢复', type='positive', timeout=1500)
 
+    def _schedule_workspace_persist(self):
+        """去抖写入浏览器，避免每次快速勾选都发送完整工作区。"""
+        if self._workspace_save_task and not self._workspace_save_task.done():
+            self._workspace_save_task.cancel()
+
+        async def _persist():
+            try:
+                await asyncio.sleep(WORKSPACE_SAVE_DEBOUNCE_SECONDS)
+            except asyncio.CancelledError:
+                return
+            try:
+                data = dump_workspace(self.workspace_state)
+            except WorkspaceDataError as exc:
+                print(f'[UI] 工作区保存前校验失败: {exc}', flush=True)
+                return
+
+            client = self.client
+            if client is None or getattr(client, '_deleted', False):
+                return
+            try:
+                client.run_javascript(
+                    f"localStorage.setItem('{WORKSPACE_STORAGE_KEY}', {_json.dumps(data)});"
+                )
+            except RuntimeError:
+                pass
+
+        self._workspace_save_task = asyncio.ensure_future(_persist())
+
     def _save_staged_tags(self):
-        """将实时选择同步到版本化 WorkspaceState 并写入 localStorage。"""
+        """将实时选择同步到版本化 WorkspaceState，并去抖写入 localStorage。"""
         tags = self._get_selected_tags()
         self._selected_order = list(tags)
         cn_names = {t: self._get_cn_name_for_tag(t) for t in tags}
@@ -2587,19 +2622,7 @@ class DanbooruSearchUI:
             item['tag'] for item in self.workspace_state['selected']
             if item.get('origin') in _ARTIST_ORIGINS
         }
-        try:
-            data = dump_workspace(self.workspace_state)
-        except WorkspaceDataError as exc:
-            print(f'[UI] 工作区保存前校验失败: {exc}', flush=True)
-            return
-        try:
-            if getattr(ui.context.client, '_deleted', False):
-                return
-            ui.run_javascript(
-                f"localStorage.setItem('{WORKSPACE_STORAGE_KEY}', {_json.dumps(data)});"
-            )
-        except RuntimeError:
-            pass  # 事件上下文已销毁（UI 重建中），数据仍在内存里，下次保存时会同步
+        self._schedule_workspace_persist()
 
     def _save_history(self):
         if not self._client_alive():
@@ -3216,6 +3239,18 @@ class DanbooruSearchUI:
                             with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
                                 ui.label(detail).style('font-size:13px;')
 
+    def _schedule_concept_coverage_render(self):
+        """让选择区先刷新，再在下一个事件循环周期重建查询理解。"""
+        if self._coverage_render_task and not self._coverage_render_task.done():
+            self._coverage_render_task.cancel()
+
+        async def _render():
+            await asyncio.sleep(0)
+            if self._client_alive():
+                self._render_concept_coverage()
+
+        self._coverage_render_task = asyncio.ensure_future(_render())
+
     async def _search_uncovered_segment(self, segment: str):
         segment = str(segment or '').strip()
         if not segment:
@@ -3336,8 +3371,7 @@ class DanbooruSearchUI:
             self.chip_extra_selected.update(all_selected)
             self.result_table.selected = []
             self._render_selected_chips()
-            self._update_selection_display(None)
-            self._save_staged_tags()
+            await self._update_selection_display(None)
 
             self._refresh_related([], show_nsfw_val)
             self._last_recommendation_seed_tags = []
@@ -3441,7 +3475,7 @@ class DanbooruSearchUI:
             self.selection_count_label.text = str(len(all_tags))
         self._save_staged_tags()
         self._render_selected_chips()
-        self._render_concept_coverage()
+        self._schedule_concept_coverage_render()
         # 显式刷新关联推荐和 Group 区域（不依赖 table.on('selection') 事件，
         # 因为在 chip 点击回调上下文中该事件可能不可靠）。
         # 从关联推荐/同类标签勾选时跳过，由各自动态刷新或手动按钮触发。
@@ -3451,7 +3485,7 @@ class DanbooruSearchUI:
             if not all_tags:
                 self.chip_extra_selected.clear()
 
-    def _update_selection_display(self, _e):
+    async def _update_selection_display(self, _e):
         if self.result_table is None:
             return
         self._mark_interaction()
@@ -3483,7 +3517,11 @@ class DanbooruSearchUI:
             self.selection_count_label.text = str(len(all_tags))
         self._render_selected_chips()
 
-        # 同步推荐画师 checkbox
+        # 先把选择区的轻量变化交给 WebSocket 刷出，再处理推荐和查询理解。
+        self._save_staged_tags()
+        await asyncio.sleep(0)
+
+        # 同步当前画师页的 checkbox（当前页最多 8 个）。
         for t, cb in self._artist_rec_checkboxes.items():
             cb.set_value(t in tag_set)
 
@@ -3491,7 +3529,6 @@ class DanbooruSearchUI:
         self._refresh_recommendations_if_seed_changed(all_tags, show_nsfw_val)
         if not all_tags:
             self.chip_extra_selected.clear()
-        self._save_staged_tags()
         self._render_concept_coverage()
 
     def _on_related_checkbox_change(self, tag: str, checked: bool):
@@ -3614,78 +3651,119 @@ class DanbooruSearchUI:
             self._render_related_list(merged, show_nsfw)
 
     def _refresh_related_from_selection(self, selected_tags: list[str], show_nsfw: bool):
-        """仅刷新关联推荐列表（300ms 去抖，避免快速勾选产生 CPU 洪峰）。"""
-        selected_tags = self._get_recommendation_seed_tags(selected_tags)
-        # 取消上次未执行的刷新
-        if self._debounce_related_task and not self._debounce_related_task.done():
-            self._debounce_related_task.cancel()
-        async def _do():
-            await asyncio.sleep(0.3)
-            if not selected_tags:
-                self._refresh_related([], show_nsfw)
-                return
-            tagger = await DanbooruTagger.get_instance()
-            related = await tagger.get_related_async(
-                selected_tags,
-                set(selected_tags),
-                50,
-                show_nsfw,
-            )
-            self._refresh_related(related, show_nsfw)
-        self._debounce_related_task = asyncio.ensure_future(_do())
+        """请求刷新关联推荐；实际计算由统一的 latest-wins 调度器执行。"""
+        self._queue_recommendation_refresh(
+            selected_tags, show_nsfw, {'related'},
+        )
 
     def _refresh_group_from_selection(self, selected_tags: list[str], show_nsfw: bool):
-        """仅刷新同类扩展区域（300ms 去抖，避免快速勾选产生 CPU 洪峰）。"""
-        selected_tags = self._get_recommendation_seed_tags(selected_tags)
-        if self._debounce_group_task and not self._debounce_group_task.done():
-            self._debounce_group_task.cancel()
-        async def _do():
-            await asyncio.sleep(0.3)
-            if not selected_tags:
-                if self.group_expansion_container is not None:
-                    self.group_expansion_container.clear()
-                    with self.group_expansion_container:
-                        ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
-                return
-            tagger = await DanbooruTagger.get_instance()
-            group_data = await tagger.get_group_candidates_async(
-                selected_tags,
-                show_nsfw,
-            )
-            await self._capture_group_scroll_positions()
-            self._render_group_expansion(group_data, selected_tags, show_nsfw)
-        self._debounce_group_task = asyncio.ensure_future(_do())
+        """请求刷新同类扩展；实际计算由统一的 latest-wins 调度器执行。"""
+        self._queue_recommendation_refresh(
+            selected_tags, show_nsfw, {'group'},
+        )
 
     def _refresh_artist_from_selection(self, selected_tags: list[str], show_nsfw: bool = True):
-        """根据已选标签刷新画师推荐（300ms 去抖）。"""
+        """请求刷新画师推荐；实际计算由统一的 latest-wins 调度器执行。"""
+        self._queue_recommendation_refresh(
+            selected_tags, show_nsfw, {'artist'},
+        )
+
+    def _queue_recommendation_refresh(
+        self,
+        selected_tags: list[str],
+        show_nsfw: bool,
+        scopes: set[str],
+    ):
+        """合并同一选择快照的刷新范围，并确保运行中的线程不会被取消。"""
         selected_tags = self._get_recommendation_seed_tags(selected_tags)
-        if self._debounce_artist_task and not self._debounce_artist_task.done():
-            self._debounce_artist_task.cancel()
-        async def _do():
-            await asyncio.sleep(0.3)
-            if len(selected_tags) < 1:
-                self._render_artist_rec([], {}, show_nsfw)
-                return
-            tagger = await DanbooruTagger.get_instance()
-            artist_results = await tagger.search_artists_by_tags_async(
-                selected_tags, limit=ARTIST_REC_LIMIT, min_cooc=3,
+        requested_scopes = frozenset(scopes)
+        pending = self._pending_recommendation_request
+        if (
+            pending is not None
+            and pending['selected_tags'] == selected_tags
+            and pending['show_nsfw'] == show_nsfw
+        ):
+            requested_scopes = pending['scopes'] | requested_scopes
+
+        self._recommendation_generation += 1
+        self._pending_recommendation_request = {
+            'generation': self._recommendation_generation,
+            'selected_tags': list(selected_tags),
+            'show_nsfw': show_nsfw,
+            'scopes': requested_scopes,
+        }
+        if self._recommendation_task is None or self._recommendation_task.done():
+            self._recommendation_task = asyncio.ensure_future(
+                self._recommendation_worker()
             )
-            top_tags = {}
-            if artist_results:
-                names = [r.artist for r in artist_results]
-                top_tags = tagger.get_artist_top_tags(names, show_nsfw=show_nsfw)
-            self._render_artist_rec(artist_results, top_tags, show_nsfw)
-        self._debounce_artist_task = asyncio.ensure_future(_do())
+
+    async def _recommendation_worker(self):
+        """连续消费最新选择快照；过期结果只计算不渲染。"""
+        try:
+            while self._pending_recommendation_request is not None:
+                await asyncio.sleep(RECOMMENDATION_DEBOUNCE_SECONDS)
+                request = self._pending_recommendation_request
+                self._pending_recommendation_request = None
+                selected_tags = request['selected_tags']
+                show_nsfw = request['show_nsfw']
+                scopes = request['scopes']
+
+                try:
+                    if selected_tags:
+                        tagger = await DanbooruTagger.get_instance()
+                        result = await tagger.get_selection_recommendations_async(
+                            selected_tags,
+                            show_nsfw,
+                            scopes,
+                            related_limit=50,
+                            artist_limit=ARTIST_REC_LIMIT,
+                            artist_min_cooc=3,
+                        )
+                    else:
+                        result = {
+                            'related': [],
+                            'groups': [],
+                            'artists': [],
+                            'artist_top_tags': {},
+                        }
+                except Exception as exc:
+                    print(f'[UI] 推荐刷新失败: {exc}', flush=True)
+                    continue
+
+                if request['generation'] != self._recommendation_generation:
+                    continue
+                if not self._client_alive():
+                    return
+
+                if 'related' in scopes:
+                    self._refresh_related(result['related'], show_nsfw)
+                if 'group' in scopes:
+                    if selected_tags:
+                        await self._capture_group_scroll_positions()
+                        self._render_group_expansion(
+                            result['groups'], selected_tags, show_nsfw,
+                        )
+                    elif self.group_expansion_container is not None:
+                        self.group_expansion_container.clear()
+                        with self.group_expansion_container:
+                            ui.label('请先搜索并勾选标签…').classes(
+                                'text-sm text-gray-400 italic p-4'
+                            )
+                if 'artist' in scopes:
+                    self._render_artist_rec(
+                        result['artists'],
+                        result['artist_top_tags'],
+                        show_nsfw,
+                    )
+        finally:
+            self._recommendation_task = None
 
     def _set_artist_rec_page(self, page: int):
-        """切换推荐画师页，仅切换已构建行的可见性。"""
+        """切换推荐画师页，只构建当前页的可见行。"""
         if self._artist_rec_page_count < 1:
             return
         self._artist_rec_page = max(1, min(page, self._artist_rec_page_count))
-        start = (self._artist_rec_page - 1) * ARTIST_REC_PAGE_SIZE
-        end = start + ARTIST_REC_PAGE_SIZE
-        for index, row in enumerate(self._artist_rec_rows):
-            row.set_visibility(start <= index < end)
+        self._render_artist_rec_page()
         if self._artist_rec_page_label is not None:
             self._artist_rec_page_label.text = (
                 f'{self._artist_rec_page} / {self._artist_rec_page_count}'
@@ -3701,44 +3779,36 @@ class DanbooruSearchUI:
             else:
                 self._artist_rec_next_button.enable()
 
-    def _render_artist_rec(self, artist_results, top_tags=None, show_nsfw: bool = True):
-        """渲染推荐画师列表（对标关联推荐样式）。"""
-        if self.artist_rec_list is None or self.artist_rec_pagination is None:
+    def _render_artist_rec_page(self):
+        """重建当前画师页，节点数量固定不超过 ARTIST_REC_PAGE_SIZE。"""
+        if self.artist_rec_list is None:
             return
         self.artist_rec_list.clear()
-        self.artist_rec_pagination.clear()
         self._artist_rec_checkboxes.clear()
         self._artist_rec_rows.clear()
-        self._artist_rec_page = 1
-        self._artist_rec_page_count = 0
-        self._artist_rec_page_label = None
-        self._artist_rec_prev_button = None
-        self._artist_rec_next_button = None
-        self._current_artist_rec_tags.clear()
-        self._artist_rec_sources.clear()
 
-        if not artist_results:
+        if not self._artist_rec_results:
             with self.artist_rec_list:
                 ui.label('暂无推荐画师').classes('text-sm text-gray-400 italic p-4')
             return
 
-        top_tags = top_tags or {}
         selected_now = set(self._get_selected_tags())
+        start = (self._artist_rec_page - 1) * ARTIST_REC_PAGE_SIZE
+        end = start + ARTIST_REC_PAGE_SIZE
+        page_results = self._artist_rec_results[start:end]
 
         with self.artist_rec_list:
-            for r in artist_results[:ARTIST_REC_LIMIT]:
+            for r in page_results:
                 artist = r.artist
-                self._current_artist_rec_tags.add(artist)
                 is_selected = artist in selected_now
                 # 归一化：除以命中标签数，cap 到 100%
                 normalized = min(r.score / max(r.hit_count, 1), 1.0)
                 score_pct = f'+{normalized * 100:.0f}%'
                 reason = artist_candidate_reason(r.sources)
-                self._artist_rec_sources[artist] = '、'.join(r.sources[:3])
                 post_str = f'{r.post_count:,}' if r.post_count else '—'
 
                 # tooltip：画师擅长标签
-                tag_list = top_tags.get(artist, [])
+                tag_list = self._artist_rec_top_tags.get(artist, [])
                 tooltip_html = f'<div><b>{artist}</b><br>这位画师经常画:<br>'
                 if tag_list:
                     for t in tag_list[:10]:
@@ -3776,9 +3846,36 @@ class DanbooruSearchUI:
                     score_color = 'green' if normalized > 0.6 else ('teal' if normalized > 0.3 else 'grey')
                     ui.label(score_pct).classes(f'text-sm font-bold text-{score_color}-600 whitespace-nowrap')
 
-            self._artist_rec_page_count = (
-                len(self._artist_rec_rows) + ARTIST_REC_PAGE_SIZE - 1
-            ) // ARTIST_REC_PAGE_SIZE
+    def _render_artist_rec(self, artist_results, top_tags=None, show_nsfw: bool = True):
+        """保存推荐快照，并仅渲染当前画师页。"""
+        if self.artist_rec_list is None or self.artist_rec_pagination is None:
+            return
+        self.artist_rec_list.clear()
+        self.artist_rec_pagination.clear()
+        self._artist_rec_checkboxes.clear()
+        self._artist_rec_rows.clear()
+        self._artist_rec_page = 1
+        self._artist_rec_page_label = None
+        self._artist_rec_prev_button = None
+        self._artist_rec_next_button = None
+        self._artist_rec_results = list(artist_results[:ARTIST_REC_LIMIT])
+        self._artist_rec_top_tags = dict(top_tags or {})
+        self._artist_rec_show_nsfw = show_nsfw
+        self._artist_rec_page_count = (
+            len(self._artist_rec_results) + ARTIST_REC_PAGE_SIZE - 1
+        ) // ARTIST_REC_PAGE_SIZE
+        self._current_artist_rec_tags = {
+            result.artist for result in self._artist_rec_results
+        }
+        self._artist_rec_sources = {
+            result.artist: '、'.join(result.sources[:3])
+            for result in self._artist_rec_results
+        }
+
+        if not self._artist_rec_results:
+            self._render_artist_rec_page()
+            return
+
         if self._artist_rec_page_count > 1:
             with self.artist_rec_pagination:
                 with ui.row().classes('w-full items-center justify-center gap-2 px-3 py-2'):
@@ -4050,14 +4147,14 @@ class DanbooruSearchUI:
 
     # ── NSFW 切换 ─────────────────────────────────────────────────────────
 
-    def on_nsfw_toggle(self, e):
+    async def on_nsfw_toggle(self, e):
         show_nsfw_val = self.input_nsfw.value
 
         # 复用当前分词筛选：同时套用新 NSFW 状态并保持 chip 选中态
         self._filter_by_source(self.current_filter_keyword)
         if not show_nsfw_val:
             self.result_table.selected = [r for r in self.result_table.selected if r.get('nsfw') != '1']
-        self._update_selection_display(None)
+        await self._update_selection_display(None)
 
     # ── 复制 / 反馈 ──────────────────────────────────────────────────────
 

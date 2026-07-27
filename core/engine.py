@@ -76,6 +76,16 @@ def _resolve_cpu_sem_limit(cpu_count: Optional[int] = None) -> int:
     return 2 if cpus >= 8 else 1
 
 
+def _resolve_recommendation_sem_limit(cpu_count: Optional[int] = None) -> int:
+    """Resolve the lightweight recommendation lane concurrency."""
+    override = _positive_int_env('DANBOORU_RECOMMENDATION_CONCURRENCY')
+    if override is not None:
+        return override
+    # Recommendation lookups are much lighter than semantic search, but keeping
+    # one dedicated lane avoids stealing several cores from PyTorch at once.
+    return 1
+
+
 # 限制 PyTorch CPU 线程数，给 asyncio 事件循环和 UI 留出核心。
 torch.set_num_threads(_resolve_torch_threads())
 
@@ -201,12 +211,13 @@ class DanbooruTagger:
 
     _instance: Optional['DanbooruTagger'] = None
     _lock: Optional[asyncio.Lock] = None
-    # 进程级 CPU 并发闸门：串行化所有 CPU 密集型操作（search / get_related /
-    # get_group_candidates），避免并发抢占 CPU 而拖垮 asyncio 事件循环。
+    # 进程级搜索闸门：限制 PyTorch 密集型任务，避免并发抢占 CPU。
     _cpu_sem: Optional[asyncio.Semaphore] = None
     _cpu_sem_limit: Optional[int] = None
     _cpu_active_tasks: int = 0
     _cpu_waiting_tasks: int = 0
+    # UI 推荐使用独立的轻量通道，避免被长耗时语义搜索阻塞。
+    _recommendation_sem: Optional[asyncio.Semaphore] = None
 
     @classmethod
     def is_ready(cls) -> bool:
@@ -663,6 +674,87 @@ class DanbooruTagger:
                 sem.release()
             else:
                 cls._cpu_waiting_tasks = max(0, cls._cpu_waiting_tasks - 1)
+
+    @classmethod
+    def _get_recommendation_sem(cls) -> asyncio.Semaphore:
+        if cls._recommendation_sem is None:
+            cls._recommendation_sem = asyncio.Semaphore(
+                _resolve_recommendation_sem_limit()
+            )
+        return cls._recommendation_sem
+
+    def _selection_recommendations(
+        self,
+        selected_tags: list[str],
+        show_nsfw: bool,
+        scopes: frozenset[str],
+        related_limit: int,
+        artist_limit: int,
+        artist_min_cooc: int,
+    ) -> dict[str, Any]:
+        """Compute one consistent recommendation snapshot in a single worker."""
+        related = (
+            self.get_related(
+                selected_tags,
+                set(selected_tags),
+                related_limit,
+                show_nsfw,
+            )
+            if 'related' in scopes
+            else []
+        )
+        groups = (
+            self.get_group_candidates(selected_tags, show_nsfw)
+            if 'group' in scopes
+            else []
+        )
+        artists = (
+            self.search_artists_by_tags(
+                selected_tags,
+                limit=artist_limit,
+                min_cooc=artist_min_cooc,
+            )
+            if 'artist' in scopes
+            else []
+        )
+        artist_top_tags = (
+            self.get_artist_top_tags(
+                [result.artist for result in artists],
+                show_nsfw=show_nsfw,
+            )
+            if artists
+            else {}
+        )
+        return {
+            'related': related,
+            'groups': groups,
+            'artists': artists,
+            'artist_top_tags': artist_top_tags,
+        }
+
+    async def get_selection_recommendations_async(
+        self,
+        selected_tags: list[str],
+        show_nsfw: bool,
+        scopes: frozenset[str],
+        related_limit: int = 50,
+        artist_limit: int = 64,
+        artist_min_cooc: int = 3,
+    ) -> dict[str, Any]:
+        """Run a UI recommendation snapshot outside the semantic-search queue."""
+        async with self._get_recommendation_sem():
+            return await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._selection_recommendations,
+                    selected_tags,
+                    show_nsfw,
+                    scopes,
+                    related_limit,
+                    artist_limit,
+                    artist_min_cooc,
+                ),
+                timeout=30.0,
+            )
 
     @classmethod
     def get_load_snapshot(cls) -> dict[str, int]:
