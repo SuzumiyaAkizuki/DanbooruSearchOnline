@@ -493,7 +493,7 @@ class DanbooruSearchUI:
         self._cat_checkboxes: dict[str, ui.checkbox] = {}
 
     def _update_footer_text(self):
-        if self.search_count_label is not None:
+        if self.search_count_label is not None and self._client_alive():
             try:
                 total = counter.get()
                 visits = counter.get_visits()
@@ -513,7 +513,7 @@ class DanbooruSearchUI:
                 pass
 
     def _update_service_status(self):
-        if self.service_status_container is None:
+        if self.service_status_container is None or not self._client_alive():
             return
         self.service_status_container.clear()
         with self.service_status_container:
@@ -872,6 +872,8 @@ class DanbooruSearchUI:
 
     def _save_config(self):
         """将当前控件状态序列化并写入 localStorage。"""
+        if not self._client_alive():
+            return
         cfg = self._collect_config_state()
         js = _json.dumps(cfg, ensure_ascii=False)
         ui.run_javascript(f"localStorage.setItem('{_CONFIG_LS_KEY}', {_json.dumps(js)});")
@@ -932,7 +934,7 @@ class DanbooruSearchUI:
     async def _restore_config(self):
         """从 localStorage 读取配置并恢复控件状态。"""
         try:
-            if getattr(ui.context.client, '_deleted', False):
+            if not self._client_alive():
                 return
             raw = await ui.run_javascript(
                 f"localStorage.getItem('{_CONFIG_LS_KEY}');",
@@ -2550,6 +2552,8 @@ class DanbooruSearchUI:
             pass  # 事件上下文已销毁（UI 重建中），数据仍在内存里，下次保存时会同步
 
     def _save_history(self):
+        if not self._client_alive():
+            return
         while True:
             try:
                 data = dump_collection(self.search_history, label='history')
@@ -2568,6 +2572,8 @@ class DanbooruSearchUI:
                 return
 
     def _save_favorites(self):
+        if not self._client_alive():
+            return False
         try:
             data = dump_collection(self.favorites, label='favorites')
             ui.run_javascript(
@@ -3024,7 +3030,11 @@ class DanbooruSearchUI:
 
     async def _hide_banner_when_ready(self):
         while not DanbooruTagger.is_ready():
+            if not self._client_alive():
+                return
             await asyncio.sleep(1)
+        if not self._client_alive():
+            return
         if self.init_banner:
             self.init_banner.set_visibility(False)
         self._update_service_status()
@@ -3035,9 +3045,11 @@ class DanbooruSearchUI:
 
     def _client_alive(self) -> bool:
         try:
-            _ = self.search_btn.client
-            return True
-        except RuntimeError:
+            client = self.client
+            if client is None and self.search_btn is not None:
+                client = self.search_btn.client
+            return client is not None and not bool(getattr(client, '_deleted', False))
+        except (AttributeError, RuntimeError):
             return False
 
     # ── 分词筛选 ──────────────────────────────────────────────────────────
