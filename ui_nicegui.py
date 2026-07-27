@@ -3167,8 +3167,6 @@ class DanbooruSearchUI:
                     )
         except asyncio.CancelledError:
             was_cancelled = True
-            if not self._client_connected():
-                print('[UI] localStorage 恢复中止：客户端已断开，未写入未恢复数据。', flush=True)
         finally:
             self._storage_restoring = False
             if self._storage_restore_task is asyncio.current_task():
@@ -4785,6 +4783,7 @@ async def main_page():
     def mark_connected(*_):
         _mark_ui_session_active(client_id)
         app_ui._start_service_status_task()
+        # 页面先完成构建；localStorage 恢复只在 Socket.IO 真正连接后后台执行。
         app_ui._start_storage_restore_task()
 
     def mark_disconnected(*_):
@@ -4811,12 +4810,6 @@ async def main_page():
         except Exception:
             pass
     asyncio.create_task(silent_visit_update())
-
-    # 一次性恢复配置、工作区、历史与收藏；失败项保持写入保护。
-    restore_task = app_ui._start_storage_restore_task()
-    if restore_task is not None:
-        await restore_task
-
 
 # ── 入口 ───────────────────────────────────────────────────────────────────────
 
