@@ -18,6 +18,7 @@ import os
 import re
 import time
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Optional
@@ -203,6 +204,9 @@ class DanbooruTagger:
     # 进程级 CPU 并发闸门：串行化所有 CPU 密集型操作（search / get_related /
     # get_group_candidates），避免并发抢占 CPU 而拖垮 asyncio 事件循环。
     _cpu_sem: Optional[asyncio.Semaphore] = None
+    _cpu_sem_limit: Optional[int] = None
+    _cpu_active_tasks: int = 0
+    _cpu_waiting_tasks: int = 0
 
     @classmethod
     def is_ready(cls) -> bool:
@@ -636,8 +640,39 @@ class DanbooruTagger:
     @classmethod
     def _get_cpu_sem(cls) -> asyncio.Semaphore:
         if cls._cpu_sem is None:
-            cls._cpu_sem = asyncio.Semaphore(_resolve_cpu_sem_limit())
+            cls._cpu_sem_limit = _resolve_cpu_sem_limit()
+            cls._cpu_sem = asyncio.Semaphore(cls._cpu_sem_limit)
         return cls._cpu_sem
+
+    @classmethod
+    @asynccontextmanager
+    async def _cpu_slot(cls):
+        """申请共享 CPU 计算槽，并维护可公开展示的进程内负载计数。"""
+        sem = cls._get_cpu_sem()
+        acquired = False
+        cls._cpu_waiting_tasks += 1
+        try:
+            await sem.acquire()
+            acquired = True
+            cls._cpu_waiting_tasks = max(0, cls._cpu_waiting_tasks - 1)
+            cls._cpu_active_tasks += 1
+            yield
+        finally:
+            if acquired:
+                cls._cpu_active_tasks = max(0, cls._cpu_active_tasks - 1)
+                sem.release()
+            else:
+                cls._cpu_waiting_tasks = max(0, cls._cpu_waiting_tasks - 1)
+
+    @classmethod
+    def get_load_snapshot(cls) -> dict[str, int]:
+        """返回当前进程的 CPU 计算任务负载快照。"""
+        capacity = cls._cpu_sem_limit or _resolve_cpu_sem_limit()
+        return {
+            'active': cls._cpu_active_tasks,
+            'waiting': cls._cpu_waiting_tasks,
+            'capacity': capacity,
+        }
 
     async def search_async(self, request: SearchRequest) -> SearchResponse:
         """search() 的并发安全异步封装：共享闸门串行化 + 线程池执行。
@@ -646,7 +681,7 @@ class DanbooruTagger:
         asyncio.to_thread(self.search)，以共享同一个 CPU 并发闸门。
         包含 60 秒超时，防止异常卡死导致信号量永久泄漏。
         """
-        async with self._get_cpu_sem():
+        async with self._cpu_slot():
             return await asyncio.wait_for(
                 asyncio.to_thread(self.search, request),
                 timeout=120.0,
@@ -661,7 +696,7 @@ class DanbooruTagger:
         target_categories: set[str] | None = None,
     ) -> list:
         """get_related() 的并发安全异步封装，共享同一个 CPU 闸门。"""
-        async with self._get_cpu_sem():
+        async with self._cpu_slot():
             return await asyncio.to_thread(
                 self.get_related, seed_tags, exclude, limit, show_nsfw, target_categories,
             )
@@ -672,7 +707,7 @@ class DanbooruTagger:
         show_nsfw: bool = True,
     ) -> list[dict]:
         """get_group_candidates() 的并发安全异步封装，共享同一个 CPU 闸门。"""
-        async with self._get_cpu_sem():
+        async with self._cpu_slot():
             return await asyncio.to_thread(
                 self.get_group_candidates, selected_tags, show_nsfw,
             )
@@ -684,7 +719,7 @@ class DanbooruTagger:
         min_cooc: int = 5,
     ) -> list:
         """search_artists_by_tags() 的并发安全异步封装。"""
-        async with self._get_cpu_sem():
+        async with self._cpu_slot():
             return await asyncio.to_thread(
                 self.search_artists_by_tags, tags, limit, min_cooc,
             )
@@ -698,7 +733,7 @@ class DanbooruTagger:
         target_categories: list[str] | None = None,
     ) -> tuple:
         """search_artists_pipeline() 的并发安全异步封装。"""
-        async with self._get_cpu_sem():
+        async with self._cpu_slot():
             return await asyncio.wait_for(
                 asyncio.to_thread(
                     self.search_artists_pipeline,

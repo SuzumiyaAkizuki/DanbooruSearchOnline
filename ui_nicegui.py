@@ -12,6 +12,7 @@ import sys
 sys.stdout.reconfigure(line_buffering=True)
 print("[UI] 脚本开始执行", flush=True)
 import asyncio
+import logging
 import os
 import re
 import time
@@ -88,7 +89,23 @@ from core.workspace import (
 from platform_utils import is_cloud, get_host_port, nsfw_allowed
 from mcp_server import mcp
 
-import logging
+
+# 仅统计当前进程中已建立 Socket.IO 连接的 UI 页面，不等同于唯一用户数。
+_ACTIVE_UI_CLIENT_IDS: set[str] = set()
+
+
+def _mark_ui_session_active(client_id: str) -> None:
+    _ACTIVE_UI_CLIENT_IDS.add(client_id)
+
+
+def _mark_ui_session_inactive(client_id: str) -> None:
+    _ACTIVE_UI_CLIENT_IDS.discard(client_id)
+
+
+def _get_active_ui_session_count() -> int:
+    return len(_ACTIVE_UI_CLIENT_IDS)
+
+
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 logging.getLogger("mcp").setLevel(logging.WARNING)
@@ -380,6 +397,8 @@ class DanbooruSearchUI:
     def __init__(self):
         self.search_count_label = None
         self.service_status_container = None
+        self.service_status_timer = None
+        self._last_service_status_key = None
         self.current_search_interacted = True
         self._telemetry_search_started_at: float | None = None
         self._telemetry_selection_recorded = False
@@ -515,20 +534,45 @@ class DanbooruSearchUI:
     def _update_service_status(self):
         if self.service_status_container is None or not self._client_alive():
             return
+
+        ready = DanbooruTagger.is_ready()
+        online_sessions = _get_active_ui_session_count()
+        load = DanbooruTagger.get_load_snapshot()
+        active = load['active']
+        waiting = load['waiting']
+        capacity = load['capacity']
+        busy = ready and (waiting > 0 or active >= capacity)
+        status_key = (ready, busy, online_sessions, active, waiting, capacity)
+        if status_key == self._last_service_status_key:
+            return
+        self._last_service_status_key = status_key
+
         self.service_status_container.clear()
         with self.service_status_container:
-            if DanbooruTagger.is_ready():
-                with ui.row().classes(
-                    'w-full items-center gap-2 service-state-panel ready'
-                ):
-                    ui.icon('check_circle', size='18px', color='positive')
-                    ui.label('服务可用').classes('font-medium')
-            else:
+            if not ready:
                 with ui.row().classes(
                     'w-full items-center gap-2 service-state-panel loading'
                 ):
                     ui.spinner(size='18px', color='primary')
                     ui.label('引擎初始化中，请稍候…约需 5~10 分钟').classes('font-medium')
+            else:
+                with ui.row().classes(
+                    f'w-full items-center gap-2 service-state-panel {"busy" if busy else "ready"}'
+                ):
+                    ui.icon(
+                        'schedule' if busy else 'check_circle',
+                        size='18px',
+                        color='warning' if busy else 'positive',
+                    )
+                    parts = [
+                        '服务繁忙' if busy else '服务可用',
+                        f'{online_sessions} 个在线页面',
+                    ]
+                    if active > 0:
+                        parts.append(f'正在处理 {active} 个任务')
+                    if waiting > 0:
+                        parts.append(f'等待 {waiting} 个')
+                    ui.label(' · '.join(parts)).classes('font-medium')
 
     def _build_sponsor_dialog(self):
         with ui.dialog() as self.sponsor_dialog, ui.card().classes('w-full max-w-sm'):
@@ -1017,6 +1061,11 @@ class DanbooruSearchUI:
                     border: 1px solid #a7f3d0;
                     color: #047857;
                 }
+                .service-state-panel.busy {
+                    background: #fff7ed;
+                    border: 1px solid #fed7aa;
+                    color: #c2410c;
+                }
                 .query-insight-panel {
                     background: #f8fafc;
                     border: 1px solid #dbe4ee;
@@ -1344,6 +1393,7 @@ class DanbooruSearchUI:
             with ui.element('div').classes('w-full border-t border-slate-100 pt-3 mt-1'):
                 self.service_status_container = ui.column().classes('w-full gap-0')
                 self._update_service_status()
+                self.service_status_timer = ui.timer(1.0, self._update_service_status)
 
     # ── 工作区工具 ────────────────────────────────────────────────────────
 
@@ -4187,6 +4237,18 @@ class DanbooruSearchUI:
 
 @ui.page('/')
 async def main_page():
+    client = ui.context.client
+    client_id = client.id
+
+    def mark_connected(*_):
+        _mark_ui_session_active(client_id)
+
+    def mark_disconnected(*_):
+        _mark_ui_session_inactive(client_id)
+
+    client.on_connect(mark_connected)
+    client.on_disconnect(mark_disconnected)
+
     app_ui = DanbooruSearchUI()
     app_ui.build_page()
 
