@@ -11,3 +11,4 @@ uvicorn
 modelscope
 oss2
 mcp==1.27.0
+PyYAML>=6.0,<7

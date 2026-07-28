@@ -35,6 +35,7 @@ from core import counter, telemetry
 from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
 from core.models import RelatedTag, SearchRequest
+from core.ui_text import load_ui_text
 from core.prompt_import import (
     WORKSPACE_GROUP_ORDER,
     PromptImportResult,
@@ -174,11 +175,7 @@ SPONSOR_IMAGE_URL = "https://akizukipic.oss-cn-beijing.aliyuncs.com/img/20250112
 SPONSOR_TOOLCHAIN_URL = "http://intro.sakizuki.site/index.html"
 SPONSOR_NOTICE_TEXT = "喜欢的话，可以请作者喝杯咖啡"
 SPONSOR_TITLE = "谢谢你愿意支持"
-SPONSOR_BODY = (
-    "如果你喜欢这个小工具，可以自愿赞赏一点维护成本。"
-    "它会继续免费开放；赞赏不会解锁任何额外功能、不会提高额度、不会影响搜索结果，"
-    "量力而行就好，未成年人请勿赞赏。"
-)
+UI_TEXT = load_ui_text()
 
 
 def _resolve_group_render_limit(default: int = 80) -> int:
@@ -264,7 +261,7 @@ def _sanitize_restored_config(cfg: dict) -> dict:
 
     for key in (
         'show_nsfw', 'use_segmentation', 'sw_semantic', 'sw_layer',
-        'sw_source', 'notice_expanded', 'mcp_notice_dismissed',
+        'sw_source',
     ):
         if isinstance(cfg.get(key), bool):
             safe[key] = cfg[key]
@@ -494,8 +491,6 @@ class DanbooruSearchUI:
 
         self.bad_case_btn = None
 
-        self.mcp_notice = None
-        self.notice_expansion = None
         self.announcement_banner = None
         self.dismissed_announcement_version = ''
         self.help_dialog = None
@@ -638,11 +633,11 @@ class DanbooruSearchUI:
         with ui.dialog() as self.sponsor_dialog, ui.card().classes('w-full max-w-sm'):
             with ui.column().classes('w-full items-center gap-2 text-center'):
                 ui.label(SPONSOR_TITLE).classes('text-base font-bold text-gray-800')
-                ui.label(SPONSOR_BODY).classes('text-sm text-gray-600 leading-relaxed')
+                ui.label(UI_TEXT['sponsor']['body']).classes('text-sm text-gray-600 leading-relaxed')
                 ui.image(SPONSOR_IMAGE_URL).classes('w-60 max-w-full rounded border border-gray-200')
                 ui.label('微信赞赏码').classes('text-xs text-gray-400')
                 ui.link(
-                    '如果你想继续折腾，也可以看看基于这个小工具的更多工具链',
+                    UI_TEXT['sponsor']['toolchain_prompt'],
                     SPONSOR_TOOLCHAIN_URL,
                     new_tab=True,
                 ).classes('text-xs text-blue-500 hover:text-blue-700 hover:underline')
@@ -665,99 +660,51 @@ class DanbooruSearchUI:
                 ui.button(icon='close', on_click=self.help_dialog.close).props('flat dense round color=grey-7')
 
             with ui.scroll_area().classes('w-full h-[72vh]'):
-                with ui.column().classes('w-full gap-4 px-5 py-4'):
-                    with ui.element('div').classes(
-                        'w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-3'
-                    ):
-                        ui.label('最近更新：标签工作区与查询理解').classes(
-                            'text-base font-bold text-blue-900'
-                        )
-                        ui.label(
-                            '本次更新优化了标签已选区，现已支持历史记录、收藏等功能。这些信息始终保存在本地。'
-                        ).classes('text-sm text-blue-800 mt-1')
+                with ui.column().classes('w-full gap-5 px-5 py-4'):
+                    with ui.column().classes('help-section'):
+                        with ui.element('div').classes('help-section-heading'):
+                            ui.label(UI_TEXT['help']['update_title']).classes(
+                                'help-section-heading-title'
+                            )
+                            ui.label(UI_TEXT['help']['update_summary']).classes(
+                                'help-section-heading-subtitle'
+                            )
+                        ui.markdown(UI_TEXT['help']['guide_markdown']).classes('help-content')
 
-                    ui.markdown("""
-### 1. 搜索与查询理解
+                    with ui.column().classes('help-section'):
+                        with ui.element('div').classes(
+                            'help-section-heading help-section-heading--documentation'
+                        ):
+                            ui.label(UI_TEXT['documentation']['title']).classes(
+                                'help-section-heading-title'
+                            )
+                            ui.label(UI_TEXT['documentation']['subtitle']).classes(
+                                'help-section-heading-subtitle'
+                            )
+                        with ui.column().classes('help-content gap-3'):
+                            with ui.row().classes('w-full gap-3 flex-wrap'):
+                                for link in UI_TEXT['documentation']['links']:
+                                    link_url = (
+                                        alternate_url
+                                        if link['url'] == '{alternate_url}'
+                                        else link['url']
+                                    )
+                                    ui.link(link['label'], link_url, new_tab=True).classes('help-link')
+                            ui.markdown(
+                                UI_TEXT['documentation']['copyright_markdown']
+                            ).classes('help-content')
 
-搜索后的“查询理解”优化了原先的分词筛选功能，增加了是否覆盖的标记：
-
-- **绿色**：这个概念已有标签被加入工作区。
-- **黄色**：搜索结果中存在候选，但你还没有选择。
-- **红色**：当前结果没有覆盖；点击它会沿用当前参数发起补充搜索，不会清空工作区。
-- 点击绿色或黄色概念，可以只查看来自该概念的搜索结果；点击“全部结果”恢复完整列表。
-
-### 2. 标签工作区
-
-勾选搜索结果、关联标签、同类标签或推荐画师后，它们都会进入同一个工作区，并自动保存在当前浏览器中。
-
-- 使用标签两侧的 `− / +` 调整 Prompt 权重。
-- 使用“撤销 / 恢复”回退最近的工作区修改。
-- “清空已选”只清空当前工作区标签，不会删除历史和收藏。
-- SDXL、NAI、Anima 复制格式会随工作区保存；画师标签在 Anima 格式下会自动使用 `@画师名`。
-
-### 3. 历史与继续搜索
-
-每次搜索都会记录查询、当时的搜索设置和工作区快照：
-
-- **重新搜索**：恢复历史查询和当时的搜索参数，然后立即搜索。
-- **恢复工作区**：恢复当时的已选标签、权重和格式。
-- **追加查询**：使用当前页面的搜索参数重新执行历史查询，并保留当前工作区。
-
-### 4. 收藏
-
-“保存收藏”会保存当前标签组合、权重、来源和 Prompt 格式。收藏可以恢复、合并或直接复制；合并时，同名标签保留当前工作区已有权重。
-
-### 5. Prompt 导入与 Alias 纠错
-
-点击“导入 Prompt”后粘贴标签字符串。全角逗号和半角逗号会等价解析；上传或粘贴完成后，需要再次点击确认才会导入。
-
-- Alias 是 Danbooru 中标记弃用标签的数据接口，导入 Prompt 后，系统将自动替换弃用标签，并展示替换关系。
-- 重复标签会合并，不会重复加入。
-- 无法唯一识别或目标不在当前标签库中的内容进入“待确认”，不会被强行加入。
-
-### 6. 关联、同类与画师推荐
-
-- **关联推荐**根据标签共现关系补充经常一起出现的标签。
-- **同类标签**根据 Tag Group 展示同一语义组中的其他标签。
-- **推荐擅长画师**根据标签与画师的共现数据推荐画师，每页显示 8 位；悬停可查看常见标签。
-
-推荐原因只展示系统实际使用的数据来源，不会虚构标签关系。
-
-### 7. 备份与迁移
-
-“备份 / 迁移”可以导出完整 JSON，内容包括当前配置、工作区、原始搜索查询、历史和收藏。文件仅在你主动下载或上传时离开浏览器。导入时可以选择合并或替换。
-
-### 8. 反馈与隐私
-
-你可以提交整次搜索问题或标签翻译错误。反馈只记录当前查询、搜索设置、应用版本和你主动填写的说明；不会上传浏览器指纹、收藏、完整历史或未经提交的工作区等任何个人信息。
-                    """).classes('w-full text-sm text-slate-700 leading-relaxed')
-
-                    ui.separator()
-
-                    with ui.column().classes('w-full gap-2'):
-                        ui.label('文档与集成').classes('text-sm font-bold text-slate-700')
-                        with ui.row().classes('w-full gap-3 flex-wrap'):
-                            ui.link('工具链使用指南', 'http://intro.sakizuki.site/index.html', new_tab=True) \
-                                .classes('text-sm text-blue-600')
-                            ui.link('API 文档', '/api/docs', new_tab=True).classes('text-sm text-blue-600')
-                            ui.link(
-                                'MCP 接入',
-                                'https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline#mcp-接口',
-                                new_tab=True,
-                            ).classes('text-sm text-blue-600')
-                            ui.link(
-                                'ComfyUI 插件',
-                                'https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher',
-                                new_tab=True,
-                            ).classes('text-sm text-blue-600')
-                            ui.link('备用服务', alternate_url, new_tab=True).classes('text-sm text-blue-600')
-                            ui.link(
-                                'GitHub',
-                                'https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline',
-                                new_tab=True,
-                            ).classes('text-sm text-blue-600')
-
-                    ui.separator()
+                    with ui.column().classes('help-section'):
+                        with ui.element('div').classes(
+                            'help-section-heading help-section-heading--notice'
+                        ):
+                            ui.label(UI_TEXT['notice']['title']).classes(
+                                'help-section-heading-title'
+                            )
+                            ui.label(UI_TEXT['notice']['subtitle']).classes(
+                                'help-section-heading-subtitle'
+                            )
+                        ui.markdown(UI_TEXT['notice']['body_markdown']).classes('help-content')
 
                     with ui.element('div').classes(
                         'w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3'
@@ -1128,6 +1075,91 @@ class DanbooruSearchUI:
                     border-left: 3px solid #4a90e2;
                     border-radius: 8px;
                 }
+                .homepage-support-note {
+                    color: #64748b;
+                    font-size: 12px;
+                    line-height: 1.6;
+                }
+                .homepage-support-note a {
+                    color: #4a90e2;
+                    font-weight: 500;
+                    text-decoration: none;
+                }
+                .homepage-support-note a:hover {
+                    color: #2563a8;
+                    text-decoration: underline;
+                }
+                .help-section {
+                    width: 100%;
+                    gap: 12px;
+                    background: #ffffff;
+                }
+                .help-section-heading {
+                    display: flex;
+                    flex-direction: column;
+                    width: 100%;
+                    gap: 5px;
+                    padding: 12px 16px;
+                    border: 1px solid #b9d7f7;
+                    border-radius: 8px;
+                    background: #eef6ff;
+                }
+                .help-section-heading-title {
+                    color: #174f91;
+                    font-size: 15px;
+                    font-weight: 700;
+                    line-height: 1.4;
+                }
+                .help-section-heading-subtitle {
+                    color: #2563a8;
+                    font-size: 13px;
+                    font-weight: 400;
+                    line-height: 1.55;
+                }
+                .help-section-heading--documentation {
+                    border-color: #a7e3c4;
+                    background: #ecfdf5;
+                }
+                .help-section-heading--documentation .help-section-heading-title {
+                    color: #047857;
+                }
+                .help-section-heading--documentation .help-section-heading-subtitle {
+                    color: #16855f;
+                }
+                .help-section-heading--notice {
+                    border-color: #fed7aa;
+                    background: #fff7ed;
+                }
+                .help-section-heading--notice .help-section-heading-title {
+                    color: #c2410c;
+                }
+                .help-section-heading--notice .help-section-heading-subtitle {
+                    color: #b45309;
+                }
+                .help-content {
+                    width: 100%;
+                    color: #334155;
+                    font-size: 14px;
+                    line-height: 1.75;
+                }
+                .help-section > .help-content {
+                    box-sizing: border-box;
+                    padding-right: 16px;
+                    padding-left: 16px;
+                }
+                .help-content h3,
+                .help-content h4 {
+                    color: #334155;
+                }
+                .help-link {
+                    color: #2563a8;
+                    font-size: 14px;
+                    line-height: 1.6;
+                }
+                .help-link:hover {
+                    color: #174f86;
+                    text-decoration: underline;
+                }
 
                 /* 强制双栏并排 */
                 .two-col-layout {
@@ -1229,76 +1261,6 @@ class DanbooruSearchUI:
                     .props('flat dense no-caps color=grey-6') \
                     .classes('text-xs mt-1')
 
-    # ── 公告栏（标签组 + MCP）─────────────────────────────────────────────
-
-    def _build_group_notice(self):
-        self.mcp_notice = ui.card().classes(
-            'w-full bg-green-50 border-l-4 border-green-500 p-0 overflow-hidden'
-        )
-        with self.mcp_notice:
-            with ui.column().classes('px-4 py-3 w-full gap-2'):
-                # ── 画师查找公告 ──
-                with ui.row().classes('items-center justify-between w-full'):
-                    with ui.row().classes('items-center gap-1'):
-                        ui.label('🧪 新功能：推荐擅长画师（beta）').classes('text-sm font-bold text-green-800')
-                    ui.button(icon='close').props('flat dense round color=grey-6') \
-                        .on_click(self._dismiss_mcp_notice)
-                ui.html(
-                    '基于标签共现数据，根据已选标签查找对应的擅长画师。'
-                    '鼠标悬停画师行可查看该画师最常画的标签'
-                ).classes('text-xs text-green-900')
-                ui.separator().classes('my-1')
-                # ── 标签组扩展 ──
-                ui.html(
-                    '【标签组扩展】 勾选标签后，搜索结果下方会出现<b>同类标签</b>区域，'
-                    '展示已选标签所属分组中的其他标签，勾选即可加入已选。'
-                ).classes('text-xs text-green-900')
-                ui.separator().classes('my-1')
-                # ── MCP 服务 ──
-                ui.html(
-                    '【MCP 服务】 支持通过 MCP 协议接入 AI Agent（如 Claude Desktop）。'
-                    '免配置托管版体验：'
-                    '<a href="https://huggingface.co/spaces/SAkizuki/WenQiuYue" '
-                    'target="_blank" rel="noopener noreferrer" '
-                    'class="text-green-700 font-bold underline">问秋月 Space</a>，'
-                    '<span class="text-gray-500 ml-1">API 额度有限，仅供体验。</span>'
-                    '&nbsp;'
-                    '<a href="https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline#mcp-接口" '
-                    'target="_blank" rel="noopener noreferrer" '
-                    'class="text-green-700 underline">接入文档 →</a>'
-                ).classes('text-xs text-green-900')
-
-    def _dismiss_mcp_notice(self):
-        if self.mcp_notice:
-            self.mcp_notice.set_visibility(False)
-        self._save_config()
-
-    # ── 注意事项 ──────────────────────────────────────────────────────────
-
-    def _build_notice(self):
-        with ui.card().classes('w-full bg-orange-50 border-l-4 border-orange-500 p-0 overflow-hidden'):
-            with ui.expansion(value=True).classes('w-full') as notice_expansion:
-                self.notice_expansion = notice_expansion
-                notice_expansion.on('update:model-value', lambda _: self._save_config())
-                notice_expansion.add_slot('header', '''
-                    <div class="flex items-center gap-2 px-4 py-2 w-full flex-wrap">
-                        <span class="text-base font-bold text-orange-800">⚠️ 注意事项 / Note</span>
-                        <span v-if="!props.expanded" class="text-sm text-gray-600 ml-1">
-                             如果觉得好用，请点击顶部给本 Space 点个
-                            <strong>Like ❤️</strong>，或前往 GitHub 点个 <strong>Star ⭐</strong>！
-                        </span>
-                    </div>
-                ''')
-                ui.markdown("""
-- **AI 辅助**：基于语义匹配，结果未必绝对准确(Results may contain errors)
-- **内容警告**：查找结果可能包含 NSFW 内容 (May include NSFW content)
-- **检索限制**：仅支持中/英双语查找 ，更推荐中文(CN/EN only,CN is preferred)
-- **标签范围**：仅显示特征、角色与作品标签，且频数须 ≥ 100 (General, Character & Copyright only, Freq ≥ 100)
-- **集成与接口**：[ComfyUI 插件](https://github.com/SuzumiyaAkizuki/ComfyUI-DanbooruSearcher) · [API 文档](/api/docs) · [MCP 接入](https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline#mcp-接口)
-- **支持作者**：如果觉得好用，欢迎点击顶部给本 Space 点个 **Like ❤️**，或前往 [GitHub](https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline) 点个 **Star ⭐**！也可以自愿赞赏一点维护成本；不影响任何功能使用。
-- **🚀 首次使用？[点击查看使用指南](http://intro.sakizuki.site/index.html)**，了解五种搜索模式与进阶技巧
-""").classes('text-sm text-gray-800 px-4 pb-3')
-
     # ── 搜索卡片 ─────────────────────────────────────────────────────────
 
     def _build_search_card(self):
@@ -1313,12 +1275,21 @@ class DanbooruSearchUI:
             ui.label(
                 '基于语义匹配的标签搜索引擎，支持多维匹配与共现关联推荐。'
             ).classes('text-sm text-gray-500 -mt-1 mb-1')
-            ui.html(
-                '<a href="http://intro.sakizuki.site/index.html" '
-                'target="_blank" rel="noopener noreferrer" '
-                'class="text-blue-600 hover:text-blue-800 underline font-medium">'
-                '查看工具链介绍 / 使用指南 →</a>'
-            ).classes('text-sm mb-3')
+            with ui.row().classes(
+                'w-full items-center justify-between gap-x-4 gap-y-1 flex-wrap mb-3'
+            ):
+                ui.link(
+                    '查看工具链介绍 / 使用指南 →',
+                    'http://intro.sakizuki.site/index.html',
+                    new_tab=True,
+                ).classes('text-sm text-blue-600 hover:text-blue-800 font-medium')
+                ui.html(
+                    '觉得好用？给 '
+                    '<a href="https://huggingface.co/spaces/SAkizuki/DanbooruSearch">'
+                    'Space 点个 Like ❤️</a>，或到 '
+                    '<a href="https://github.com/SuzumiyaAkizuki/DanbooruSearchOnline">'
+                    'GitHub 点 Star ⭐</a>'
+                ).classes('homepage-support-note')
 
             with ui.row().classes('w-full gap-3 items-stretch'):
                 self.search_input = ui.textarea(
@@ -1662,10 +1633,9 @@ class DanbooruSearchUI:
     def _open_prompt_import_dialog(self):
         with ui.dialog() as dialog, ui.card().classes('w-full max-w-3xl'):
             ui.label('导入 Prompt').classes('text-lg font-bold')
-            ui.label(
-                '支持半角/全角逗号或换行分隔，以及 (tag:1.2)、1.2::tag::、{tag}、[tag] 和 @artist。'
-                '无法确认的内容会保留在待确认区，不会进入最终 Prompt。'
-            ).classes('text-sm text-gray-600')
+            ui.label(UI_TEXT['dialogs']['prompt_import_description']).classes(
+                'text-sm text-gray-600'
+            )
             prompt_input = ui.textarea(
                 label='粘贴 Prompt',
                 placeholder='1girl, (white_serafuku:1.2), {rain}, @artist_name',
@@ -2180,10 +2150,9 @@ class DanbooruSearchUI:
     def _open_backup_dialog(self):
         with ui.dialog() as dialog, ui.card().classes('w-full max-w-2xl'):
             ui.label('本地数据备份与迁移').classes('text-lg font-bold')
-            ui.label(
-                '导出文件包含当前配置、工作区、原始搜索查询、历史和收藏。'
-                '文件只会在你主动下载或上传时离开浏览器。'
-            ).classes('text-sm text-orange-700 bg-orange-50 rounded p-3')
+            ui.label(UI_TEXT['dialogs']['backup_description']).classes(
+                'text-sm text-orange-700 bg-orange-50 rounded p-3'
+            )
             ui.button(
                 '导出完整 JSON', icon='download', on_click=self._export_backup,
             ).props('unelevated color=primary').classes('w-full')
@@ -3160,11 +3129,16 @@ class DanbooruSearchUI:
                 )
                 if self._client_connected() and not self._storage_failure_notified:
                     self._storage_failure_notified = True
-                    ui.notify(
-                        '本地工作区数据暂未恢复，已停止覆盖旧数据；连接恢复后会自动重试。',
-                        type='warning',
-                        timeout=5000,
-                    )
+                    try:
+                        with self.client:
+                            ui.notify(
+                                '本地工作区数据暂未恢复，已停止覆盖旧数据；连接恢复后会自动重试。',
+                                type='warning',
+                                timeout=5000,
+                            )
+                    except RuntimeError:
+                        # The client may disconnect after the connection check.
+                        pass
         except asyncio.CancelledError:
             was_cancelled = True
         finally:
@@ -4669,10 +4643,9 @@ class DanbooruSearchUI:
         with ui.dialog() as dialog, ui.card().classes('w-full max-w-lg'):
             ui.label('反馈搜索问题').classes('text-base font-bold text-gray-800')
             ui.label(f'当前搜索词：{query}').classes('text-sm text-gray-600')
-            ui.label(
-                '提交后会记录当前查询、搜索设置、应用版本和提交时间；'
-                '不会上传账号信息、浏览器指纹、搜索历史或收藏。'
-            ).classes('text-xs text-slate-500 bg-slate-50 rounded p-2')
+            ui.label(UI_TEXT['dialogs']['search_feedback_privacy']).classes(
+                'text-xs text-slate-500 bg-slate-50 rounded p-2'
+            )
             detail_input = ui.textarea(
                 label='具体问题（可选）',
                 placeholder='例如：结果偏题、缺少某个关键标签、召回了不相关角色/作品...',
@@ -4729,10 +4702,9 @@ class DanbooruSearchUI:
             ui.label('反馈翻译错误').classes('text-base font-bold text-gray-800')
             ui.label(f'词条：{tag}').classes('text-sm font-mono text-gray-700')
             ui.label(f'当前中文名：{current_cn_first or current_cn_name or "（空）"}').classes('text-sm text-gray-600')
-            ui.label(
-                '提交后会记录当前查询、该词条、当前翻译、搜索设置、应用版本和提交时间；'
-                '不会上传账号信息、浏览器指纹、搜索历史或收藏。'
-            ).classes('text-xs text-slate-500 bg-slate-50 rounded p-2')
+            ui.label(UI_TEXT['dialogs']['translation_feedback_privacy']).classes(
+                'text-xs text-slate-500 bg-slate-50 rounded p-2'
+            )
             suggested_input = ui.input(
                 label='建议中文名（可选）',
                 placeholder='如果有更合适的译名，可以填在这里',

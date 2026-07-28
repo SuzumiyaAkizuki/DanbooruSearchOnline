@@ -542,9 +542,7 @@ class DanbooruTagger:
             top_i_list = top_i.tolist()
 
             for i, source_word in enumerate(queries):
-                cur_weights = query_weights[i]
                 kq = cur_pvk_per_q[i].get(ln, 1)
-                layer_w = cur_weights.get(ln, 1.0)
                 row_v = top_v_list[i]
                 row_i = top_i_list[i]
                 # 仅取该 query 自己的配额条数
@@ -560,7 +558,9 @@ class DanbooruTagger:
                     tag_name    = self._arr_name[idx]
                     count       = self._arr_post_count[idx]
                     pop_score   = self._arr_pop_score[idx]
-                    final_score = score * layer_w * (1 - w_pop) + pop_score * w_pop
+                    # 意图层权重仅用于上方的分层召回配额；最终排序统一比较原始语义分，
+                    # 避免核心词/扩展词的视图权重覆盖正确的跨层语义顺序。
+                    final_score = score * (1 - w_pop) + pop_score * w_pop
                     if tag_name not in final or final_score > final[tag_name].final_score:
                         final[tag_name] = TagResult(
                             tag=tag_name, cn_name=self._arr_cn_name[idx], category=cat_text,
