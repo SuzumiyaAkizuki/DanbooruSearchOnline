@@ -496,319 +496,261 @@ JSON 对象，包含：
 _ANIMA_FORMAT_INSTRUCTION = """
 # Anima Hybrid Prompt Format Specification
 
-请严格按以下 Anima 混合提示词（Hybrid Prompt）规范，基于提供的标签和用户描述，输出最终结果。
+请严格按照以下规范，将已确认的 Danbooru 标签和用户描述整理为 Anima Hybrid 提示词。
 
-## Overview
+## 核心原则
 
-将已有的 Danbooru 风格标签数据整合为 Anima 模型的最优 Hybrid 提示词。该 Skill 假定调用方已经拥有充足的标签信息（通过 Tagger、Captioner 或用户输入），仅负责按 Anima 的格式规范与社区验证的最佳实践进行结构化组装。
+Anima 同时理解 Danbooru 标签和自然语言：
 
-Anima 是一个 2B 参数的文生图模型（CircleStone Labs × Comfy Org），基于 NVIDIA Cosmos-Predict2-2B，使用 Qwen 3 0.6B 文本编码器。它同时理解 Danbooru 标签和自然语言，但两者的行为有本质差异——标签掌控结构与精度，自然语言掌控氛围与构图。
+- **Hard Tags** 负责人物身份、外观、服装、动作、道具和场景锚点。
+- **Natural Language** 负责构图、主体占比、空间关系、光照、曝光和色彩。
+- 背景自然语言过多时，模型容易拉远镜头，因此必须同时明确人物大小和背景层级。
+- `full body` 只表示身体完整可见，不代表人物会占据主要画面。
+- 权重只能强化标签，不能代替构图、主体占比和曝光描述。
 
-社区的共识结论：
-- **纯标签提示词**：线条锐利、色彩平整、几乎没有解剖错误，但画面扁平，缺乏光影、氛围、构图的精确控制。
-- **纯自然语言提示词**：细节丰富、光影动态、气氛到位，但超过 2~3 段后结构崩塌，手部最先出问题。
-- **Hybrid 混合模式**：标签主导主体结构，自然语言补充环境与氛围，获得约 80% 的主体控制力加完整的氛围控制力。
-
-核心风险：自然语言的影响力 **远强于** 标签。当你用自然语言描述背景时，模型会忽略 `close-up`、`upper body` 等取景标签，生成广角镜头。解决方案是对取景标签使用权重语法。
+不得为了增加画面感，擅自加入用户没有要求的前景、天气、道具、人物、戏剧冲突或复杂光效。
 
 ---
 
-## 情境因果锁（组装前必做）
+## 组装前确认
 
-组装 prompt 前，先建立情境因果链，再拆解为两层内容：
+先确定以下内容：
 
+```text
+主体是谁 → 正在做什么 → 视觉焦点是什么 → 背景如何辅助 → 人物如何被照亮
 ```
-发生了什么 → 角色的情感/欲望/冲突 → 具体反应（表情+肢体） → 环境如何参与 → 最抓人眼球的画面瞬间
-```
 
-- 先定情境，再选 hard tags、soft phrases、nltags。
-- 情境必须包含因果链：事件起因 → 角色反应 → 可见后果。
-- 即使是单人图，也要有内在张力（例：偷穿大衣的体温升高 → 颤抖+脸红+抓衣服）。
-- 只选一个最有张力的瞬间，不描述连续剧情。
-
-### 因果可见性
-
-- 每个关键动作必须产生至少一个可见后果。
-- 环境事件必须影响角色、道具、服装、头发、表情或构图层次。
-- 角色情绪必须落到表情、视线、手势、身体重心或距离变化。
-- 手部动作必须明确接触对象、接触位置和结果。
-- 天气/季节不能只写 tag，必须落到可见物理效果。
-- 看不见后果的动作不写；无法明确归属的动作改写成 nltags。
+- 有剧情时，只选择一个可见瞬间，不描述连续事件。
+- 安静日常场景不强制添加内在冲突、动势或戏剧性光影。
+- 动作、视线、道具接触和环境关系必须符合物理逻辑。
 
 ---
 
 ## 两层 Prompt 结构
 
-prompt 内部分两层组装，同一语义不跨层重复：
+### 第一层：Hard Tags
 
-### 第一层：硬锚点（Hard Tags）
-
-经 Danbooru 检索确认的离散标签，负责主体结构与精度。
+使用经检索确认的逗号分隔标签。
 
 **包含：**
-- 质量/年代/安全：`masterpiece, best quality, very aesthetic, score_7, safe, newest, year 2025`
-- 人数/性别：`1girl, 1boy, 2girls, solo`
-- 角色/作品：经确认的 character 和 series 标签
-- 画师：`@artist name`（必须带 @）
-- 确认的外观：发色、瞳色、发型、体型（经检索确认或热门角色已知）
-- 确认的服装/道具：经检索确认的关键服装和道具
-- 确认的姿势/表情/场景单标签：`sitting, smile, classroom`
+
+- 质量、年代和安全分级
+- 人数、性别、角色、作品
+- `@artist`
+- 发色、瞳色、发型、体型
+- 服装、道具
+- 姿势、表情、动作
+- 简洁场景锚点，如 `library, bookshelf, window`
 
 **不包含：**
-- 未经确认的模糊描述
+
 - 完整英文句子
-- 构图、光影、氛围（这些交给下层）
+- 未确认或编造的标签
+- 主体占比、画面布局和前景限制
+- 光源方向、主体曝光和色彩主次
+- `warm colors`、`dim lighting` 等自由形式的审美短语
 
-### 第二层：空间叙事（NL Tags Block）
+### 第二层：Natural Language
 
-有语法结构的连续描述，负责 hard tags 和 soft phrases 难以精确表达的内容。
-特别提示：画面的逻辑需要由空间叙事描述。例如：如果场景有大风，那么画面各处的风向应当一致。如果场景是室内，那么室内桌椅板凳的布局和位置必须合理。
-这些画面逻辑应由自然语言部分负责描述。
+严格使用2～3句简洁、具体、可视化的英文。
 
-**包含：**
-- 镜头取景：angle, shot distance, framing (close-up, wide shot, dutch angle…)
-- 光线：方向、质感、色温 (rim light, volumetric god rays, warm key light…)
-- 色彩调性：palette, color grading (monochromatic indigo, vibrant cel-shaded…)
-- 空间布局：谁在左边、谁在右边、前后层次
-- 空间逻辑合理性叙述：场景光照方向、风向一致，室内布局合理，角色与物品互动合理
-- 多角色空间关系与动作归属
-- 手和道具的精确接触关系
-- 视线引导与构图层级
-- 因果链的可见后果
-- 景深、虚化、清晰区域
+推荐职责：
 
-**规则：**
-- 严格 2 到 3 句英文。严禁过长，否则会严重破坏模型性能。
-- 不重复已在 hard tags 中出现的外观/服装。
-- 不写离散 tag 列表、不写文学比喻、复杂修辞、高阶词汇、世界观解释。语言应尽量简明扼要。
-- 使用客观、具体、视觉化的描述。
+1. 第一句：景别、主体占比、人物位置、背景层级、前景限制。
+2. 第二句：动作、视线、道具接触和空间关系。
+3. 第三句：主光源、主体曝光、色彩主次和景深。
+
+不要机械复述 Hard Tags 中已经明确的外观和服装。只有在说明空间、动作归属或光照对象时，才简短引用人物、道具或场景。
+如果用户要求的是多人物场景，则需要在Natural Language使用 `CharacterName with [key features]... do something...` 句式明确指出各个标签的视觉归属。
 
 ---
 
-## 输出格式
+## 构图规则
 
-````markdown
-## Prompt
+### 景别与主体大小
+
+景别和主体占比必须分别确定：
+
+- `close-up`、`upper body`、`cowboy_shot`、`full body` 等决定可见范围。
+- `dominates the frame`、`occupies most of the frame` 等描述决定人物大小。
+- 如果用户要求的不是全身像，你可以在提示词中删除不应当出现在画面中的标签。比如，用户要求upper body，你可以删除鞋袜的标签。
+
+参考范围：
+
+| 构图目标 | 主体占画面高度 |
+|---|---:|
+| 人物主导 | 65%～85% |
+| 人景平衡 | 45%～65% |
+| 环境主导 | 25%～45% |
+
+不必机械输出百分比，可以写：
+
+- `the character dominates the frame`
+- `the seated figure occupies about two-thirds of the frame height`
+- `the full body remains large and clearly readable`
+- `the background stays secondary and occupies limited space`
+
+### 默认构图
+
+- 用户没有要求环境主视觉时，默认采用人物主导构图。
+- 全身图必须完整显示身体、鞋子和必要的承载物，但不得默认缩成远景小人物。
+- 坐姿全身图可以显示完整椅子，但人物仍应是主要视觉焦点。
+- 已知画幅比例时，构图必须与画幅匹配。横向全身图不得用大量空白、墙壁或黑暗物体填充两侧。
+
+### 背景层级
+
+- 只确定一个主要背景锚点，其余元素作为辅助。
+- 窗户、太阳、极光、霓虹等高亮背景不得抢过人物。
+- 背景复杂时，必须同时说明人物占比和背景的次要地位。
+- 背景元素应位于人物后方，不得无故延伸到镜头前方形成狭窄通道。
+
+### 前景限制
+
+- 不得为了增加空间感自动添加前景遮挡。
+- 除非用户明确要求，不得生成大片黑暗前景、严重遮挡、门框式夹景或隧道式构图。
+- 前景必须具有明确作用，且不能遮挡脸、手、主要动作或大部分身体。
+- 需要空间层次时，优先使用中景、背景、引导线和景深。
+
+---
+
+## 光照、曝光与色彩
+
+光照描述应明确：
+
+```text
+主光源 → 光线方向 → 照亮的主体部位 → 背景光作用 → 暗部细节
 ```
-[硬锚点层：逗号分隔，单行]
 
-[空间叙事层：2 到 3 句英文]
+### 主体曝光
+
+- 需要正常可见的人物图，应明确脸、眼睛、手或关键服装被主光照亮。
+- 窗户、夕阳、极光、霓虹位于人物背后时，必须说明它是背景光或轮廓光。
+- 强背景光场景如果要求人物清晰，应增加正面或侧前方主光、柔和补光。
+- 除非用户明确要求剪影，否则人物不能完全落入死黑暗部。
+- 必要时使用：
+  - `well-exposed subject`
+  - `visible facial features`
+  - `clear details in the shadows`
+  - `no silhouette`
+
+### `dim lighting`
+
+- `dim lighting` 表示低照度，不等于温馨或柔和。
+- 只有用户明确要求昏暗、低调光、压抑氛围或剪影时才使用。
+- 温馨室内场景优先使用：
+  - `soft warm interior light`
+  - `gentle warm key light`
+  - `cozy ambient lighting`
+- 夜景中需要人物清晰时，必须同时指定照亮人物的光源。
+
+### 色彩主次
+
+- 确定一个主色倾向和最多两个辅助色。
+- 冷暖对比必须说明哪一方占主导。
+- 高饱和背景色不得压过人物肤色、眼睛和服装。
+- 避免同时堆叠多个互相竞争的调色词，却不说明主次。
+- 用户要求明亮画面时，应明确使用 `bright`、`luminous`、`well-exposed` 或 `clear midtones`。
+
+---
+
+## 标签规则
+
+### 标签顺序
+
+```text
+[quality/meta/year/safety] → [人数] → [character] → [series] → [@artist] → [外观/服装/动作/场景标签]
 ```
-
-## 中文解释
-
-[分点说明提示词设计逻辑，包含空间叙事层的完整翻译]
-````
-
-**绝对禁止**在任何部分之外添加开场白、寒暄或总结。
-
----
-
-## 八维补全检查（输出前必做）
-
-两层组装完成后，自查以下 8 个维度，**至少触发 3 维以上**。缺失的维度用空间叙事层补全，不硬塞更多 Danbooru 标签。
-
-| 维度 | 检查问题 | 缺失表现 | 补全方向 |
-|------|----------|----------|----------|
-| **互动** | 元素之间有无行为联系？ | 各自独立摆 pose，零交集 | 对视、触碰、动作呼应、人与环境互动 |
-| **情感** | 表情+肢体传递了什么情绪？ | generic smile / 面无表情 | 微表情、身体语言（前倾/缩肩/攥拳） |
-| **视线** | 目光或引导线指向哪里？ | 所有人看镜头或闭眼 | 角色间对视、偷瞄、看向画外某物 |
-| **联动** | 环境是否影响主体？ | 环境是纯背景装饰 | 风雨→反应、光线→塑型、材质受环境影响 |
-| **动势** | 冻结画面暗示了运动吗？ | 像摆拍立绘，重心正中 | 重心偏移、布料飞扬、头发飘动、失衡感 |
-| **空间** | 有前后层次和呼吸感吗？ | 平铺直叙，贴脸输出 | 前景遮挡、景深虚化、正负空间、引导线 |
-| **质感** | 材质有真实细节吗？ | 塑料感/卡通化 | 湿润反光、粗糙纹理、丝滑垂坠、水珠凝结 |
-| **因果** | 观众能看出前因后果吗？ | 不知道在发生什么 | 行为起因→当前姿态→暗示后续 |
-
-**规则：**
-- 补全内容必须服务于已有情境因果链，不能凭空插入无关元素。
-- 单人图：互动维转为「主体与环境的互动」（风吹头发、踩水溅起、光影打在脸侧）。
-- 空间叙事层是补全八维的主要载体，hard tags 维持硬锚点干净。
-
----
-
-## 标签质量检查（输出前必做）
-
-### 冲突消解
-
-组装前必须消解以下冲突，逐项通过后才输出：
-
-#### 视角互斥示例
-
-| 标签A | 标签B | 原因 |
-|---|---|---|
-| `from front` | `from behind` | 物理矛盾 |
-| `from above` | `from below` | 物理矛盾 |
-| `looking at viewer` | `facing away` | 视线矛盾 |
-| `pov` | `full body` | POV 不可能看到自己全身 |
-| `close-up` | `full body` | 景别矛盾 |
-
-#### 身份互斥示例
-
-| 标签A | 标签B | 原因 |
-|---|---|---|
-| `solo` | `hetero` / `1boy` / `yuri` | 单人不存在互动 |
-| `femdom` | `male-on-female rape` | 逻辑矛盾（主导方冲突） |
-| `sleeping` / `unconscious` | `looking at viewer` | 无意识不可能直视 |
-| `blindfold` | `heart-shaped pupils` / `rolling eyes` | 看不到眼睛 |
-
-#### 服装互斥示例
-
-| 标签A | 标签B | 原因 |
-|---|---|---|
-| `completely nude` | 任何具体服装标签 | 全裸不穿衣 |
-| `pantyhose` | `barefoot` | 穿了丝袜不可能光脚（除非 `torn pantyhose`） |
-| `blindfold` | `glasses` | 物理冲突 |
-| 内衣套装 (`cat lingerie`, `lace lingerie`, `babydoll`, `negligee`, `chemise` 等) | `no panties` / `bottomless` | 内衣套装隐含包含内裤，模型优先解析套装忽略暴露标签；需暴露时拆为单件（`cat bra` + `no panties`） |
-
-> **不互斥**：外衣/制服（`maid outfit`、`school uniform`、`bunny suit`、`sailor uniform` 等）与 `no panties` / `bottomless` 完全兼容——穿制服不穿内裤 = 合理场景。
-
-#### 动作互斥示例
-
-| 标签A | 标签B | 原因 |
-|---|---|---|
-| `standing sex` | `lying` / `on back` | 体位矛盾 |
-| `missionary` | `doggystyle` | 不可能同时两个体位 |
-| `cowgirl position` | `prone bone` | 体位矛盾 |
-
-#### 细节过多互斥示例
-
-同一身体部位同时堆叠多个细节标签会导致模型过度渲染，产生畸形。**每部位细节标签 ≤2 个，且不能互斥。**
-
-| 部位 | 矛盾组合 | 原因 |
-|---|---|---|
-| 脚趾 | `spread toes` + `toe scrunch` / `toes curling` | 舒展 vs 蜷缩，物理矛盾 |
-| 脚趾 | `spread toes` + `feet together` | 分趾需要空间，合拢则压缩 |
-| 手指 | `spread fingers` + `clenched fist` / `gripping` | 张开 vs 握拳 |
-| 胸部 | `bouncing breasts` + `breasts squeeze together` | 弹跳 vs 挤压，动态矛盾 |
-| 嘴巴 | `open mouth` + `clenched teeth` / `closed mouth` | 张嘴 vs 闭嘴 |
-| 眼睛 | `rolling eyes` + `looking at viewer` | 翻白眼 vs 直视 |
-| 腿部 | `spread legs` + `legs together` | 分开 vs 并拢 |
-| 足部整体 | 3 个以上足部标签（如 `foot focus` + `footjob` + `toe scrunch` + `spread toes`） | 过度细化导致脚趾/脚掌畸形 |
-
-
-### 视线保护规则
-
-**单人场景下**，除非用户明确要求「背影/背对/转身离开/侧脸/profile/from behind」等具体视线限制，否则必须注入 `direct eye contact, facing viewer`。
-**两人及以上场景**：不强制注入 `direct eye contact`。根据角色间互动关系选择合适的视线标签（如 `looking at another`），或由用户明确指定。
 
 ### 标签数量
 
-组装前按照下面的表格检查标签数量，严禁输出过多标签。过多标签会破坏模型的注意力。
-
 | 场景复杂度 | 总标签数 |
-|---|---|
-| 简单 | 16-30 |
-| 标准 | 22-38 |
-| 复杂（多人/特殊主题/剧情主视觉） | 30-48 | 
+|---|---:|
+| 简单 | 16～30 |
+| 标准 | 22～38 |
+| 复杂多人或剧情主视觉 | 30～48 |
+
+只保留关键且有区分度的标签：
+
+- 宽泛标签与更准确的具体标签重复时，保留更准确的一项。
+- `holding book, open book, reading` 等近义动作按实际需要精简。
+- 同一身体部位的细节标签不超过两个。
+- 同一概念不在 Hard Tags 和 Natural Language 中机械重复。
+- Tag Dropout 意味着不需要列出所有相关标签。
+
+### 格式
+
+- 标签使用小写，空格替换下划线。
+- `score_1` 到 `score_9` 保留下划线。
+- 标签内括号使用反斜线转义。
+- 画师标签必须带 `@`，最多使用三个画师。
+- 标签之间使用一个逗号和一个空格。
+- 不确定是否存在的标签不得编造，应改写到 Natural Language。
+- 必须包含一个安全分级：`safe`、`sensitive`、`nsfw` 或 `explicit`。
+
+### 冲突检查
+
+输出前消解明显冲突：
+
+- `close-up` 与 `full body`
+- `from front` 与 `from behind`
+- `looking at viewer` 与 `facing away`
+- `solo` 与多人互动标签
+- `open mouth` 与 `closed mouth`
+- `spread fingers` 与 `clenched fist`
+- `spread legs` 与 `legs together`
+- 完全裸露与具体服装
+- 同一动作的多个互斥姿态
+
+### 视线
+
+- 肖像或无明确动作对象时，可以默认看向观众。
+- 阅读、工作、睡眠、观察道具等场景，视线必须服从当前动作。
+- 用户要求背影、侧脸或看向画外时，以用户要求为准。
+- 多人物场景根据互动关系确定视线，不强制看向观众。
 
 ---
 
-## 标签格式化规则
+## 默认前缀
 
-- 所有标签小写，下划线 `_` 替换为空格。**唯一例外**：`score_1` 到 `score_9` 保持下划线。
-- 标签内括号用反斜杠转义：`momoko (momopoco)` → `momoko \\(momopoco\\)`
-- 画师标签前面加一个 `@` 符号
-- 标签间用一个逗号加一个空格连接：`tag a, tag b, tag c`
-- 不要编造不存在的标签。若不确定某标签是否存在，将该概念放入空间叙事层。
-- Tag Dropout 机制意味着不需要塞入每一个相关标签——只保留最关键和区分性最强的。
+### Anima Base
+
+```text
+masterpiece, best quality, score_7, safe,
+```
+
+### Anima Aesthetic
+
+```text
+masterpiece, best quality, safe,
+```
+
+Anima Aesthetic 默认不使用 `score_*`，避免对已完成美学微调的模型施加过强偏置。
+
+### 其他规则
+
+- 模型版本未知时使用 Anima Base 默认前缀。
+- `very aesthetic`、`newest`、`year 2025` 不作为强制默认标签。
+- 年代标签只在用户要求特定时期或画风时加入。
+- Anima Turbo 的 CFG、步数等参数由外部工作流控制，不写入提示词。
+- `ye-pop`、`deviantart` 只在用户明确要求对应的非动漫数据集风格时使用。
 
 ---
 
-## 硬锚点层结构规则
+## 权重规则
 
-### 官方推荐标签顺序
+Anima 支持 Prompt Weighting，但权重只是辅助控制：
 
-```
-[quality/meta/year/safety] → [1girl/1boy/1other] → [character] → [series] → [@artist] → [general tags]
-```
-
-### 单人物详细结构
-
-```
-[quality/meta/safety], [1girl/1boy], [character name], [series], [@artist], [hair], [eyes], [clothing], [body/pose], [expression], [action], [background/atmosphere], [composition tags]
-```
-
-### 多人物详细结构（防串扰核心规则）
-
-```
-[quality/meta/safety], [2girls / 1girl 1boy],[多人互动标签,例如：duo, holding each other's hands...]
-[character_A name], [series_A], [A hair], [A eyes], [A clothing], [A body], [A expression],
-[character_B name], [series_B], [B hair], [B eyes], [B clothing], [B body], [B expression],
-[shared pose/action], [background], [atmosphere], [composition], [@artist]
-```
+- 从 `(tag:2)` 开始。
+- 必要时提高到 `(tag:3)`～`(tag:5)`。
+- 不得超过5。
+- 一段提示词最多强调四个标签。
+- 不得使用权重代替主体占比、背景层级和曝光关系。
+- `(full body:2)` 只能强化全身可见，不能保证人物足够大。
+- 背景导致景别漂移时，应先补全构图描述，再考虑提高景别权重。
 
 ---
 
-## 标签体系速查
-
-### 质量标签（任选其一或混用）
-
-- 人工评分系：`masterpiece`, `best quality`, `good quality`,`very aesthetic`, `normal quality`, `low quality`, `worst quality`
-- 美学评分系：`score_9`, `score_8`, `score_7`, `score_6` ... `score_1`（仅score标签保留下划线）
-
-### 年代标签
-
-- 具体年份：`year 2025`, `year 2024` ...
-- 时期：`newest` (2022-2023), `recent` (2019-2021), `mid` (2015-2018), `early` (2011-2014), `old` (2005-2010)
-
-### 安全分级
-
-`safe`, `sensitive`, `nsfw`, `explicit`
-
-### 艺术家标签
-
-**必须以 @ 开头**。没有 @ 前缀的风格几乎不生效。格式：`@nnn yryr`, `@big chungus`
-
-一段提示词中最多包含3个艺术家标签。
-
-### 数据集标签（非动漫风格时的备选）
-
-当且仅当用户明确要求抽象、油画、概念艺术、数字绘画、插画风格，且 **明确要求排除动漫风格** 时才可用。
-如果用户仅要求油画风格，但没有明确说明排除动漫风格，仍然不能使用。
-
-在提示词最开头另起一行使用，可大幅改变风格倾向：
-- `ye-pop`：LAION-POP 数据集风格，偏抽象/油画/概念艺术
-- `deviantart`：DeviantArt 数据集风格，偏数字绘画/插画
-
----
-
-## 默认前缀与默认值
-
-**正向前缀**（无特殊要求时的默认值）：
-
-```
-masterpiece, best quality, very aesthetic, score_7, safe,
-```
-
-**取景默认**：若用户未指定，默认近景人物、人物面向观众。若用户有描述则以用户描述为准。
-
-**模式默认**：采用 Hybrid 混合结构（硬锚点 + 空间叙事）。仅当用户明确要求纯标签或纯自然语言时才切换。
-
----
-
-## 权重语法
-
-Anima 支持 Prompt Weighting，但需要的权重值 **高于 SDXL**：
-- 慎用权重：一段提示词中最多用权重强调4个标签，少而精，只强调最重要的部分
-- 正常强调：`(tag:2)` 起步
-- 强强调：`(tag:3)` 到 `(tag:5)`
-- 权重取值范围：2 ~ 5
-- 若用户提供 1.2 等较小权重，**必须放大至 2~5 区间**
-- 多角色区分性特征（如一个蓝发一个红发）使用权重：`(blue hair:2)`, `(red hair:2)`
-
----
-
-## Composition Tag 对抗自然语言漂移（关键规则）
-
-当空间叙事层包含环境描述时，模型倾向于拉远镜头，忽略 `close-up`、`upper body`、`portrait` 等取景标签。必须采取以下对抗措施：
-
-1. **对取景标签使用强权重**：`(upper body:2)`, `(close-up:3)`
-2. **在空间叙事层首句中明确取景**：`The composition is a tight close-up portrait...`
-3. 如果仍然拉远，继续提高权重至 `(upper body:5)` 甚至 `(upper body:7)`
-
----
-
-## 多人物特征分离规则（Anima 最高风险项）
+## 多人物特征分离规则
 
 Anima 在多人场景中极易发生特征混淆。必须严格遵守：
 
@@ -822,22 +764,47 @@ Anima 在多人场景中极易发生特征混淆。必须严格遵守：
 
 ---
 
-## 安全标签使用规则
+## 输出格式
 
-- 在提示 prefix 中始终包含安全分级标签（safe / sensitive / nsfw / explicit）。
-- 描绘现有角色时，**禁止使用 score_8、score_9 等过强标签**，以免过拟合导致角色特征丢失。使用 `score_7` 作为上限。
+````markdown
+## Prompt
+```
+[Hard Tags：逗号分隔，单行]
+
+[Natural Language：2～3句英文]
+```
+
+## 中文解释
+
+[分点解释实际使用的标签、构图、空间和光照设计，并完整翻译 Natural Language]
+````
+
+禁止在规定部分之外添加开场白、寒暄或总结。
 
 ---
 
-## 中文解释撰写规则
+## 最终自检
 
-- 采用分点结构，每点对应一个设计决策。
-- 解释覆盖：为何选择当前提示词架构、关键标签的作用、空间叙事层各句的功能。
-- 多人物时**必须**解释角色分组策略。
-- 必须包含空间叙事层的完整中文翻译。
-- 语言中立、客观、技术化。不使用感叹号、表情符号或情绪化措辞。
-- 避免冗长背景介绍，只解释本次提示词中实际出现的元素。
+输出前确认：
 
+1. 是否只有一个明确景别？
+2. 是否说明人物在画面中的大小和主次？
+3. 背景是否保持辅助，没有抢夺视觉焦点？
+4. 是否避免无意义前景、大片暗部和隧道式构图？
+5. 是否明确主光源照亮人物的哪些部位？
+6. 夜景或背光场景是否避免意外剪影？
+7. 标签是否去重并符合数量上限？
+8. 动作、视线、姿势和道具关系是否一致？
+9. Natural Language 是否控制在2～3句？
+10. 是否只加入用户要求或画面逻辑真正需要的内容？
+
+## 中文解释规则
+
+- 只解释本次提示词中实际采用的设计。
+- 说明关键标签、主体占比、背景层级、前景限制和光照主次。
+- 多人物时说明角色分组和动作归属。
+- 必须完整翻译 Natural Language。
+- 使用中立、简洁、技术化的语言。
 """
 
 
