@@ -191,6 +191,7 @@ def _resolve_group_render_limit(default: int = 80) -> int:
 GROUP_RENDER_TAG_LIMIT = _resolve_group_render_limit()
 ARTIST_REC_LIMIT = 64
 ARTIST_REC_PAGE_SIZE = 8
+RELATED_REC_PAGE_SIZE = 10
 RECOMMENDATION_DEBOUNCE_SECONDS = 0.1
 WORKSPACE_SAVE_DEBOUNCE_SECONDS = 0.3
 
@@ -424,6 +425,7 @@ class DanbooruSearchUI:
         self.related_list_container = None  # 右栏关联推荐列表
         self.group_expansion_container = None  # 左栏 Group 同类扩展（表格下方）
         self.artist_rec_pagination = None
+        self.related_pagination = None
         self.client = None
         self._group_render_limits: dict[str, int] = {}
         self._group_expanded_names: set[str] = set()
@@ -503,6 +505,13 @@ class DanbooruSearchUI:
 
         # 关联推荐的 checkbox 引用
         self._related_checkboxes: dict[str, ui.checkbox] = {}
+        self._related_results: list = []
+        self._related_show_nsfw = True
+        self._related_page = 1
+        self._related_page_count = 0
+        self._related_page_label = None
+        self._related_prev_button = None
+        self._related_next_button = None
         # 同类标签的 checkbox 引用
         self._group_checkboxes: dict[str, ui.checkbox] = {}
         # 推荐画师的 checkbox 引用
@@ -785,7 +794,9 @@ class DanbooruSearchUI:
         confirm.open()
 
     def _build_release_announcement(self):
-        self.announcement_banner = ui.element('div').classes('w-full release-notice px-3 py-2')
+        self.announcement_banner = ui.element('div').classes(
+            'w-full release-notice section-surface px-3 py-2'
+        )
         with self.announcement_banner:
             with ui.row().classes('w-full items-center justify-between gap-2'):
                 with ui.row().classes('items-center gap-2 min-w-0 flex-wrap'):
@@ -1019,6 +1030,28 @@ class DanbooruSearchUI:
                                        pointer-events: none !important; user-select: none !important; }
                 .nsfw-checkbox-disabled { pointer-events: none !important; opacity: 0.3 !important; }
                 .nsfw-row-blocked    { cursor: not-allowed !important; }
+                .result-table-flat {
+                    border-radius: 4px;
+                    box-shadow: none !important;
+                }
+                .result-table-flat .q-table th,
+                .result-table-flat .q-table td {
+                    border-color: var(--cell-border);
+                }
+                .recommendation-grid {
+                    overflow: hidden;
+                    background: #ffffff;
+                    border-top: 1px solid var(--cell-border);
+                    border-bottom: 1px solid var(--cell-border);
+                }
+                .recommendation-row + .recommendation-row {
+                    border-top: 1px solid var(--cell-border);
+                }
+                .recommendation-cell {
+                    align-self: stretch;
+                    display: flex;
+                    align-items: center;
+                }
                 .related-item { transition: background-color 0.15s ease; }
                 .related-item:hover { background-color: rgba(74, 144, 226, 0.04); }
                 .tag-link { text-decoration: none; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; }
@@ -1038,10 +1071,32 @@ class DanbooruSearchUI:
                 .weight-label { font-family: Consolas, Monaco, monospace; font-size: 11px;
                                 color: #888; min-width: 28px; text-align: center; }
 
+                :root {
+                    --section-surface: #f8fafc;
+                    --section-border: #dbe4ee;
+                    --cell-border: #e2e8f0;
+                    --section-heading: #334155;
+                    --section-radius: 8px;
+                }
                 .product-search-card {
-                    border: 1px solid #d8e4f1;
-                    border-top: 4px solid #4a90e2;
-                    box-shadow: 0 6px 20px rgba(38, 76, 115, 0.08);
+                    background: #ffffff;
+                    border: 1px solid var(--section-border);
+                    border-top: 3px solid #4a90e2;
+                    border-radius: var(--section-radius);
+                    box-shadow: none;
+                }
+                .section-surface {
+                    box-sizing: border-box;
+                    background: var(--section-surface);
+                    border: 1px solid var(--section-border);
+                    border-radius: var(--section-radius);
+                    box-shadow: none !important;
+                }
+                .section-heading {
+                    color: var(--section-heading);
+                    font-size: 14px;
+                    font-weight: 700;
+                    line-height: 1.4;
                 }
                 .service-state-panel {
                     border-radius: 8px;
@@ -1064,16 +1119,7 @@ class DanbooruSearchUI:
                     color: #c2410c;
                 }
                 .query-insight-panel {
-                    background: #f8fafc;
-                    border: 1px solid #dbe4ee;
-                    border-radius: 8px;
                     padding: 10px 12px;
-                }
-                .release-notice {
-                    background: #f8fbff;
-                    border: 1px solid #dbeafe;
-                    border-left: 3px solid #4a90e2;
-                    border-radius: 8px;
                 }
                 .homepage-support-note {
                     color: #64748b;
@@ -1236,7 +1282,7 @@ class DanbooruSearchUI:
 
             # ── 3. 工作区工具和已选标签（无需搜索即可恢复）──
             self.workspace_card = ui.card().classes(
-                'w-full p-0 gap-0 overflow-hidden bg-blue-50 border border-blue-200'
+                'w-full p-0 gap-0 overflow-hidden section-surface'
             )
             with self.workspace_card:
                 self._build_workspace_toolbar()
@@ -1420,11 +1466,11 @@ class DanbooruSearchUI:
 
     def _build_workspace_toolbar(self):
         with ui.element('div').classes(
-            'w-full bg-slate-50 border-b border-blue-100 px-4 py-2'
+            'w-full bg-slate-50 border-b border-slate-200 px-4 py-2'
         ):
             with ui.row().classes('w-full items-center gap-2 flex-wrap'):
                 ui.icon('workspaces', color='primary')
-                ui.label('标签工作区').classes('font-bold text-slate-700 mr-2')
+                ui.label('标签工作区').classes('section-heading mr-2')
                 self.undo_btn = ui.button(
                     '撤销', icon='undo', on_click=self._undo_workspace,
                 ).props('dense flat color=grey-7')
@@ -3244,9 +3290,9 @@ class DanbooruSearchUI:
         self.two_col_container = ui.element('div').classes('w-full two-col-layout')
         with self.two_col_container:
             # ── 左栏：语义匹配结果（表格）──
-            with ui.card().classes('col-left'):
+            with ui.card().classes('col-left section-surface'):
                 with ui.row().classes('items-center justify-between mb-2 w-full'):
-                    ui.label('匹配标签结果').classes('font-bold text-lg text-gray-800')
+                    ui.label('匹配标签结果').classes('section-heading')
                     ui.button('复制全部标签', icon='content_copy', on_click=self._copy_all_tags) \
                         .props('dense flat color=primary').classes('text-sm')
 
@@ -3256,7 +3302,9 @@ class DanbooruSearchUI:
                     pagination=0,
                     selection='multiple',
                     row_key='tag',
-                ).classes('w-full')
+                ).props('flat separator=horizontal').classes(
+                    'w-full result-table-flat'
+                )
                 self.result_table.on('selection', self._update_selection_display)
                 self.result_table.on('link_click', self._mark_interaction)
                 self.result_table.on('translation_feedback', self.report_translation_error)
@@ -3358,18 +3406,20 @@ class DanbooruSearchUI:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
 
             # ── 右栏：推荐画师 + 关联推荐 ──
-            with ui.card().classes('col-right'):
+            with ui.card().classes('col-right section-surface'):
                 # 推荐画师
                 with ui.row().classes('items-center justify-between w-full mb-2'):
                     with ui.row().classes('items-center gap-2'):
-                        ui.label('推荐擅长画师(Beta)').classes('font-bold text-lg text-gray-800')
+                        ui.label('推荐擅长画师(Beta)').classes('section-heading')
                         with ui.icon('info_outline', size='sm', color='grey').classes('cursor-help'):
                             with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
                                 ui.html(
                                     '基于标签-画师 NPMI 共现数据，根据您当前已选的标签，推荐擅长这些元素的画师。<br>悬停画师行可查看与该画师共现关联最强的标签。').style(
                                     'font-size:14px;line-height:1.5;')
 
-                self.artist_rec_list = ui.column().classes('w-full gap-0')
+                self.artist_rec_list = ui.column().classes(
+                    'w-full gap-0 recommendation-grid'
+                )
                 with self.artist_rec_list:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
                 self.artist_rec_pagination = ui.column().classes('w-full')
@@ -3379,7 +3429,7 @@ class DanbooruSearchUI:
                 # 关联推荐
                 with ui.row().classes('items-center justify-between w-full mb-2'):
                     with ui.row().classes('items-center gap-2'):
-                        ui.label('关联推荐').classes('font-bold text-lg text-gray-800')
+                        ui.label('关联推荐').classes('section-heading')
                         with ui.icon('info_outline', size='sm', color='grey').classes('cursor-help'):
                             with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
                                 ui.html(
@@ -3390,28 +3440,55 @@ class DanbooruSearchUI:
                     ui.button('根据已选刷新', icon='refresh', on_click=self._manual_refresh_related) \
                         .props('dense flat color=primary').classes('text-sm')
 
-                self.related_list_container = ui.column().classes('w-full gap-0')
+                self.related_list_container = ui.column().classes(
+                    'w-full gap-0 recommendation-grid'
+                )
                 with self.related_list_container:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
+                self.related_pagination = ui.column().classes('w-full')
 
     # ══════════════════════════════════════════════════════════════════════
     # 渲染关联推荐列表
     # ══════════════════════════════════════════════════════════════════════
 
-    def _render_related_list(self, related: list, show_nsfw: bool):
+    def _set_related_page(self, page: int):
+        """切换关联推荐页，只构建当前页的可见行。"""
+        if self._related_page_count < 1:
+            return
+        self._related_page = max(1, min(page, self._related_page_count))
+        self._render_related_page()
+        if self._related_page_label is not None:
+            self._related_page_label.text = (
+                f'{self._related_page} / {self._related_page_count}'
+            )
+        if self._related_prev_button is not None:
+            if self._related_page == 1:
+                self._related_prev_button.disable()
+            else:
+                self._related_prev_button.enable()
+        if self._related_next_button is not None:
+            if self._related_page == self._related_page_count:
+                self._related_next_button.disable()
+            else:
+                self._related_next_button.enable()
+
+    def _render_related_page(self):
+        """重建当前关联推荐页，节点数量固定不超过 10 条。"""
         self.related_list_container.clear()
         self._related_checkboxes.clear()
 
-        filtered = [r for r in related if not (r.nsfw == '1' and not show_nsfw)]
-        if not filtered:
+        if not self._related_results:
             with self.related_list_container:
                 ui.label('暂无推荐').classes('text-sm text-gray-400 italic p-4')
             return
 
         selected_now = set(self._get_selected_tags())
+        start = (self._related_page - 1) * RELATED_REC_PAGE_SIZE
+        end = start + RELATED_REC_PAGE_SIZE
+        page_results = self._related_results[start:end]
 
         with self.related_list_container:
-            for r in filtered:
+            for r in page_results:
                 tag = r.tag
                 cn_first = r.cn_name.split(',')[0].strip() if r.cn_name else ''
                 is_selected = tag in selected_now
@@ -3454,50 +3531,101 @@ class DanbooruSearchUI:
 
                 # 整行容器，tooltip 挂在行上
                 with ui.row().classes(
-                    'w-full flex-nowrap items-center gap-2 px-3 py-2 overflow-hidden '
-                    'related-item border-b border-gray-100'
+                    'w-full flex-nowrap items-stretch gap-0 overflow-hidden '
+                    'related-item recommendation-row'
                 ).style(row_bg):
                     # 整行 wiki tooltip
                     if tooltip_html:
                         with ui.tooltip().props('content-class="bg-black text-white shadow-4" max-width="500px"'):
                             ui.html(tooltip_html).style('font-size:14px;line-height:1.5;max-width:480px;')
 
-                    # Checkbox
-                    cb = ui.checkbox(
-                        '', value=is_selected,
-                        on_change=lambda e, t=tag: self._on_related_checkbox_change(t, e.value)
-                    ).props('dense').classes('flex-none')
-                    self._related_checkboxes[tag] = cb
+                    # Checkbox 单元格
+                    with ui.element('div').classes(
+                        'recommendation-cell flex-none justify-center px-2 py-2'
+                    ):
+                        cb = ui.checkbox(
+                            '', value=is_selected,
+                            on_change=lambda e, t=tag: self._on_related_checkbox_change(t, e.value)
+                        ).props('dense').classes('flex-none')
+                        self._related_checkboxes[tag] = cb
 
                     # 标签名（可点击跳转）+ 中文名
-                    with ui.column().classes('flex-1 gap-0 min-w-0 overflow-hidden'):
-                        with ui.row().classes('w-full flex-nowrap items-center gap-1 min-w-0 overflow-hidden'):
-                            link = ui.link(
-                                tag,
-                                f'https://danbooru.donmai.us/wiki_pages/{tag}',
-                                new_tab=True
-                            ).classes(
-                                'tag-link text-primary font-bold text-xs flex-1 min-w-0 truncate'
-                            )
-                            link.on('click', self._mark_interaction)
-                            if r.sources and r.sources[0].startswith('tag_group:'):
-                                group_display = r.sources[0].replace('tag_group:', '')
-                                ui.label(group_display).classes(
-                                    'text-xs text-orange-500 font-bold bg-orange-50 px-1 rounded'
+                    with ui.element('div').classes(
+                        'recommendation-cell '
+                        'flex-1 min-w-0 overflow-hidden px-3 py-2'
+                    ):
+                        with ui.column().classes('w-full gap-0 min-w-0 overflow-hidden'):
+                            with ui.row().classes('w-full flex-nowrap items-center gap-1 min-w-0 overflow-hidden'):
+                                link = ui.link(
+                                    tag,
+                                    f'https://danbooru.donmai.us/wiki_pages/{tag}',
+                                    new_tab=True
+                                ).classes(
+                                    'tag-link text-primary font-bold text-xs flex-1 min-w-0 truncate'
                                 )
+                                link.on('click', self._mark_interaction)
+                                if r.sources and r.sources[0].startswith('tag_group:'):
+                                    group_display = r.sources[0].replace('tag_group:', '')
+                                    ui.label(group_display).classes(
+                                        'text-xs text-orange-500 font-bold bg-orange-50 px-1 rounded'
+                                    )
 
-                        if cn_first:
-                            ui.label(cn_first).classes('w-full text-xs text-gray-500 truncate')
-                        ui.label(
-                            related_candidate_reason(r.sources)
-                        ).classes('w-full text-xs text-slate-500 truncate')
+                            if cn_first:
+                                ui.label(cn_first).classes('w-full text-xs text-gray-500 truncate')
+                            ui.label(
+                                related_candidate_reason(r.sources)
+                            ).classes('w-full text-xs text-slate-500 truncate')
 
-                    # 关联分数
-                    score_color = 'green' if r.cooc_score > 0.6 else ('teal' if r.cooc_score > 0.3 else 'grey')
-                    ui.label(score_pct).classes(
-                        f'flex-none ml-auto self-center text-sm font-bold '
-                        f'text-{score_color}-600 whitespace-nowrap'
+                    # 关联分数单元格
+                    with ui.element('div').classes(
+                        'recommendation-cell '
+                        'flex-none justify-end min-w-16 px-3 py-2'
+                    ):
+                        score_color = 'green' if r.cooc_score > 0.6 else ('teal' if r.cooc_score > 0.3 else 'grey')
+                        ui.label(score_pct).classes(
+                            f'text-sm font-bold text-{score_color}-600 whitespace-nowrap'
+                        )
+
+    def _render_related_list(self, related: list, show_nsfw: bool):
+        """保存关联推荐快照，并仅渲染当前页。"""
+        if self.related_list_container is None or self.related_pagination is None:
+            return
+        self.related_list_container.clear()
+        self.related_pagination.clear()
+        self._related_checkboxes.clear()
+        self._related_page = 1
+        self._related_page_label = None
+        self._related_prev_button = None
+        self._related_next_button = None
+        self._related_results = [
+            item for item in related
+            if not (item.nsfw == '1' and not show_nsfw)
+        ]
+        self._related_show_nsfw = show_nsfw
+        self._related_page_count = (
+            len(self._related_results) + RELATED_REC_PAGE_SIZE - 1
+        ) // RELATED_REC_PAGE_SIZE
+
+        if not self._related_results:
+            self._render_related_page()
+            return
+
+        if self._related_page_count > 1:
+            with self.related_pagination:
+                with ui.row().classes('w-full items-center justify-center gap-2 px-3 py-2'):
+                    self._related_prev_button = ui.button(
+                        '‹',
+                        on_click=lambda: self._set_related_page(self._related_page - 1),
+                    ).props('flat dense round color=grey-7')
+                    self._related_page_label = ui.label().classes(
+                        'text-xs text-gray-600 min-w-12 text-center'
                     )
+                    self._related_next_button = ui.button(
+                        '›',
+                        on_click=lambda: self._set_related_page(self._related_page + 1),
+                    ).props('flat dense round color=grey-7')
+
+        self._set_related_page(1)
 
     # ══════════════════════════════════════════════════════════════════════
     # 交互逻辑
@@ -3589,10 +3717,12 @@ class DanbooruSearchUI:
                 chip.style('box-shadow: 0 0 0 2px #4a90e2;')
 
         with self.coverage_container:
-            with ui.element('div').classes('w-full query-insight-panel'):
+            with ui.element('div').classes(
+                'w-full query-insight-panel section-surface'
+            ):
                 with ui.row().classes('w-full items-center gap-2 flex-wrap'):
                     ui.icon('manage_search', color='primary', size='sm')
-                    ui.label('查询理解').classes('text-sm font-bold text-slate-700')
+                    ui.label('查询理解').classes('section-heading')
                     ui.label(
                         f"已覆盖 {status_counts[COVERED]} · "
                         f"有候选 {status_counts[CANDIDATE_UNSELECTED]} · "
@@ -4234,33 +4364,47 @@ class DanbooruSearchUI:
                 tooltip_html += '</div>'
 
                 with ui.row().classes(
-                    'w-full items-center gap-2 px-3 py-2 related-item border-b border-gray-100'
+                    'w-full flex-nowrap items-stretch gap-0 overflow-hidden '
+                    'related-item recommendation-row'
                 ).style('background: rgba(244,114,182,0.04);') as row:
                     self._artist_rec_rows.append(row)
                     # tooltip
                     with ui.tooltip().props('content-class="bg-black text-white shadow-4" max-width="400px"'):
                         ui.html(tooltip_html).style('font-size:14px;line-height:1.5;max-width:380px;')
 
-                    # Checkbox
-                    cb = ui.checkbox(
-                        '', value=is_selected,
-                        on_change=lambda e, t=artist: self._on_artist_rec_checkbox_change(t, e.value)
-                    ).props('dense')
-                    self._artist_rec_checkboxes[artist] = cb
+                    # Checkbox 单元格
+                    with ui.element('div').classes(
+                        'recommendation-cell flex-none justify-center px-2 py-2'
+                    ):
+                        cb = ui.checkbox(
+                            '', value=is_selected,
+                            on_change=lambda e, t=artist: self._on_artist_rec_checkbox_change(t, e.value)
+                        ).props('dense')
+                        self._artist_rec_checkboxes[artist] = cb
 
                     # 画师名 + 信息
-                    with ui.column().classes('flex-grow gap-0 min-w-0'):
-                        ui.link(
-                            artist,
-                            f'https://danbooru.donmai.us/posts?tags={artist}',
-                            new_tab=True,
-                        ).classes('text-primary font-bold text-xs')
-                        ui.label(reason).classes('text-xs text-slate-500')
-                        ui.label(f'作品 {post_str}').classes('text-xs text-gray-400')
+                    with ui.element('div').classes(
+                        'recommendation-cell '
+                        'flex-grow min-w-0 overflow-hidden px-3 py-2'
+                    ):
+                        with ui.column().classes('w-full gap-0 min-w-0'):
+                            ui.link(
+                                artist,
+                                f'https://danbooru.donmai.us/posts?tags={artist}',
+                                new_tab=True,
+                            ).classes('text-primary font-bold text-xs')
+                            ui.label(reason).classes('text-xs text-slate-500')
+                            ui.label(f'作品 {post_str}').classes('text-xs text-gray-400')
 
-                    # 分值
-                    score_color = 'green' if normalized > 0.6 else ('teal' if normalized > 0.3 else 'grey')
-                    ui.label(score_pct).classes(f'text-sm font-bold text-{score_color}-600 whitespace-nowrap')
+                    # 分值单元格
+                    with ui.element('div').classes(
+                        'recommendation-cell '
+                        'flex-none justify-end min-w-16 px-3 py-2'
+                    ):
+                        score_color = 'green' if normalized > 0.6 else ('teal' if normalized > 0.3 else 'grey')
+                        ui.label(score_pct).classes(
+                            f'text-sm font-bold text-{score_color}-600 whitespace-nowrap'
+                        )
 
     def _render_artist_rec(self, artist_results, top_tags=None, show_nsfw: bool = True):
         """保存推荐快照，并仅渲染当前画师页。"""
