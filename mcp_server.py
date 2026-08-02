@@ -552,16 +552,17 @@ Anima 同时理解 Danbooru 标签和自然语言：
 
 ### 第二层：Natural Language
 
-严格使用2～3句简洁、具体、可视化的英文。
+单人物通常使用2～3句简洁、具体、可视化的英文。多人物场景优先为每个角色单独写一句，通常可扩展为3～6句；角色更多时可随人数适度增加，禁止为了满足句数限制把多名角色压进同一个长句。
 
 推荐职责：
 
-1. 第一句：景别、主体占比、人物位置、背景层级、前景限制。
-2. 第二句：动作、视线、道具接触和空间关系。
-3. 第三句：主光源、主体曝光、色彩主次和景深。
+1. 第一句：景别、主体占比、整体布局、背景层级、前景限制。
+2. 单人物时，第二句说明动作、视线、道具接触和空间关系；多人物时，先按角色分别说明画面位置、身份和少量关键特征。
+3. 多人物的角色锚定完成后，再用独立句子说明互动，明确写出动作发起者、承受者、接触对象和视线方向。
+4. 最后一句：主光源、主体曝光、色彩主次和景深。
 
 不要机械复述 Hard Tags 中已经明确的外观和服装。只有在说明空间、动作归属或光照对象时，才简短引用人物、道具或场景。
-如果用户要求的是多人物场景，则需要在Natural Language使用 `CharacterName with [key features]... do something...` 句式明确指出各个标签的视觉归属。
+多人物场景必须使用“画面方位 + 角色名/身份 + 关键辨识特征”的独立短句建立角色锚点；详细规则见“多人物特征分离规则”。
 
 ---
 
@@ -661,6 +662,8 @@ Anima 同时理解 Danbooru 标签和自然语言：
 [quality/meta/year/safety] → [人数] → [character] → [series] → [@artist] → [外观/服装/动作/场景标签]
 ```
 
+多人时，先完整列出人数，再按角色连续排列身份和作品锚点；同一角色的专属外观、服装和道具标签必须保持相邻，不与其他角色的同类属性交叉排列。
+
 ### 标签数量
 
 | 场景复杂度 | 总标签数 |
@@ -752,15 +755,26 @@ Anima 支持 Prompt Weighting，但权重只是辅助控制：
 
 ## 多人物特征分离规则
 
-Anima 在多人场景中极易发生特征混淆。必须严格遵守：
+Anima 的多人生成可以通过清晰的角色边界减少特征混淆，但提示词不能保证彻底消除串色。必须严格遵守：
 
-1. **角色属性按角色分组排列**。同一角色的发型、瞳色、服装、体型连续出现后再切换。严禁交叉排列（如 `blue hair, red hair, short hair, long hair`）。
-2. **互动词必须紧跟在人数后**。如果画中有多个人物，必须在人数声明完毕后，**立即** 写下他们的互动行为。推荐写法：2girls, duo, holding each other's hands,，然后开始分开描述每位美少女的容貌和衣服。
-3. **空间叙事层中为每个角色写一句"外观锚定短语"**。格式：`CharacterName with [key features]... do something...` 明确指出视觉归属。这比仅靠标签的防串扰效果强得多。
-4. **使用空间方位词分离角色**：left/right/foreground/background。
-5. **为易混淆特征使用权重**：`(blue hair:2)`, `(red hair:2)`。
-6. **角色外观在硬锚点层中充分描述**。官方文档明确指出：先命名角色，再描述其外观。仅列出角色名而不描述外观会让模型困惑。
-7. **空间叙事层中不重复标签内容**——空间叙事层补充空间关系、互动动作、光影氛围、构图取景。
+1. **先声明准确人数与性别构成**：使用 `2girls`、`1girl, 1boy`、`3girls` 等与画面一致的标签；不得同时保留 `solo`，也不得用 `multiple girls` 代替已知的精确人数。
+2. **先建立角色身份，再描述互动**：人数之后先写角色名及各自作品名。不要把互动标签插在角色身份之间，也不要只列角色名后立刻进入复杂动作。
+3. **Hard Tags 按角色分组**：同一角色的专属发型、瞳色、服装、体型和道具连续出现后再切换到下一角色。严禁把不同角色的同类属性交叉排列，例如 `blue hair, red hair, short hair, long hair`。
+4. **每个角色使用独立的 Natural Language 锚定句**：推荐结构为 `On the left side of the image is Character A from Series A, with [4~6个关键辨识特征].`；下一角色另起一句。不得把多名角色的外观塞进同一个嵌套长句。
+5. **空间位置以画面/观众视角为基准并保持稳定**：使用 `on the left side of the image`、`on the right side of the image`、`in the center`、`in the foreground`、`in the background`。不要混用画面左右与角色自身左右；后文不得交换已分配的位置。
+6. **互动句必须明确主语和宾语**：完成所有角色锚定后，再写 `Character A holds Character B's right hand`、`Character B looks at Character A` 等。避免连续使用含义不明的 `she`、`he`、`they`，避免笼统的 `interacting`、`together` 代替可见动作。
+7. **区分专属属性与共享属性**：专属外观、服装、表情和道具必须放进对应角色的分组或锚定句；两人共有的服装、姿势或环境状态使用 `Both characters...` 单独说明，不得复制成含混的全局属性。
+8. **只保留少量高区分度特征**：每个角色优先选择2～4个最能区分彼此的外观或服装锚点。角色相似、人数达到3人以上或互动复杂时，应减少次要装饰、道具和同时发生的动作，优先保证身份、位置和主要互动。
+9. **权重不能代替属性归属**：只有在角色分组和自然语言锚定已经清楚时，才可谨慎强化关键特征。不得仅靠 `(blue hair:2)`、`(red hair:2)` 分离角色，也不得同时堆叠大量高权重属性。
+10. **Natural Language 负责明确归属而非机械复读**：只复述用于身份区分的关键特征，并补充空间位置、互动动作、光影对象和构图取景；不要把全部 Hard Tags 再抄一遍。
+
+推荐示意：
+
+```text
+2girls, character a, series a, black hair, blue eyes, white jacket, character b, series b, blonde hair, red eyes, black dress, railway station
+
+The image is divided into a left side and a right side, with both characters shown at the same readable scale. On the left side of the image is Character A from Series A, with short black hair, blue eyes, and a white jacket. On the right side of the image is Character B from Series B, with long blonde hair, red eyes, and a black dress. Character A holds Character B's right hand while Character B looks at Character A. A soft side light keeps both faces clearly visible while the railway platform remains secondary in the background.
+```
 
 ---
 
@@ -771,7 +785,7 @@ Anima 在多人场景中极易发生特征混淆。必须严格遵守：
 ```
 [Hard Tags：逗号分隔，单行]
 
-[Natural Language：2～3句英文]
+[Natural Language：单人物2～3句英文；多人物按角色拆句，通常3～6句]
 ```
 
 ## 中文解释
@@ -795,8 +809,9 @@ Anima 在多人场景中极易发生特征混淆。必须严格遵守：
 6. 夜景或背光场景是否避免意外剪影？
 7. 标签是否去重并符合数量上限？
 8. 动作、视线、姿势和道具关系是否一致？
-9. Natural Language 是否控制在2～3句？
-10. 是否只加入用户要求或画面逻辑真正需要的内容？
+9. Natural Language 是否保持职责清晰：单人物2～3句，多人物按角色拆句且没有嵌套长句？
+10. 多人物时，人数是否准确，每个角色是否都有稳定的画面位置、独立锚定和明确的动作归属？
+11. 是否只加入用户要求或画面逻辑真正需要的内容？
 
 ## 中文解释规则
 
