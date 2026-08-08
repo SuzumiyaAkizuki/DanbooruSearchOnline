@@ -76,12 +76,9 @@ from core.workspace import (
     merge_favorites,
     merge_history,
     merge_workspaces,
-    migrate_legacy_workspace,
     new_workspace,
     normalize_backup,
     normalize_favorites,
-    normalize_history,
-    normalize_workspace,
     replace_with_favorite,
     sync_selected_entries,
     utc_now_iso,
@@ -98,10 +95,7 @@ from webui.constants import (
     CONFIG_VERSION as _CONFIG_VERSION,
     GROUP_RENDER_TAG_LIMIT,
     HISTORY_PRE_COMPACTION_BACKUP_KEY as _HISTORY_PRE_COMPACTION_BACKUP_KEY,
-    LOCAL_STORAGE_MAX_READ_CHARS as _LOCAL_STORAGE_MAX_READ_CHARS,
     LOCAL_STORAGE_NAMES as _LOCAL_STORAGE_NAMES,
-    LOCAL_STORAGE_READ_CHUNK_CHARS as _LOCAL_STORAGE_READ_CHUNK_CHARS,
-    LOCAL_STORAGE_RESTORE_CACHE as _LOCAL_STORAGE_RESTORE_CACHE,
     LOCAL_STORAGE_RESTORE_RETRY_DELAYS as _LOCAL_STORAGE_RESTORE_RETRY_DELAYS,
     OPTIONAL_COLS,
     RECOMMENDATION_DEBOUNCE_SECONDS,
@@ -133,6 +127,8 @@ from webui.helpers import (
     should_group_start_expanded,
 )
 from webui.styles import MOTION_STYLE
+from webui.routes import register_main_page
+from webui.local_storage import backup_key, clear_restore_cache, finish_storage_restore_task, flush_storage_session_changes, pause_storage_restore, prepare_restore_snapshot, read_prepared_value, restore_staged_storage, restore_with_retries, start_storage_restore_task, storage_keys, storage_listener_script, write_is_ready
 
 
 # 仅统计当前进程中已建立 Socket.IO 连接的 UI 页面，不等同于唯一用户数。
@@ -785,10 +781,7 @@ class DanbooruSearchUI:
 
     def _storage_write_allowed(self, name: str) -> bool:
         """Block writes until that localStorage domain has been safely restored."""
-        if name in self._storage_applying:
-            return False
-        ready = self._storage_states.get(name) == 'ready'
-        if not ready or not self._client_connected():
+        if not write_is_ready(name, self._storage_states, self._storage_applying) or not self._client_connected():
             if self._storage_restore_started:
                 self._storage_session_dirty.add(name)
             return False
@@ -2572,85 +2565,12 @@ class DanbooruSearchUI:
         self._schedule_workspace_persist()
 
     def _local_storage_keys(self) -> dict[str, str]:
-        return {
-            'workspace': WORKSPACE_STORAGE_KEY,
-            'legacy': self._STAGED_LS_KEY,
-            'config': _CONFIG_LS_KEY,
-            'history': HISTORY_STORAGE_KEY,
-            'favorites': FAVORITES_STORAGE_KEY,
-        }
+        return storage_keys()
 
     async def _prepare_local_storage_restore(self, names: list[str]) -> dict:
         """Snapshot requested keys in-browser and compact legacy history in memory."""
-        if not self._client_connected():
-            raise RuntimeError('client is disconnected')
         keys = {name: self._local_storage_keys()[name] for name in names}
-        keys_js = _json.dumps(keys, ensure_ascii=False)
-        cache_key_js = _json.dumps(_LOCAL_STORAGE_RESTORE_CACHE)
-        result = await self.client.run_javascript(
-            f"""(() => {{
-                const keys = {keys_js};
-                const values = {{}};
-                const manifest = {{}};
-                for (const [name, key] of Object.entries(keys)) {{
-                    let value = localStorage.getItem(key);
-                    let prepared = false;
-                    let originalLength = value === null ? null : value.length;
-                    if (name === 'history' && value) {{
-                        try {{
-                            const data = JSON.parse(value);
-                            if (data && typeof data === 'object' &&
-                                (data.schema_version === 1 || data.schema_version === 2) &&
-                                Array.isArray(data.items)) {{
-                                let changed = data.schema_version !== 2;
-                                const items = data.items.map((item) => {{
-                                    if (!item || typeof item !== 'object' ||
-                                        !item.workspace || typeof item.workspace !== 'object' ||
-                                        typeof item.query !== 'string' || !item.query.trim() ||
-                                        !item.settings || typeof item.settings !== 'object' ||
-                                        Array.isArray(item.settings)) return item;
-                                    const query = item.query.trim().slice(0, 4000);
-                                    const searchedAt = typeof item.searched_at === 'string' && item.searched_at
-                                        ? item.searched_at : new Date().toISOString();
-                                    const compactQuery = {{
-                                        query,
-                                        searched_at: searchedAt,
-                                        settings: item.settings,
-                                    }};
-                                    const oldQueries = item.workspace.queries;
-                                    if (!Array.isArray(oldQueries) || oldQueries.length !== 1 ||
-                                        !oldQueries[0] || oldQueries[0].query !== query) changed = true;
-                                    const workspace = {{
-                                        ...item.workspace,
-                                        queries: [compactQuery],
-                                        updated_at: searchedAt,
-                                    }};
-                                    return {{...item, workspace_id: workspace.workspace_id, workspace}};
-                                }});
-                                if (changed) {{
-                                    value = JSON.stringify({{...data, schema_version: 2, items}});
-                                    prepared = true;
-                                }}
-                            }}
-                        }} catch (_) {{
-                            // Python performs authoritative validation and corruption backup.
-                        }}
-                    }}
-                    values[name] = value;
-                    manifest[name] = {{
-                        length: value === null ? null : value.length,
-                        original_length: originalLength,
-                        prepared,
-                    }};
-                }}
-                window[{cache_key_js}] = values;
-                return manifest;
-            }})()""",
-            timeout=5.0,
-        )
-        if not isinstance(result, dict):
-            raise RuntimeError('localStorage manifest is invalid')
-        return result
+        return await prepare_restore_snapshot(self.client, self._client_connected, keys)
 
     async def _read_local_storage_value(
         self,
@@ -2658,86 +2578,18 @@ class DanbooruSearchUI:
         key: str,
         length,
     ) -> str | None:
-        """Read one prepared localStorage value in transport-safe chunks."""
-        if length is None:
-            return None
-        if isinstance(length, bool) or not isinstance(length, (int, float)):
-            raise RuntimeError(f'localStorage key {key!r} returned an invalid length')
-        length = int(length)
-        if length < 0 or length > _LOCAL_STORAGE_MAX_READ_CHARS:
-            raise WorkspaceDataError(f'localStorage key {key!r} exceeds the read limit')
-        if length == 0:
-            return ''
-
-        name_js = _json.dumps(name, ensure_ascii=False)
-        key_js = _json.dumps(key, ensure_ascii=False)
-        cache_key_js = _json.dumps(_LOCAL_STORAGE_RESTORE_CACHE)
-        chunks: list[str] = []
-        offset = 0
-        while offset < length:
-            if not self._client_connected():
-                raise RuntimeError('client disconnected during localStorage restore')
-            result = await self.client.run_javascript(
-                f"""(() => {{
-                    const cache = window[{cache_key_js}];
-                    const value = cache && Object.prototype.hasOwnProperty.call(cache, {name_js})
-                        ? cache[{name_js}] : localStorage.getItem({key_js});
-                    if (value === null) return null;
-                    let end = Math.min(value.length, {offset + _LOCAL_STORAGE_READ_CHUNK_CHARS});
-                    if (end < value.length) {{
-                        const lastCodeUnit = value.charCodeAt(end - 1);
-                        if (lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF) end += 1;
-                    }}
-                    return {{chunk: value.slice({offset}, end), next_offset: end}};
-                }})()""",
-                timeout=5.0,
-            )
-            if not isinstance(result, dict):
-                raise RuntimeError(f'localStorage key {key!r} disappeared during restore')
-            chunk = result.get('chunk')
-            next_offset = result.get('next_offset')
-            if not isinstance(chunk, str) or not isinstance(next_offset, (int, float)):
-                raise RuntimeError(f'localStorage key {key!r} returned an invalid chunk')
-            next_offset = int(next_offset)
-            if next_offset <= offset or next_offset > length:
-                raise RuntimeError(f'localStorage key {key!r} returned an invalid offset')
-            chunks.append(chunk)
-            offset = next_offset
-        return ''.join(chunks)
+        return await read_prepared_value(self.client, self._client_connected, name, key, length)
 
     def _clear_local_storage_restore_cache(self):
         if not self._client_connected():
             return
-        cache_key_js = _json.dumps(_LOCAL_STORAGE_RESTORE_CACHE)
-        try:
-            self.client.run_javascript(f'delete window[{cache_key_js}];')
-        except RuntimeError:
-            pass
+        clear_restore_cache(self.client)
 
     async def _backup_local_storage_key(self, source_key: str, backup_key: str) -> bool:
         """Copy an existing value inside the browser before replacing it."""
         if not self._client_connected():
             return False
-        source_key_js = _json.dumps(source_key, ensure_ascii=False)
-        backup_key_js = _json.dumps(backup_key, ensure_ascii=False)
-        try:
-            status = await self.client.run_javascript(
-                f"""(() => {{
-                    const source = localStorage.getItem({source_key_js});
-                    if (source === null) return 'missing';
-                    if (localStorage.getItem({backup_key_js}) !== null) return 'exists';
-                    try {{
-                        localStorage.setItem({backup_key_js}, source);
-                        return 'created';
-                    }} catch (error) {{
-                        return `error:${{error && error.name ? error.name : 'unknown'}}`;
-                    }}
-                }})()""",
-                timeout=5.0,
-            )
-        except Exception:
-            return False
-        return status in {'created', 'exists'}
+        return await backup_key(self.client, source_key, backup_key)
 
     async def _backup_history_before_compaction(self) -> bool:
         """Preserve the original history in-browser before replacing it with v2."""
@@ -2798,252 +2650,32 @@ class DanbooruSearchUI:
 
     async def _restore_staged_tags(self) -> tuple[dict[str, str], set[str], list[str]]:
         """Run one restore attempt and return failures, required writes and warnings."""
-        unresolved = [
-            name for name in _LOCAL_STORAGE_NAMES
-            if self._storage_states.get(name) != 'ready'
-        ]
-        if not unresolved:
-            return {}, set(), []
-
-        failures: dict[str, str] = {}
-        persist: set[str] = set()
-        warnings: list[str] = []
-        keys = self._local_storage_keys()
-        try:
-            manifest = await self._prepare_local_storage_restore(unresolved)
-        except Exception as exc:
-            message = str(exc) or type(exc).__name__
-            return {name: message for name in unresolved}, persist, warnings
-
-        try:
-            for name in unresolved:
-                meta = manifest.get(name)
-                if not isinstance(meta, dict):
-                    failures[name] = 'missing manifest entry'
-                    continue
-                try:
-                    raw = await self._read_local_storage_value(
-                        name,
-                        keys[name],
-                        meta.get('length'),
-                    )
-                except Exception as exc:
-                    failures[name] = str(exc) or type(exc).__name__
-                    continue
-                self._storage_raw_values[name] = raw
-        finally:
-            self._clear_local_storage_restore_cache()
-
-        if 'legacy' in unresolved and 'legacy' not in failures:
-            self._storage_states['legacy'] = 'ready'
-
-        if 'config' in unresolved and 'config' not in failures:
-            raw_config = self._storage_raw_values.get('config')
-            config_dirty = 'config' in self._storage_session_dirty
-            try:
-                cfg = _json.loads(raw_config) if raw_config else {}
-                if not isinstance(cfg, dict):
-                    raise WorkspaceDataError('config must be a JSON object')
-            except Exception as exc:
-                if raw_config and not await self._backup_local_storage_key(
-                    _CONFIG_LS_KEY,
-                    f'{_CONFIG_LS_KEY}_corrupt_backup',
-                ):
-                    failures['config'] = f'corrupt config backup failed: {exc}'
-                else:
-                    warnings.append('config_corrupt')
-                    persist.add('config')
-            else:
-                if cfg and cfg.get('version') != _CONFIG_VERSION:
-                    warnings.append('config_schema_migrated')
-                    persist.add('config')
-                if not config_dirty:
-                    self._storage_applying.add('config')
-                    try:
-                        self._apply_config_state(cfg)
-                    finally:
-                        self._storage_applying.discard('config')
-                else:
-                    persist.add('config')
-            if 'config' not in failures:
-                self._storage_states['config'] = 'ready'
-
-        if 'workspace' in unresolved and 'workspace' not in failures:
-            raw_workspace = self._storage_raw_values.get('workspace')
-            if not raw_workspace and any(
-                self._storage_states.get(name) != 'ready'
-                for name in ('legacy', 'config')
-            ):
-                failures['workspace'] = 'legacy workspace inputs are not available'
-            else:
-                workspace_warnings: list[str] = []
-                try:
-                    if raw_workspace:
-                        workspace, workspace_warnings = normalize_workspace(raw_workspace)
-                    else:
-                        workspace, workspace_warnings = migrate_legacy_workspace(
-                            self._storage_raw_values.get('legacy'),
-                            self._storage_raw_values.get('config'),
-                        )
-                        persist.add('workspace')
-                except WorkspaceDataError as exc:
-                    backed_up = await self._backup_local_storage_key(
-                        WORKSPACE_STORAGE_KEY,
-                        f'{WORKSPACE_STORAGE_KEY}_corrupt_backup',
-                    )
-                    if raw_workspace and not backed_up:
-                        failures['workspace'] = f'corrupt workspace backup failed: {exc}'
-                    else:
-                        workspace, migration_warnings = migrate_legacy_workspace(
-                            self._storage_raw_values.get('legacy'),
-                            self._storage_raw_values.get('config'),
-                        )
-                        workspace_warnings = ['workspace_corrupt'] + migration_warnings
-                        persist.add('workspace')
-                if 'workspace' not in failures:
-                    if 'workspace' in self._storage_session_dirty:
-                        workspace = merge_workspaces(
-                            self.workspace_state,
-                            workspace,
-                            origin='local_restore',
-                            source='浏览器本地恢复',
-                        )
-                        persist.add('workspace')
-                    self._storage_applying.add('workspace')
-                    try:
-                        self._apply_workspace_state(
-                            workspace,
-                            persist=False,
-                            refresh_recommendations=False,
-                        )
-                    finally:
-                        self._storage_applying.discard('workspace')
-                    warnings.extend(workspace_warnings)
-                    if workspace_warnings:
-                        persist.add('workspace')
-                    self._storage_states['workspace'] = 'ready'
-                    if raw_workspace:
-                        # A valid versioned workspace makes the legacy key irrelevant.
-                        self._storage_states['legacy'] = 'ready'
-                        failures.pop('legacy', None)
-
-        if 'history' in unresolved and 'history' not in failures:
-            raw_history = self._storage_raw_values.get('history')
-            history_prepared = bool(
-                isinstance(manifest.get('history'), dict)
-                and manifest['history'].get('prepared')
-            )
-            try:
-                history, history_warnings = normalize_history(raw_history)
-            except WorkspaceDataError as exc:
-                backed_up = await self._backup_local_storage_key(
-                    HISTORY_STORAGE_KEY,
-                    f'{HISTORY_STORAGE_KEY}_corrupt_backup',
-                )
-                if raw_history and not backed_up:
-                    failures['history'] = f'corrupt history backup failed: {exc}'
-                else:
-                    history, history_warnings = empty_history(), ['history_corrupt']
-                    persist.add('history')
-            if 'history' not in failures:
-                if history_prepared:
-                    if not await self._backup_history_before_compaction():
-                        failures['history'] = 'legacy history backup failed'
-                    else:
-                        history_warnings.extend([
-                            'history_schema_migrated',
-                            'history_workspace_queries_compacted',
-                        ])
-                        persist.add('history')
-                if 'history' not in failures:
-                    if 'history' in self._storage_session_dirty:
-                        history = merge_history(self.search_history, history)
-                        persist.add('history')
-                    self.search_history = history
-                    warnings.extend(history_warnings)
-                    if history_warnings:
-                        persist.add('history')
-                    self._storage_states['history'] = 'ready'
-
-        if 'favorites' in unresolved and 'favorites' not in failures:
-            raw_favorites = self._storage_raw_values.get('favorites')
-            try:
-                favorites, favorite_warnings = normalize_favorites(raw_favorites)
-            except WorkspaceDataError as exc:
-                backed_up = await self._backup_local_storage_key(
-                    FAVORITES_STORAGE_KEY,
-                    f'{FAVORITES_STORAGE_KEY}_corrupt_backup',
-                )
-                if raw_favorites and not backed_up:
-                    failures['favorites'] = f'corrupt favorites backup failed: {exc}'
-                else:
-                    favorites, favorite_warnings = empty_favorites(), ['favorites_corrupt']
-                    persist.add('favorites')
-            if 'favorites' not in failures:
-                if 'favorites' in self._storage_session_dirty:
-                    favorites = merge_favorites(self.favorites, favorites)
-                    persist.add('favorites')
-                self.favorites = favorites
-                warnings.extend(favorite_warnings)
-                if favorite_warnings:
-                    persist.add('favorites')
-                self._storage_states['favorites'] = 'ready'
-
-        for name in failures:
-            self._storage_states[name] = 'failed'
-        self._update_undo_buttons()
-        self._update_workspace_counts()
-        return failures, persist, warnings
-
-    def _persist_restored_storage(self, names: set[str]):
-        if 'config' in names:
-            self._save_config()
-        if 'workspace' in names:
-            self._save_staged_tags()
-        if 'history' in names:
-            self._save_history()
-        if 'favorites' in names:
-            self._save_favorites()
-
-    def _flush_storage_session_changes(self):
-        ready_dirty = {
-            name for name in self._storage_session_dirty
-            if self._storage_states.get(name) == 'ready'
-        }
-        self._persist_restored_storage(ready_dirty)
+        return await restore_staged_storage(
+            self,
+            _LOCAL_STORAGE_NAMES,
+            _CONFIG_VERSION,
+        )
 
     async def _restore_local_storage_with_retries(self):
         self._storage_restore_started = True
-        last_failures: dict[str, str] = {}
-        all_warnings: list[str] = []
         was_cancelled = False
         try:
-            for delay in _LOCAL_STORAGE_RESTORE_RETRY_DELAYS:
-                if delay:
-                    await asyncio.sleep(delay)
-                if not self._client_alive():
-                    return
-                if not self._client_connected():
-                    last_failures = {'connection': 'client is disconnected'}
-                    continue
-                self._storage_restoring = True
-                try:
-                    failures, persist, warnings = await self._restore_staged_tags()
-                finally:
-                    self._storage_restoring = False
-                self._persist_restored_storage(persist)
-                all_warnings.extend(warnings)
-                last_failures = failures
-                if not failures:
-                    self._flush_storage_session_changes()
-                    self._install_workspace_storage_listener()
-                    self._storage_failure_notified = False
-                    if all_warnings:
-                        print(
-                            f'[UI] 本地数据恢复提示: {sorted(set(all_warnings))}',
-                            flush=True,
-                        )
-                    return
+            result = await restore_with_retries(
+                self,
+                _LOCAL_STORAGE_RESTORE_RETRY_DELAYS,
+            )
+            if result.client_stopped:
+                return
+            if result.completed:
+                flush_storage_session_changes(self)
+                self._install_workspace_storage_listener()
+                self._storage_failure_notified = False
+                if result.warnings:
+                    print(
+                        f'[UI] 本地数据恢复提示: {sorted(set(result.warnings))}',
+                        flush=True,
+                    )
+                return
             unresolved = sorted(
                 name for name in _LOCAL_STORAGE_NAMES
                 if self._storage_states.get(name) != 'ready'
@@ -3051,7 +2683,7 @@ class DanbooruSearchUI:
             if unresolved:
                 client_id = str(getattr(self.client, 'id', 'unknown'))[:8]
                 detail = '; '.join(
-                    f'{name}={message}' for name, message in sorted(last_failures.items())
+                    f'{name}={message}' for name, message in sorted(result.failures.items())
                 )
                 print(
                     f'[UI] localStorage 恢复未完成 (client={client_id}, '
@@ -3073,30 +2705,21 @@ class DanbooruSearchUI:
         except asyncio.CancelledError:
             was_cancelled = True
         finally:
-            self._storage_restoring = False
-            if self._storage_restore_task is asyncio.current_task():
-                self._storage_restore_task = None
-                if was_cancelled and self._client_connected():
-                    self._start_storage_restore_task()
+            if finish_storage_restore_task(
+                self,
+                asyncio.current_task(),
+                was_cancelled,
+            ):
+                self._start_storage_restore_task()
 
     def _start_storage_restore_task(self):
-        task = self._storage_restore_task
-        if task is not None and not task.done():
-            return task
-        needs_work = any(
-            state != 'ready' for state in self._storage_states.values()
-        ) or bool(self._storage_session_dirty)
-        if not needs_work:
-            return None
-        self._storage_restore_task = asyncio.create_task(
-            self._restore_local_storage_with_retries()
+        return start_storage_restore_task(
+            self,
+            self._restore_local_storage_with_retries,
         )
-        return self._storage_restore_task
 
     def _pause_storage_restore(self):
-        task = self._storage_restore_task
-        if task is not None and not task.done():
-            task.cancel()
+        pause_storage_restore(self)
 
     def _install_workspace_storage_listener(self):
         """其他标签页修改工作区时提示刷新，避免静默覆盖。"""
@@ -3104,24 +2727,7 @@ class DanbooruSearchUI:
             return
         self._workspace_storage_listener_installed = True
         try:
-            ui.run_javascript(f"""
-                if (!window.__danbooruWorkspaceStorageListenerV1) {{
-                    window.__danbooruWorkspaceStorageListenerV1 = true;
-                    window.addEventListener('storage', (event) => {{
-                        const watchedKeys = new Set([
-                            '{WORKSPACE_STORAGE_KEY}',
-                            '{HISTORY_STORAGE_KEY}',
-                            '{FAVORITES_STORAGE_KEY}',
-                        ]);
-                        if (watchedKeys.has(event.key) && event.newValue !== event.oldValue) {{
-                            const reload = window.confirm(
-                                '工作区数据已在另一个标签页更新。是否重新加载当前页面以同步最新内容？'
-                            );
-                            if (reload) window.location.reload();
-                        }}
-                    }});
-                }}
-            """)
+            ui.run_javascript(storage_listener_script())
         except RuntimeError:
             pass
 
@@ -4799,42 +4405,13 @@ class DanbooruSearchUI:
 
 # ── 页面路由 ───────────────────────────────────────────────────────────────────
 
-@ui.page('/')
-async def main_page():
-    client = ui.context.client
-    client_id = client.id
-    app_ui = DanbooruSearchUI()
-
-    def mark_connected(*_):
-        _mark_ui_session_active(client_id)
-        app_ui._start_service_status_task()
-        # 页面先完成构建；localStorage 恢复只在 Socket.IO 真正连接后后台执行。
-        app_ui._start_storage_restore_task()
-
-    def mark_disconnected(*_):
-        _mark_ui_session_inactive(client_id)
-        app_ui._pause_storage_restore()
-
-    def mark_deleted(*_):
-        _mark_ui_session_inactive(client_id)
-        app_ui._dispose()
-
-    client.on_connect(mark_connected)
-    client.on_disconnect(mark_disconnected)
-    on_delete = getattr(client, 'on_delete', None)
-    if callable(on_delete):
-        on_delete(mark_deleted)
-
-    app_ui.build_page()
-
-    async def silent_visit_update():
-        try:
-            await counter.increment_visit()
-            await telemetry.increment("ui_visit")
-            app_ui._update_footer_text()
-        except Exception:
-            pass
-    asyncio.create_task(silent_visit_update())
+register_main_page(
+    DanbooruSearchUI,
+    _mark_ui_session_active,
+    _mark_ui_session_inactive,
+    counter.increment_visit,
+    telemetry.increment,
+)
 
 # ── 入口 ───────────────────────────────────────────────────────────────────────
 
