@@ -593,6 +593,10 @@ class DanbooruTagger:
                 r = final[tag]
                 r.final_score = round(r.final_score * (1.0 - alpha + alpha * float(max_co[i])), 4)
 
+        # 官方 Tag Alias 只负责规范化语义召回结果，不改变查询文本或召回方式。
+        # 必须在最终截断前合并，避免废弃标签和规范标签重复占用结果名额。
+        final = self._canonicalize_search_aliases(final)
+
         # Group expand 处理（在 guaranteed_tags 之前，因为会改分数）
         if request.group_mode == "expand" and self._tag_to_groups:
             self._apply_group_expand(final)
@@ -645,6 +649,69 @@ class DanbooruTagger:
 
         cached_queries = [q for q, hit in zip(queries, hit_mask) if hit]
         return valid, keywords, extra_segments, cached_queries
+
+    def _canonicalize_search_aliases(
+        self,
+        results: dict[str, TagResult],
+    ) -> dict[str, TagResult]:
+        """用官方 Alias 规范化语义搜索候选，并按规范标签去重。"""
+        if not results or not self._tag_aliases:
+            return results
+
+        canonical: dict[str, TagResult] = {}
+        for result in results.values():
+            alias = self._tag_aliases.get(result.tag)
+            if alias is None:
+                normalized = result
+            else:
+                original_tag = result.tag
+                target_tag = alias.consequent_name
+                target_idx = self._name_to_idx.get(target_tag)
+
+                if target_idx is None:
+                    # Alias 目标尚未进入本地标签库时，仍输出官方规范名；分数和
+                    # 安全/分类信息沿用已被模型实际召回的原标签，其余元数据
+                    # 使用明确的降级值，避免把废弃标签资料冒充为规范标签资料。
+                    normalized = TagResult(
+                        tag=target_tag,
+                        cn_name="",
+                        category=result.category,
+                        nsfw=result.nsfw,
+                        final_score=result.final_score,
+                        semantic_score=result.semantic_score,
+                        count=0,
+                        source=result.source,
+                        layer=result.layer,
+                        wiki="",
+                        alias_from=original_tag,
+                    )
+                else:
+                    normalized = TagResult(
+                        tag=target_tag,
+                        cn_name=str(self._arr_cn_name[target_idx]),
+                        category=CAT_MAP.get(self._arr_category[target_idx], 'Other'),
+                        nsfw=str(self._arr_nsfw[target_idx]),
+                        final_score=result.final_score,
+                        semantic_score=result.semantic_score,
+                        count=int(self._arr_post_count[target_idx]),
+                        source=result.source,
+                        layer=result.layer,
+                        wiki=str(self._arr_wiki[target_idx]),
+                        artist_top_tags=list(result.artist_top_tags),
+                        alias_from=original_tag,
+                    )
+
+            existing = canonical.get(normalized.tag)
+            if existing is None or (
+                normalized.final_score,
+                normalized.semantic_score,
+            ) > (
+                existing.final_score,
+                existing.semantic_score,
+            ):
+                canonical[normalized.tag] = normalized
+
+        return canonical
 
     # ── 并发闸门（语义搜索与轻量推荐分通道）─────────────────────────────
 

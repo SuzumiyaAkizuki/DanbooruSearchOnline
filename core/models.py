@@ -19,6 +19,7 @@ class TagResult:
     layer: str
     wiki: str = ""
     artist_top_tags: list[str] = field(default_factory=list)
+    alias_from: str | None = None  # 搜索结果由官方 Tag Alias 规范化时记录原标签
 
 
 @dataclass

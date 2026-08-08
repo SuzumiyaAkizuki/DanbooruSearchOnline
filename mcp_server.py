@@ -147,7 +147,9 @@ search_tags，不要把画师名放进 query。
                          "full_scene"。
                          适合："EVA中蓝发的驾驶员"（单一角色概念）、"灯笼裤"（单一物件）、
                          "两侧有开口，前方有拉绳的运动短裤"（带细节的单一物件）。
-    "precise_lookup"   — 精确查词 / 拼写纠错，例如 "selafuku"、"thighhigh"。
+    "precise_lookup"   — 中文或英文的单一概念精确查词 / 拼写纠错，例如“水手服”、
+                         "selafuku"、"thighhigh"。仍使用语义搜索；官方 Tag Alias 仅用于
+                         将召回的废弃标签规范化为当前标签。
 - 判断规则：用户是想得到一张具体图的提示词（→ full_scene），还是想浏览某个概念的多种候选
   （→ concept_explore）？元素数量不是判断依据，探索意图才是。
 - 重要：只要 query 是具体场景、多元素组合、角色 + 属性，就用 "full_scene"。拿不准时也用
@@ -181,7 +183,8 @@ search_tags，不要把画师名放进 query。
 ## 返回
 
 JSON 对象，包含 prompt（逗号分隔 tag）、keywords、results。
-每个 result 包含 tag、cn_name；当 include_wiki=True 时额外包含 wiki。
+每个 result 包含 tag、cn_name；搜索结果经官方 Alias 规范化时包含 alias_from；
+当 include_wiki=True 时额外包含 wiki。
     """
     await telemetry.increment("mcp_search_tags")
     _SEARCH_MODE_PRESETS: dict[str, dict] = {
@@ -234,6 +237,8 @@ JSON 对象，包含 prompt（逗号分隔 tag）、keywords、results。
             "tag":         r.tag,
             "cn_name":     r.cn_name,
         }
+        if r.alias_from:
+            item["alias_from"] = r.alias_from
         if include_wiki:
             item["wiki"] = r.wiki
         results.append(item)
@@ -528,7 +533,7 @@ Anima 同时理解 Danbooru 标签和自然语言：
 
 ### 第一层：Hard Tags
 
-使用经检索确认的逗号分隔标签。
+使用用户已提供或经检索确认的逗号分隔标签。
 
 **包含：**
 
@@ -555,11 +560,11 @@ Anima 同时理解 Danbooru 标签和自然语言：
 推荐职责：
 
 1. 第一句：景别、主体占比、整体布局、背景层级、前景限制。
-2. 单人物时，第二句说明动作、视线、道具接触和空间关系；多人物时，先按角色分别说明画面位置、身份和少量关键特征。
+2. 单人物时，第二句说明动作、视线、道具接触和空间关系；多人物时，先按角色分别说明画面位置、身份，以及按可见类别选出的代表性特征。
 3. 多人物的角色锚定完成后，再用独立句子说明互动，明确写出动作发起者、承受者、接触对象和视线方向。
 4. 最后一句：主光源、主体曝光、色彩主次和景深。
 
-不要机械复述 Hard Tags 中已经明确的外观和服装。只有在说明空间、动作归属或光照对象时，才简短引用人物、道具或场景。
+单人物不要机械复述 Hard Tags 中已经明确的外观和服装。多人物为了明确属性归属，每个角色的锚定句必须复述“多人物特征分离规则”要求的各类代表性特征，但不要继续抄写同类别的其余次要 Hard Tags。
 背景描述不要只写 `behind the character`、`recedes into the background` 或整体 `softly blurred`；应说明主要环境位于画面的左侧、中央、人物后方或地面，并仅让最远处细节轻微虚化。
 多人物场景必须使用“画面方位 + 角色名/身份 + 关键辨识特征”的独立短句建立角色锚点；详细规则见“多人物特征分离规则”。
 
@@ -573,7 +578,11 @@ Anima 同时理解 Danbooru 标签和自然语言：
 
 - `close-up`、`upper body`、`cowboy_shot`、`full body` 等决定可见范围。
 - `dominates the frame`、`occupies most of the frame` 等描述决定人物大小。
-- 如果用户要求的不是全身像，你可以在提示词中删除不应当出现在画面中的标签。比如，用户要求upper body，你可以删除鞋袜的标签。
+- Hard Tags 必须与最终景别一致。用户已有标签即使本身正确，只要对应内容不会出现在当前取景范围内，也应删除，不能为了“保留已有标签”继续放入提示词。
+- `close-up`：优先保留脸部、发型、头部饰品和表情，删除画面外的身体、下装、腿部、鞋袜及全身姿势标签。
+- `upper body`：保留上半身服装、手臂和画面内可见动作；删除裙子、裤子等下装细节，以及腿部姿势、袜子、长筒袜和鞋子标签。
+- `cowboy shot` 或大腿以上取景：可以保留可见的下装，通常删除袜子、鞋子、脚部动作及依赖完整身体的姿势标签。
+- `full body`：身体、下装、腿部和鞋袜均实际可见时，才保留对应标签。
 
 参考范围：
 
@@ -667,11 +676,24 @@ Anima 同时理解 Danbooru 标签和自然语言：
 
 ### 标签数量
 
+以下数量是推荐的**目标范围**，不是必须满足的硬性上下限：
+
 | 场景复杂度 | 总标签数 |
 |---|---:|
 | 简单 | 16～30 |
 | 标准 | 22～38 |
 | 复杂多人或剧情主视觉 | 30～48 |
+
+用户已有标签视为可信标签，通常不需要重新检索，但不代表必须全部保留。应尽量保留与最终画面一致、对人物识别或用户意图有帮助的标签；当已有标签过多时，可以按需删除一部分。
+
+裁剪已有标签时按以下顺序处理：
+
+1. 先删除与最终景别不一致、实际不会出现在画面中的标签。
+2. 再删除与人数、动作、视线、姿势、服装状态或安全分级冲突的标签。
+3. 再删除宽泛标签、近义重复标签，以及被更准确标签覆盖的标签。
+4. 最后删除对人物区分和主要画面贡献较低的次要装饰、身体细节或场景细节。
+
+应优先保留用户强调的内容、人物身份与作品、关键发型和瞳色、主要服装、核心道具、主要表情和动作。不要为了达到目标范围的下限而补充无关标签；如果完成必要裁剪后仍略高于目标范围，可以保留真正重要的标签，不要为了机械计数继续删除。
 
 只保留关键且有区分度的标签：
 
@@ -761,21 +783,21 @@ Anima 的多人生成可以通过清晰的角色边界减少特征混淆，但�
 1. **先声明准确人数与性别构成**：使用 `2girls`、`1girl, 1boy`、`3girls` 等与画面一致的标签；不得同时保留 `solo`，也不得用 `multiple girls` 代替已知的精确人数。
 2. **先建立角色身份，再描述互动**：人数之后先写角色名及各自作品名。不要把互动标签插在角色身份之间，也不要只列角色名后立刻进入复杂动作。
 3. **Hard Tags 按角色分组**：同一角色的专属发型、瞳色、服装、体型和道具连续出现后再切换到下一角色。严禁把不同角色的同类属性交叉排列，例如 `blue hair, red hair, short hair, long hair`。
-4. **每个角色使用独立的 Natural Language 锚定句**：推荐结构为 `On the left side of the image is Character A from Series A, with [4~6个关键辨识特征].`；下一角色另起一句。不得把多名角色的外观塞进同一个嵌套长句。
-5. **关键辨识特征规则**： 规则4中提到的关键辨识特征，必须包含发型、上衣、下装、鞋袜、道具、姿势各至少一个（没有则不写）。
+4. **每个角色使用独立的 Natural Language 锚定句**：推荐结构为 `On the left side of the image is Character A from Series A, with [按规则5覆盖各可见类别的代表性特征].`；下一角色另起一句。不得把多名角色的外观塞进同一个嵌套长句。
+5. **各类别至少一个代表性特征**：每个角色在设定中存在且在当前景别中可见的发型、上衣、下装、鞋袜、道具、姿势类别，各至少写一个代表性特征。某类别本来不存在，或因 `close-up`、`upper body` 等景别不会出现在画面中时，不得为了凑齐类别而编造或保留画面外特征。
 6. **空间位置以画面/观众视角为基准并保持稳定**：使用 `on the left side of the image`、`on the right side of the image`、`in the center`、`in the foreground`、`in the background`。不要混用画面左右与角色自身左右；后文不得交换已分配的位置。
 7. **互动句必须明确主语和宾语**：完成所有角色锚定后，再写 `Character A holds Character B's right hand`、`Character B looks at Character A` 等。避免连续使用含义不明的 `she`、`he`、`they`，避免笼统的 `interacting`、`together` 代替可见动作。
 8. **区分专属属性与共享属性**：专属外观、服装、表情和道具必须放进对应角色的分组或锚定句；两人共有的服装、姿势或环境状态使用 `Both characters...` 单独说明，不得复制成含混的全局属性。
-9. **只保留少量高区分度特征**：每个角色优先选择2～4个最能区分彼此的外观或服装锚点。角色相似、人数达到3人以上或互动复杂时，应减少次要装饰、道具和同时发生的动作，优先保证身份、位置和主要互动。
+9. **每类只保留少量高区分度特征**：在满足规则5的前提下，每个可见类别通常只选择一个最有辨识度的代表性特征；只有人物识别确实需要时，同一类别才增加第二个。角色相似、人数达到3人以上或互动复杂时，应删除同类别的次要细节和不必要的同时动作，但不得删掉某个实际存在且可见类别的唯一代表性特征。
 10. **权重不能代替属性归属**：只有在角色分组和自然语言锚定已经清楚时，才可谨慎强化关键特征。不得仅靠 `(blue hair:2)`、`(red hair:2)` 分离角色，也不得同时堆叠大量高权重属性。
-11. **Natural Language 负责明确归属而非机械复读**：只复述用于身份区分的关键特征，并补充空间位置、互动动作、光影对象和构图取景；不要把全部 Hard Tags 再抄一遍。
+11. **Natural Language 负责明确归属而非完整抄写**：角色锚定句必须复述规则5要求的各类别代表性特征，并补充空间位置、互动动作、光影对象和构图取景；同类别的其余次要 Hard Tags 不再重复。
 
 推荐示意：
 
 ```text
-2girls, character a, series a, black hair, blue eyes, white jacket, character b, series b, blonde hair, red eyes, black dress, railway station
+2girls, character a, series a, short black hair, blue eyes, white jacket, blue skirt, black boots, shoulder bag, standing, character b, series b, long blonde hair, red eyes, black blouse, red skirt, white boots, suitcase, standing, holding hands, railway station
 
-The image is divided into a left side and a right side, with both characters shown at the same readable scale. On the left side of the image is Character A from Series A, with short black hair, blue eyes, and a white jacket. On the right side of the image is Character B from Series B, with long blonde hair, red eyes, and a black dress. Character A holds Character B's right hand while Character B looks at Character A. A soft side light keeps both faces clearly visible while the railway platform remains secondary in the background.
+The image is divided into a left side and a right side, with both characters shown at the same readable scale. On the left side of the image is Character A from Series A, standing with short black hair, a white jacket, a blue skirt, black boots, and a shoulder bag. On the right side of the image is Character B from Series B, standing with long blonde hair, a black blouse, a red skirt, white boots, and a suitcase held in her left hand. Character A holds Character B's right hand while Character B looks at Character A. A soft side light keeps both faces clearly visible while the railway platform remains secondary in the background.
 ```
 
 ---
@@ -809,10 +831,10 @@ The image is divided into a left side and a right side, with both characters sho
 4. 是否避免无意义前景、大片暗部和隧道式构图？
 5. 是否明确主光源照亮人物的哪些部位？
 6. 夜景或背光场景是否避免意外剪影？
-7. 标签是否去重并符合数量上限？
+7. 标签是否去重并尽量落入目标范围；超出目标范围时，是否只保留了与取景、人物识别和用户重点真正相关的标签？
 8. 动作、视线、姿势和道具关系是否一致？
 9. Natural Language 是否保持职责清晰：单人物2～3句，多人物按角色拆句且没有嵌套长句？
-10. 多人物时，人数是否准确，每个角色是否都有稳定的画面位置、独立锚定和明确的动作归属？
+10. 多人物时，人数是否准确，每个角色是否都有稳定的画面位置、独立锚定、明确的动作归属，并为设定中存在且当前景别可见的发型、上衣、下装、鞋袜、道具、姿势类别各保留至少一个代表性特征？
 11. 是否只加入用户要求或画面逻辑真正需要的内容？
 
 ## 中文解释规则

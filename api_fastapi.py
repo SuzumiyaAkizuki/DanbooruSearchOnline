@@ -92,6 +92,7 @@ class TagOut(BaseModel):
     layer: str
     wiki: str = ""
     artist_top_tags: list[str] = Field(default_factory=list)
+    alias_from: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class RelatedIn(BaseModel):

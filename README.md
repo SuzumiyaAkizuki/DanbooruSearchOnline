@@ -98,9 +98,10 @@ thumbnail: >-
 
 ### 1. 精确查词
 
-**适用场景：** 你知道某个标签的大概写法，但不确定拼写是否准确，或者只记得部分写法。
+**适用场景：** 你想用中文或英文查询一个单一概念，或者知道某个标签的大概写法但不确定拼写是否准确。
 
 本工具通过语义相似度匹配而非字符串精确匹配，因此具备一定的拼写容错能力。
+中文概念同样会通过中文核心词、中文扩展词和释义等向量层检索，例如输入 `水手服` 可以召回 `serafuku`。语义搜索召回废弃标签时，系统会使用官方 Danbooru Tag Alias 将其规范化为当前标签；Alias 只纠正结果，不替代语义搜索。
 
 **建议参数：** Top K: 20 | 结果上限: 10 | 热度权重: 0.15 | **关闭智能分词**
 
@@ -110,6 +111,7 @@ thumbnail: >-
 
 | 你的输入 | 实际标准标签 | 说明 |
 |---|---|---|
+| `水手服` | `serafuku` | 中文概念通过语义搜索命中 |
 | `selafuku` | `serafuku` | 经典拼写错误，仍可命中 |
 | `school unifor` | `school_uniform` | 漏字母，仍可命中 |
 | `twintail` | `twintails` | 单复数混淆，仍可命中 |
@@ -360,7 +362,7 @@ POST /api/search
 ```
 
 搜索接口保留底层可调参数，适合需要精细控制召回数量、分层检索、分词策略、类别筛选和分组去重的工作流。
-响应包含 `tags_all`、`tags_sfw`、`keywords`、`results`；每条结果默认包含完整字段和 `wiki`。
+响应包含 `tags_all`、`tags_sfw`、`keywords`、`results`；每条结果默认包含完整字段和 `wiki`。如果语义召回结果经官方 Tag Alias 规范化，还会包含原废弃标签 `alias_from`；`tag`、`tags_all` 和 `tags_sfw` 始终使用规范标签。
 
 **关联推荐接口**
 ```
@@ -480,9 +482,9 @@ npm install -g mcp-remote
 - `full_scene`：默认值。用户描述的是一张具体画面时使用，即使描述里有很多元素，也仍然属于完整画面。
 - `concept_explore`：用户想浏览某个概念下有哪些候选标签时使用，结果更多，token 消耗更高。
 - `subject_describe`：只描述一个单一视觉概念、角色或物品时使用；多元素画面不要用这个模式。
-- `precise_lookup`：用于拼写纠错或接近精确的标签查询。
+- `precise_lookup`：用于中文或英文的单一概念、拼写纠错及接近精确的标签查询；仍使用语义搜索，并用官方 Tag Alias 规范化返回结果。
 
-返回 JSON 包含：`prompt`（逗号分隔标签）、`keywords`（检索关键词）、`results`（标签结果）。每条结果包含 `tag`、`cn_name`，当 `include_wiki=true` 时包含 `wiki`。
+返回 JSON 包含：`prompt`（逗号分隔标签）、`keywords`（检索关键词）、`results`（标签结果）。每条结果包含 `tag`、`cn_name`；发生官方 Alias 纠正时包含 `alias_from`，当 `include_wiki=true` 时包含 `wiki`。
 
 **`get_related_tags`** — 共现关联推荐
 

@@ -362,7 +362,7 @@ def _get_git_commit() -> str:
 def result_to_row(r, nsfw_visible: bool) -> dict:
     d = asdict(r)
     d['_nsfw_blocked'] = (r.nsfw == '1') and not nsfw_visible
-    d['reason'] = semantic_candidate_reason(r.source, r.layer)
+    d['reason'] = semantic_candidate_reason(r.source, r.layer, r.alias_from)
     return d
 
 
@@ -440,6 +440,7 @@ class DanbooruSearchUI:
         self.current_related: list = []
         self.chip_extra_selected: set = set()
         self._selected_order: list[str] = []
+        self._rendered_selected_chip_tags: set[str] = set()
         self.workspace_state: dict = new_workspace()
         self.search_history: dict = empty_history()
         self.favorites: dict = empty_favorites()
@@ -1056,6 +1057,83 @@ class DanbooruSearchUI:
                 .related-item:hover { background-color: rgba(74, 144, 226, 0.04); }
                 .tag-link { text-decoration: none; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; }
                 .tag-link:hover { text-decoration: underline; }
+                :root {
+                    --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+                    --motion-fast: 180ms;
+                    --motion-content: 250ms;
+                    --motion-chip: 210ms;
+                }
+                .motion-search-input .q-field__control {
+                    transition: box-shadow var(--motion-fast) var(--motion-ease-out),
+                                background-color var(--motion-fast) ease;
+                }
+                .motion-search-input.q-field--focused .q-field__control {
+                    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.12);
+                }
+                .motion-search-button {
+                    transition: transform var(--motion-fast) var(--motion-ease-out),
+                                box-shadow var(--motion-fast) ease,
+                                opacity var(--motion-fast) ease;
+                }
+                @media (hover: hover) {
+                    .motion-search-button:not(.disabled):hover {
+                        transform: translateY(-1px);
+                        box-shadow: 0 3px 8px rgba(51, 65, 85, 0.18);
+                    }
+                }
+                .motion-search-button:active { transform: translateY(0); }
+                .motion-search-button.disabled { opacity: 0.82; }
+                .motion-search-spinner {
+                    animation: motion-chip-enter var(--motion-fast) var(--motion-ease-out) both;
+                }
+                @keyframes motion-content-enter {
+                    from { opacity: 0; transform: translateY(6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes motion-chip-enter {
+                    from { opacity: 0; transform: translateY(3px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes motion-recommendation-enter-from-right {
+                    from { opacity: 0; transform: translateX(10px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+                @keyframes motion-recommendation-enter-from-left {
+                    from { opacity: 0; transform: translateX(-10px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+                .motion-results-enter,
+                .motion-secondary-enter,
+                .motion-refresh-enter {
+                    animation: motion-content-enter var(--motion-content) var(--motion-ease-out) both;
+                }
+                .motion-recommendation-enter-right {
+                    animation: motion-recommendation-enter-from-right var(--motion-content) var(--motion-ease-out) both;
+                }
+                .motion-recommendation-enter-left {
+                    animation: motion-recommendation-enter-from-left var(--motion-content) var(--motion-ease-out) both;
+                }
+                .motion-chip-enter {
+                    animation: motion-chip-enter var(--motion-chip) var(--motion-ease-out) both;
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .motion-search-input .q-field__control,
+                    .motion-search-button,
+                    .motion-search-spinner,
+                    .related-item,
+                    .weight-btn {
+                        transition-duration: 1ms !important;
+                    }
+                    .motion-results-enter,
+                    .motion-secondary-enter,
+                    .motion-refresh-enter,
+                    .motion-recommendation-enter-right,
+                    .motion-recommendation-enter-left,
+                    .motion-chip-enter,
+                    .motion-search-spinner {
+                        animation: none !important;
+                    }
+                }
                 .weight-chip { display: inline-flex; align-items: center; gap: 2px;
                                border-radius: 16px; padding: 2px 6px 2px 4px;
                                background: #e3edf7; border: 1px solid #b3cde8;
@@ -1289,12 +1367,16 @@ class DanbooruSearchUI:
                 self._build_selection_bar()
 
             # ── 4~5. 搜索结果区域（搜索前隐藏）──
-            self.results_section = ui.column().classes('w-full gap-4')
+            self.results_section = ui.column().classes('w-full gap-4').props(
+                'id="danbooru-results-section"'
+            )
             self.results_section.set_visibility(False)
 
             with self.results_section:
                 # ── 4. 查询理解：来源筛选 + 概念覆盖 ──
-                self.coverage_container = ui.column().classes('w-full gap-2')
+                self.coverage_container = ui.column().classes('w-full gap-2').props(
+                    'id="danbooru-coverage-section"'
+                )
 
                 # ── 5. 两栏结果 ──
                 self._build_results_columns()
@@ -1306,6 +1388,28 @@ class DanbooruSearchUI:
                 ui.button(SPONSOR_NOTICE_TEXT, on_click=self.sponsor_dialog.open) \
                     .props('flat dense no-caps color=grey-6') \
                     .classes('text-xs mt-1')
+
+    def _replay_motion(self, element_id: str, motion_class: str) -> None:
+        """在客户端重放一次区域级动效；减少动态效果时保持静止。"""
+        if not self._client_alive():
+            return
+        try:
+            ui.run_javascript(f'''
+                const element = document.getElementById('{element_id}');
+                if (element && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {{
+                    element.classList.remove(
+                        'motion-results-enter',
+                        'motion-secondary-enter',
+                        'motion-refresh-enter',
+                        'motion-recommendation-enter-right',
+                        'motion-recommendation-enter-left',
+                    );
+                    void element.offsetWidth;
+                    element.classList.add('{motion_class}');
+                }}
+            ''')
+        except RuntimeError:
+            pass
 
     # ── 搜索卡片 ─────────────────────────────────────────────────────────
 
@@ -1340,16 +1444,18 @@ class DanbooruSearchUI:
             with ui.row().classes('w-full gap-3 items-stretch'):
                 self.search_input = ui.textarea(
                     placeholder='输入自然语言描述或模糊概念，例如：一个穿着白色水手服的少女在雨中奔跑...'
-                ).classes('flex-grow text-base').props('outlined rows=2')
+                ).classes('flex-grow text-base motion-search-input').props('outlined rows=2')
                 self.search_input.on('keydown.ctrl.enter', self.perform_search)
 
                 with ui.column().classes('justify-center'):
                     self.search_btn = ui.button(
                         '', on_click=self.perform_search, icon='search'
-                    ).classes('px-6 h-full min-h-16').props('unelevated color=dark')
+                    ).classes('px-6 h-full min-h-16 motion-search-button').props('unelevated color=dark')
                     with self.search_btn:
                         ui.label('搜索').classes('text-sm mt-1')
-                    self.spinner = ui.spinner(size='2em').classes('hidden')
+                    self.spinner = ui.spinner(size='2em').classes(
+                        'hidden motion-search-spinner'
+                    )
 
             self.search_params_row = ui.row().classes('w-full gap-6 items-center mt-3 flex-wrap')
             with self.search_params_row:
@@ -2392,16 +2498,18 @@ class DanbooruSearchUI:
             # chip 容器：每个已选标签渲染为一个带加减按钮的 chip
             self.selected_chips_container = ui.element('div').classes(
                 'w-full mt-2 min-h-10 p-1 rounded bg-white border border-blue-100'
-            )
+            ).props('id="danbooru-selected-chips"')
             self.prompt_pending_container = ui.column().classes('w-full gap-2 mt-2')
 
     def _render_selected_chips(self):
         """按稳定 Tag Group 规则渲染；复制顺序仍使用原始选择顺序。"""
         if self.selected_chips_container is None:
             return
-        self.selected_chips_container.clear()
         tags = self._get_selected_tags()
+        previous_tags = set(self._rendered_selected_chip_tags)
+        self.selected_chips_container.clear()
         if not tags:
+            self._rendered_selected_chip_tags.clear()
             with self.selected_chips_container:
                 ui.label('暂无已选标签').classes('text-xs text-gray-400 italic p-2 self-center')
             return
@@ -2422,7 +2530,10 @@ class DanbooruSearchUI:
                     )
                     with ui.row().classes('w-full gap-1 flex-wrap'):
                         for tag in group_tags:
-                            self._render_selected_tag_chip(tag, step)
+                            self._render_selected_tag_chip(
+                                tag, step, animate=tag not in previous_tags,
+                            )
+        self._rendered_selected_chip_tags = set(tags)
 
     def _workspace_group_for_tag(self, tag: str) -> str:
         is_artist = tag in self._workspace_artist_tags
@@ -2447,12 +2558,13 @@ class DanbooruSearchUI:
             is_artist=is_artist,
         )
 
-    def _render_selected_tag_chip(self, tag: str, step: float):
+    def _render_selected_tag_chip(self, tag: str, step: float, *, animate: bool = False):
         w = self.tag_weights.get(tag, 1.0)
         extra_cls = 'boosted' if w > 1.0 else ('reduced' if w < 1.0 else '')
         w_str = f'{w:.1f}'
         display_label = _format_selected_tag_label(tag, self._get_cn_name_for_tag(tag))
-        with ui.element('div').classes(f'weight-chip {extra_cls}'):
+        motion_cls = ' motion-chip-enter' if animate else ''
+        with ui.element('div').classes(f'weight-chip{motion_cls} {extra_cls}'):
             metadata = self._pending_selection_meta.get(tag, {})
             reason = selected_tag_reason(
                 metadata.get('origin'),
@@ -3402,6 +3514,7 @@ class DanbooruSearchUI:
                     ui.button('根据已选刷新', icon='refresh', on_click=self._manual_refresh_group) \
                         .props('dense flat color=primary').classes('text-sm')
                 self.group_expansion_container = ui.column().classes('w-full gap-0')
+                self.group_expansion_container.props('id="danbooru-group-expansion"')
                 with self.group_expansion_container:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
 
@@ -3419,7 +3532,7 @@ class DanbooruSearchUI:
 
                 self.artist_rec_list = ui.column().classes(
                     'w-full gap-0 recommendation-grid'
-                )
+                ).props('id="danbooru-artist-recommendations"')
                 with self.artist_rec_list:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
                 self.artist_rec_pagination = ui.column().classes('w-full')
@@ -3442,7 +3555,7 @@ class DanbooruSearchUI:
 
                 self.related_list_container = ui.column().classes(
                     'w-full gap-0 recommendation-grid'
-                )
+                ).props('id="danbooru-related-recommendations"')
                 with self.related_list_container:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
                 self.related_pagination = ui.column().classes('w-full')
@@ -3455,8 +3568,15 @@ class DanbooruSearchUI:
         """切换关联推荐页，只构建当前页的可见行。"""
         if self._related_page_count < 1:
             return
+        previous_page = self._related_page
         self._related_page = max(1, min(page, self._related_page_count))
         self._render_related_page()
+        motion_class = (
+            'motion-recommendation-enter-right'
+            if self._related_page >= previous_page
+            else 'motion-recommendation-enter-left'
+        )
+        self._replay_motion('danbooru-related-recommendations', motion_class)
         if self._related_page_label is not None:
             self._related_page_label.text = (
                 f'{self._related_page} / {self._related_page_count}'
@@ -3608,6 +3728,9 @@ class DanbooruSearchUI:
 
         if not self._related_results:
             self._render_related_page()
+            self._replay_motion(
+                'danbooru-related-recommendations', 'motion-recommendation-enter-right'
+            )
             return
 
         if self._related_page_count > 1:
@@ -3926,6 +4049,7 @@ class DanbooruSearchUI:
             self.current_filter_keyword = 'ALL'
             self._render_concept_coverage()
             self._record_search_history(query)
+            self._replay_motion('danbooru-results-section', 'motion-results-enter')
             ui.notify(f'找到 {len(table_data)} 个标签', type='positive')
             self.current_search_interacted = False
 
@@ -4308,8 +4432,15 @@ class DanbooruSearchUI:
         """切换推荐画师页，只构建当前页的可见行。"""
         if self._artist_rec_page_count < 1:
             return
+        previous_page = self._artist_rec_page
         self._artist_rec_page = max(1, min(page, self._artist_rec_page_count))
         self._render_artist_rec_page()
+        motion_class = (
+            'motion-recommendation-enter-right'
+            if self._artist_rec_page >= previous_page
+            else 'motion-recommendation-enter-left'
+        )
+        self._replay_motion('danbooru-artist-recommendations', motion_class)
         if self._artist_rec_page_label is not None:
             self._artist_rec_page_label.text = (
                 f'{self._artist_rec_page} / {self._artist_rec_page_count}'
@@ -4434,6 +4565,9 @@ class DanbooruSearchUI:
 
         if not self._artist_rec_results:
             self._render_artist_rec_page()
+            self._replay_motion(
+                'danbooru-artist-recommendations', 'motion-recommendation-enter-right'
+            )
             return
 
         if self._artist_rec_page_count > 1:
@@ -4468,6 +4602,7 @@ class DanbooruSearchUI:
         if not group_data:
             with self.group_expansion_container:
                 ui.label('已选标签无分组信息').classes('text-sm text-gray-400 italic p-2')
+            self._replay_motion('danbooru-group-expansion', 'motion-refresh-enter')
             return
 
         # 行背景色按分类区分（与关联推荐一致）
@@ -4586,6 +4721,7 @@ class DanbooruSearchUI:
                                 on_click=_load_more,
                             ).props('dense flat color=primary').classes('col-span-2 text-xs')
         self._restore_group_scroll_positions()
+        self._replay_motion('danbooru-group-expansion', 'motion-refresh-enter')
 
     def _on_group_expansion_change(self, group_name: str, event):
         value = getattr(event, 'args', None)

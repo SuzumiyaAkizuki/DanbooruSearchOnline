@@ -33,11 +33,19 @@ def _clean_sources(sources: Iterable[Any], *, limit: int = 3) -> list[str]:
     return result
 
 
-def semantic_candidate_reason(source: Any, layer: Any = "") -> str:
+def semantic_candidate_reason(
+    source: Any,
+    layer: Any = "",
+    alias_from: Any = "",
+) -> str:
     source_text = str(source or "").strip()
+    alias_text = str(alias_from or "").strip()
     if str(layer or "") == "artist":
         return f"匹配画师名称：{source_text}" if source_text else "来自画师名称匹配"
-    return f"匹配输入：{source_text}" if source_text else "来自语义搜索"
+    reason = f"匹配输入：{source_text}" if source_text else "来自语义搜索"
+    if alias_text:
+        return f"{reason}；已由 {alias_text} 规范化"
+    return reason
 
 
 def related_candidate_reason(sources: Iterable[Any]) -> str:
