@@ -89,6 +89,50 @@ from core.workspace import (
 )
 from platform_utils import is_cloud, get_host_port, nsfw_allowed
 from mcp_server import mcp
+from webui.constants import (
+    ANNOUNCEMENT_VERSION as _ANNOUNCEMENT_VERSION,
+    ARTIST_ORIGINS as _ARTIST_ORIGINS,
+    ARTIST_REC_LIMIT,
+    ARTIST_REC_PAGE_SIZE,
+    CONFIG_LS_KEY as _CONFIG_LS_KEY,
+    CONFIG_VERSION as _CONFIG_VERSION,
+    GROUP_RENDER_TAG_LIMIT,
+    HISTORY_PRE_COMPACTION_BACKUP_KEY as _HISTORY_PRE_COMPACTION_BACKUP_KEY,
+    LOCAL_STORAGE_MAX_READ_CHARS as _LOCAL_STORAGE_MAX_READ_CHARS,
+    LOCAL_STORAGE_NAMES as _LOCAL_STORAGE_NAMES,
+    LOCAL_STORAGE_READ_CHUNK_CHARS as _LOCAL_STORAGE_READ_CHUNK_CHARS,
+    LOCAL_STORAGE_RESTORE_CACHE as _LOCAL_STORAGE_RESTORE_CACHE,
+    LOCAL_STORAGE_RESTORE_RETRY_DELAYS as _LOCAL_STORAGE_RESTORE_RETRY_DELAYS,
+    OPTIONAL_COLS,
+    RECOMMENDATION_DEBOUNCE_SECONDS,
+    RELATED_REC_PAGE_SIZE,
+    SEARCH_MODE_OPTIONS as _SEARCH_MODE_OPTIONS,
+    SEARCH_MODE_PRESETS as _SEARCH_MODE_PRESETS,
+    SPONSOR_IMAGE_URL,
+    SPONSOR_NOTICE_TEXT,
+    SPONSOR_TITLE,
+    SPONSOR_TOOLCHAIN_URL,
+    TABLE_COLUMNS,
+    UI_TEXT,
+    WORKSPACE_SAVE_DEBOUNCE_SECONDS,
+)
+from webui.helpers import (
+    apply_nsfw_filter as _apply_nsfw_filter,
+    format_history_settings,
+    format_history_time,
+    format_selected_tag_label,
+    format_tag_with_weight,
+    get_git_commit,
+    group_names_key,
+    group_scroll_dom_id,
+    limit_group_render_tags,
+    next_group_render_limit,
+    result_to_row as _result_to_row,
+    sanitize_restored_config,
+    scroll_state_restore_script,
+    should_group_start_expanded,
+)
+from webui.styles import MOTION_STYLE
 
 
 # 仅统计当前进程中已建立 Socket.IO 连接的 UI 页面，不等同于唯一用户数。
@@ -143,258 +187,63 @@ class _SuppressOAuthNoise(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(_SuppressOAuthNoise())
 logging.getLogger("nicegui").addFilter(_SuppressOAuthNoise())
 
-# ── 表格列定义 ─────────────────────────────────────────────────────────────────
-
-TABLE_COLUMNS = [
-    {'name': 'tag',         'label': '匹配标签', 'field': 'tag',         'align': 'left', 'sortable': True},
-    {'name': 'cn_name',     'label': '含义',     'field': 'cn_name',     'align': 'left'},
-    {'name': 'nsfw',        'label': '分级',     'field': 'nsfw',        'align': 'center', 'sortable': True},
-    {'name': 'final_score', 'label': '综合分',   'field': 'final_score', 'sortable': True},
-    {'name': 'count',       'label': '热度',     'field': 'count',       'sortable': True},
-    {'name': 'reason',      'label': '推荐原因', 'field': 'reason',      'align': 'left'},
-]
-
-OPTIONAL_COLS = {
-    'semantic': {'name': 'semantic_score', 'label': '语义分',   'field': 'semantic_score', 'sortable': True},
-    'layer':    {'name': 'layer',          'label': '匹配层',   'field': 'layer'},
-    'source':   {'name': 'source',         'label': '匹配来源', 'field': 'source'},
-}
-
-# localStorage key 与配置版本，版本变更时自动丢弃旧配置
-_CONFIG_LS_KEY = 'danbooru_search_config'
-_CONFIG_VERSION = 7
-_ANNOUNCEMENT_VERSION = 'p0-workspace-2026-07'
-_LOCAL_STORAGE_READ_CHUNK_CHARS = 200_000
-_LOCAL_STORAGE_MAX_READ_CHARS = 4_000_000
-_HISTORY_PRE_COMPACTION_BACKUP_KEY = f'{HISTORY_STORAGE_KEY}_pre_compaction_backup'
-_LOCAL_STORAGE_RESTORE_CACHE = '__danbooruLocalStorageRestoreV2'
-_LOCAL_STORAGE_RESTORE_RETRY_DELAYS = (0.0, 1.0, 3.0)
-_LOCAL_STORAGE_NAMES = ('config', 'workspace', 'history', 'favorites', 'legacy')
-
-SPONSOR_IMAGE_URL = "https://akizukipic.oss-cn-beijing.aliyuncs.com/img/202501120027592.png"
-SPONSOR_TOOLCHAIN_URL = "http://intro.sakizuki.site/index.html"
-SPONSOR_NOTICE_TEXT = "喜欢的话，可以请作者喝杯咖啡"
-SPONSOR_TITLE = "谢谢你愿意支持"
-UI_TEXT = load_ui_text()
-
-
-def _resolve_group_render_limit(default: int = 80) -> int:
-    raw = os.environ.get('DANBOORU_GROUP_RENDER_LIMIT')
-    if raw is None:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
-
-
-GROUP_RENDER_TAG_LIMIT = _resolve_group_render_limit()
-ARTIST_REC_LIMIT = 64
-ARTIST_REC_PAGE_SIZE = 8
-RELATED_REC_PAGE_SIZE = 10
-RECOMMENDATION_DEBOUNCE_SECONDS = 0.1
-WORKSPACE_SAVE_DEBOUNCE_SECONDS = 0.3
-
-# 搜索模式预设
-_SEARCH_MODE_PRESETS: dict[str, dict] = {
-    '精确查词': {'top_k': 20, 'limit': 10, 'popularity_weight': 0.15, 'use_segmentation': False, 'group_mode': 'off', 'max_per_group': 2},
-    '概念扩展': {'top_k': 80, 'limit': 80, 'popularity_weight': 0.15, 'use_segmentation': True,  'group_mode': 'expand', 'max_per_group': 2},
-    '描述查词': {'top_k': 20, 'limit': 20, 'popularity_weight': 0.15, 'use_segmentation': False, 'group_mode': 'off', 'max_per_group': 2},
-    '完整场景': {'top_k': 5,  'limit': 80, 'popularity_weight': 0.15, 'use_segmentation': True,  'group_mode': 'diverse', 'max_per_group': 2},
-}
-_SEARCH_MODE_OPTIONS = ['自定义'] + list(_SEARCH_MODE_PRESETS.keys())
-_ARTIST_ORIGINS = set(ARTIST_SELECTION_ORIGINS)
-
-
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
 
 _HISTORY_DISPLAY_TIMEZONE = timezone(timedelta(hours=8))
 
 
 def _format_history_time(value: object) -> str:
-    """将历史记录的 ISO 时间转成简短的北京时间。"""
-    raw = str(value or '').strip()
-    if not raw:
-        return '--'
-    try:
-        parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=_HISTORY_DISPLAY_TIMEZONE)
-        return parsed.astimezone(_HISTORY_DISPLAY_TIMEZONE).strftime('%y-%m-%d %H:%M:%S')
-    except ValueError:
-        return raw
+    return format_history_time(value)
 
 
 def _format_history_settings(settings: object) -> str:
-    if not isinstance(settings, dict):
-        settings = {}
-
-    mode = settings.get('search_mode')
-    preset = _SEARCH_MODE_PRESETS.get(mode)
-    if preset and all(settings.get(key) == value for key, value in preset.items()):
-        return f'预设：{mode}'
-
-    top_k = settings.get('top_k', '--')
-    limit = settings.get('limit', '--')
-    segmentation = settings.get('use_segmentation')
-    segmentation_text = '开启' if segmentation is True else '关闭' if segmentation is False else '--'
-    return f'Top K：{top_k} · 数量上限：{limit} · 分词：{segmentation_text}'
+    return format_history_settings(settings)
 
 def _sanitize_restored_config(cfg: dict) -> dict:
-    """保留旧配置中的已知、安全字段；坏字段不得阻止页面启动。"""
-    safe: dict = {}
-
-    numeric_fields = {
-        'top_k': (int, 1, 200),
-        'limit': (int, 10, 500),
-        'popularity_weight': (float, 0.0, 1.0),
-        'max_per_group': (int, 1, 10),
-    }
-    for key, (caster, minimum, maximum) in numeric_fields.items():
-        if key not in cfg:
-            continue
-        try:
-            value = caster(cfg[key])
-        except (TypeError, ValueError):
-            continue
-        if minimum <= value <= maximum:
-            safe[key] = value
-
-    for key in (
-        'show_nsfw', 'use_segmentation', 'sw_semantic', 'sw_layer',
-        'sw_source',
-    ):
-        if isinstance(cfg.get(key), bool):
-            safe[key] = cfg[key]
-
-    for key in ('selected_layers', 'selected_cats'):
-        value = cfg.get(key)
-        if isinstance(value, dict):
-            safe[key] = {str(k): v for k, v in value.items() if isinstance(v, bool)}
-
-    if cfg.get('prompt_format') in ('sdxl', 'nai', 'anima'):
-        safe['prompt_format'] = cfg['prompt_format']
-    if cfg.get('search_mode') in _SEARCH_MODE_OPTIONS:
-        safe['search_mode'] = cfg['search_mode']
-    if cfg.get('group_mode') in ('off', 'expand', 'diverse'):
-        safe['group_mode'] = cfg['group_mode']
-    if isinstance(cfg.get('rows_per_page'), int) and cfg['rows_per_page'] in {0, 5, 7, 10, 15, 20, 25, 50}:
-        safe['rows_per_page'] = cfg['rows_per_page']
-    if isinstance(cfg.get('search_query'), str):
-        safe['search_query'] = cfg['search_query'][:4_000]
-    if isinstance(cfg.get('dismissed_announcement_version'), str):
-        safe['dismissed_announcement_version'] = cfg['dismissed_announcement_version'][:100]
-    return safe
+    return sanitize_restored_config(cfg)
 
 def _next_group_render_limit(current: int, total: int, page_size: int) -> int:
-    if page_size <= 0:
-        return total
-    return min(total, max(page_size, current + page_size))
+    return next_group_render_limit(current, total, page_size)
 
 
 def _limit_group_render_tags(tags: list[dict], visible_limit: int | None = None) -> tuple[list[dict], int]:
-    limit = GROUP_RENDER_TAG_LIMIT if visible_limit is None else visible_limit
-    if limit <= 0:
-        return tags, 0
-    if len(tags) <= limit:
-        return tags, 0
-    return tags[:limit], len(tags) - limit
+    return limit_group_render_tags(tags, visible_limit)
 
 
 def _should_group_start_expanded(group_name: str, expanded_groups: set[str]) -> bool:
-    return group_name in expanded_groups
+    return should_group_start_expanded(group_name, expanded_groups)
 
 
 def _group_names_key(group_data: list[dict]) -> tuple[str, ...]:
-    return tuple(sorted({str(group.get('group', '')) for group in group_data}))
+    return group_names_key(group_data)
 
 
 def _group_scroll_dom_id(group_name: str) -> str:
-    safe_name = re.sub(r'[^0-9A-Za-z_-]+', '_', group_name)
-    return f'group-scroll-{safe_name}'
+    return group_scroll_dom_id(group_name)
 
 
 def _scroll_state_restore_script(positions: dict[str, int]) -> str:
-    js_positions = _json.dumps(positions)
-    return f"""
-        (() => {{
-            const positions = {js_positions};
-            const restore = () => {{
-                const windowTop = positions.__window__;
-                if (typeof windowTop === 'number') {{
-                    window.scrollTo({{ top: windowTop, behavior: 'auto' }});
-                    const root = document.scrollingElement || document.documentElement || document.body;
-                    if (root) root.scrollTop = windowTop;
-                }}
-                for (const [id, top] of Object.entries(positions)) {{
-                    if (id === '__window__') continue;
-                    if (id.endsWith('__bottom__')) continue;
-                    const el = document.getElementById(id);
-                    if (!el) continue;
-                    const bottom = positions[`${{id}}__bottom__`];
-                    if (typeof bottom === 'number') {{
-                        el.scrollTop = Math.max(0, el.scrollHeight - bottom);
-                    }} else {{
-                        el.scrollTop = top;
-                    }}
-                }}
-            }};
-            requestAnimationFrame(() => {{
-                restore();
-                requestAnimationFrame(restore);
-            }});
-            setTimeout(restore, 80);
-        }})();
-    """
+    return scroll_state_restore_script(positions)
 
 
 def _get_git_commit() -> str:
-    try:
-        return subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-    except Exception:
-        return os.environ.get('COMMIT_SHA', 'unknown')[:7]
+    return get_git_commit()
 
 
 def result_to_row(r, nsfw_visible: bool) -> dict:
-    d = asdict(r)
-    d['_nsfw_blocked'] = (r.nsfw == '1') and not nsfw_visible
-    d['reason'] = semantic_candidate_reason(r.source, r.layer, r.alias_from)
-    return d
+    return _result_to_row(r, nsfw_visible)
 
 
 def apply_nsfw_filter(rows: list[dict], show_nsfw: bool) -> list[dict]:
-    result = []
-    for row in rows:
-        r = dict(row)
-        r['_nsfw_blocked'] = (r.get('nsfw') == '1') and not show_nsfw
-        result.append(r)
-    return result
+    return _apply_nsfw_filter(rows, show_nsfw)
 
 
 def _format_tag_with_weight(tag: str, weight: float, fmt: str = 'sdxl') -> str:
-    """格式化单个标签。
-    sdxl:  (tag:1.2)  权重 1.0 时输出 tag
-    nai:   1.2::tag:: 权重 1.0 时输出 tag
-    anima: (tag:1.5)  权重 1.0 时输出 tag，下划线替换为空格
-    所有模式均对标签名中的括号进行反斜杠转义。
-    """
-    tag = tag.replace('(', '\\(').replace(')', '\\)')
-    if fmt == 'anima':
-        tag = tag.replace('_', ' ')
-    if weight == 1.0:
-        return tag
-    if fmt == 'nai':
-        return f'{weight:.1f}::{tag}::'
-    return f'({tag}:{weight:.1f})'
+    return format_tag_with_weight(tag, weight, fmt)
 
 
 def _format_selected_tag_label(tag: str, cn_name: str = '') -> str:
-    cn_first = (cn_name or '').split(',', 1)[0].strip()
-    return f'{tag} | {cn_first}' if cn_first else tag
+    return format_selected_tag_label(tag, cn_name)
 
 
 # ── UI 类 ─────────────────────────────────────────────────────────────────────
@@ -1021,6 +870,7 @@ class DanbooruSearchUI:
     def build_page(self):
         self.client = ui.context.client
         ui.colors(primary='#4A90E2', secondary='#5E6C84', accent='#FF6B6B')
+        ui.add_head_html(MOTION_STYLE)
         ui.add_head_html('''
             <meta name="description" content="基于语义匹配的 Danbooru 标签搜索引擎，支持中英双语描述、多维匹配、智能分词与共现关联推荐。">
             <meta name="keywords" content="Danbooru, AI绘画, Stable Diffusion, 提示词, 标签搜索, RAG, Prompt, NovelAI">
@@ -1057,83 +907,6 @@ class DanbooruSearchUI:
                 .related-item:hover { background-color: rgba(74, 144, 226, 0.04); }
                 .tag-link { text-decoration: none; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; }
                 .tag-link:hover { text-decoration: underline; }
-                :root {
-                    --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-                    --motion-fast: 180ms;
-                    --motion-content: 250ms;
-                    --motion-chip: 210ms;
-                }
-                .motion-search-input .q-field__control {
-                    transition: box-shadow var(--motion-fast) var(--motion-ease-out),
-                                background-color var(--motion-fast) ease;
-                }
-                .motion-search-input.q-field--focused .q-field__control {
-                    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.12);
-                }
-                .motion-search-button {
-                    transition: transform var(--motion-fast) var(--motion-ease-out),
-                                box-shadow var(--motion-fast) ease,
-                                opacity var(--motion-fast) ease;
-                }
-                @media (hover: hover) {
-                    .motion-search-button:not(.disabled):hover {
-                        transform: translateY(-1px);
-                        box-shadow: 0 3px 8px rgba(51, 65, 85, 0.18);
-                    }
-                }
-                .motion-search-button:active { transform: translateY(0); }
-                .motion-search-button.disabled { opacity: 0.82; }
-                .motion-search-spinner {
-                    animation: motion-chip-enter var(--motion-fast) var(--motion-ease-out) both;
-                }
-                @keyframes motion-content-enter {
-                    from { opacity: 0; transform: translateY(6px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes motion-chip-enter {
-                    from { opacity: 0; transform: translateY(3px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes motion-recommendation-enter-from-right {
-                    from { opacity: 0; transform: translateX(10px); }
-                    to { opacity: 1; transform: translateX(0); }
-                }
-                @keyframes motion-recommendation-enter-from-left {
-                    from { opacity: 0; transform: translateX(-10px); }
-                    to { opacity: 1; transform: translateX(0); }
-                }
-                .motion-results-enter,
-                .motion-secondary-enter,
-                .motion-refresh-enter {
-                    animation: motion-content-enter var(--motion-content) var(--motion-ease-out) both;
-                }
-                .motion-recommendation-enter-right {
-                    animation: motion-recommendation-enter-from-right var(--motion-content) var(--motion-ease-out) both;
-                }
-                .motion-recommendation-enter-left {
-                    animation: motion-recommendation-enter-from-left var(--motion-content) var(--motion-ease-out) both;
-                }
-                .motion-chip-enter {
-                    animation: motion-chip-enter var(--motion-chip) var(--motion-ease-out) both;
-                }
-                @media (prefers-reduced-motion: reduce) {
-                    .motion-search-input .q-field__control,
-                    .motion-search-button,
-                    .motion-search-spinner,
-                    .related-item,
-                    .weight-btn {
-                        transition-duration: 1ms !important;
-                    }
-                    .motion-results-enter,
-                    .motion-secondary-enter,
-                    .motion-refresh-enter,
-                    .motion-recommendation-enter-right,
-                    .motion-recommendation-enter-left,
-                    .motion-chip-enter,
-                    .motion-search-spinner {
-                        animation: none !important;
-                    }
-                }
                 .weight-chip { display: inline-flex; align-items: center; gap: 2px;
                                border-radius: 16px; padding: 2px 6px 2px 4px;
                                background: #e3edf7; border: 1px solid #b3cde8;
