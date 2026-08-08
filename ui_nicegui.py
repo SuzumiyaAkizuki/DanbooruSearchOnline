@@ -13,14 +13,11 @@ sys.stdout.reconfigure(line_buffering=True)
 print("[UI] 脚本开始执行", flush=True)
 import asyncio
 import logging
-import os
 import re
 import time
 import json as _json
-import subprocess
 import traceback
-from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 from fastapi.responses import PlainTextResponse
 
 def _excepthook(exc_type, exc_value, exc_tb):
@@ -30,12 +27,11 @@ def _excepthook(exc_type, exc_value, exc_tb):
 
 sys.excepthook = _excepthook
 
-from nicegui import ui, app, run
+from nicegui import ui, app
 from core import counter, telemetry
 from api_fastapi import app as api_app
 from core.engine import DanbooruTagger
-from core.models import RelatedTag, SearchRequest
-from core.ui_text import load_ui_text
+from core.models import SearchRequest
 from core.prompt_import import (
     WORKSPACE_GROUP_ORDER,
     PromptImportResult,
@@ -53,36 +49,25 @@ from core.workspace_insights import (
     compute_concept_coverage,
     related_candidate_reason,
     selected_tag_reason,
-    semantic_candidate_reason,
     tag_group_candidate_reason,
 )
 from core.workspace import (
-    ARTIST_SELECTION_ORIGINS,
     FAVORITES_STORAGE_KEY,
     HISTORY_STORAGE_KEY,
     LEGACY_STAGED_STORAGE_KEY,
     WORKSPACE_STORAGE_KEY,
     WorkspaceDataError,
-    add_history_entry,
-    append_workspace_query,
     build_backup,
-    clone_workspace,
     dump_collection,
-    dump_workspace,
     empty_favorites,
     empty_history,
     favorite_from_workspace,
     merge_favorite_into_workspace,
-    merge_favorites,
-    merge_history,
-    merge_workspaces,
     new_workspace,
     normalize_backup,
     normalize_favorites,
     replace_with_favorite,
-    sync_selected_entries,
     utc_now_iso,
-    workspace_signature,
 )
 from platform_utils import is_cloud, get_host_port, nsfw_allowed
 from mcp_server import mcp
@@ -122,13 +107,16 @@ from webui.helpers import (
     limit_group_render_tags,
     next_group_render_limit,
     result_to_row as _result_to_row,
-    sanitize_restored_config,
     scroll_state_restore_script,
     should_group_start_expanded,
 )
 from webui.styles import MOTION_STYLE
 from webui.routes import register_main_page
-from webui.local_storage import backup_key, clear_restore_cache, finish_storage_restore_task, flush_storage_session_changes, pause_storage_restore, prepare_restore_snapshot, read_prepared_value, restore_staged_storage, restore_with_retries, start_storage_restore_task, storage_keys, storage_listener_script, write_is_ready
+from webui.local_storage import backup_key, clear_restore_cache, finish_storage_restore_task, flush_storage_session_changes, pause_storage_restore, prepare_restore_snapshot, read_prepared_value, restore_staged_storage, restore_with_retries, schedule_workspace_persist, start_storage_restore_task, storage_keys, storage_listener_script, write_is_ready
+from webui.workspace_state import apply_config_state, apply_search_settings, apply_workspace_state, build_backup_import_plan, clear_history, collect_config_state, current_search_settings, merge_imported_favorite, pop_redo_workspace, pop_undo_workspace, push_undo_snapshot, record_search_history_state, remove_history_entry, replace_favorites_safely, selected_tags, set_selection_meta, sync_workspace_selection
+from webui.recommendations import clamp_page, consume_latest_recommendation_requests, merge_related_results, page_count, page_items, queue_latest_recommendation_request, recommendation_seed_tags, set_paginated_recommendation_page
+from webui.results_panel import RESULT_TABLE_BODY, filter_by_source, update_table_columns
+from webui.recommendation_views import render_artist_recommendations, render_related_list
 
 
 # 仅统计当前进程中已建立 Socket.IO 连接的 UI 页面，不等同于唯一用户数。
@@ -194,9 +182,6 @@ def _format_history_time(value: object) -> str:
 
 def _format_history_settings(settings: object) -> str:
     return format_history_settings(settings)
-
-def _sanitize_restored_config(cfg: dict) -> dict:
-    return sanitize_restored_config(cfg)
 
 def _next_group_render_limit(current: int, total: int, page_size: int) -> int:
     return next_group_render_limit(current, total, page_size)
@@ -758,26 +743,7 @@ class DanbooruSearchUI:
             self.format_toggle_btn.props('color=grey-7')
 
     def _collect_config_state(self) -> dict:
-        return {
-            'version': _CONFIG_VERSION,
-            'top_k': int(self.input_top_k.value) if self.input_top_k else 10,
-            'limit': int(self.input_limit.value) if self.input_limit else 80,
-            'popularity_weight': float(self.input_weight.value) if self.input_weight else 0.15,
-            'show_nsfw': bool(self.input_nsfw.value) if self.input_nsfw else False,
-            'use_segmentation': bool(self.input_segment.value) if self.input_segment else True,
-            'selected_layers': dict(self.selected_layers),
-            'selected_cats': dict(self.selected_cats),
-            'sw_semantic': bool(self.sw_semantic.value) if self.sw_semantic else False,
-            'sw_layer': bool(self.sw_layer.value) if self.sw_layer else False,
-            'sw_source': bool(self.sw_source.value) if self.sw_source else False,
-            'prompt_format': self.prompt_format,
-            'rows_per_page': self._get_rows_per_page(),
-            'search_query': self.search_input.value if self.search_input else '',
-            'dismissed_announcement_version': self.dismissed_announcement_version,
-            'search_mode': self.input_search_mode.value if self.input_search_mode else '自定义',
-            'group_mode': self.input_group_mode.value if self.input_group_mode else 'off',
-            'max_per_group': int(self.input_max_per_group.value) if self.input_max_per_group else 2,
-        }
+        return collect_config_state(self, _CONFIG_VERSION)
 
     def _storage_write_allowed(self, name: str) -> bool:
         """Block writes until that localStorage domain has been safely restored."""
@@ -804,57 +770,7 @@ class DanbooruSearchUI:
         return True
 
     def _apply_config_state(self, cfg: dict):
-        cfg = _sanitize_restored_config(cfg if isinstance(cfg, dict) else {})
-
-        dismissed_version = cfg.get('dismissed_announcement_version', '')
-        self.dismissed_announcement_version = dismissed_version
-        if self.announcement_banner:
-            self.announcement_banner.set_visibility(
-                dismissed_version != _ANNOUNCEMENT_VERSION
-            )
-
-        # 模式可能触发预设填充，因此随后再覆盖各个具体参数。
-        if self.input_search_mode and 'search_mode' in cfg:
-            self.input_search_mode.set_value(cfg['search_mode'])
-        if self.input_top_k and 'top_k' in cfg:
-            self.input_top_k.set_value(cfg['top_k'])
-        if self.input_limit and 'limit' in cfg:
-            self.input_limit.set_value(cfg['limit'])
-        if self.input_weight and 'popularity_weight' in cfg:
-            self.input_weight.set_value(cfg['popularity_weight'])
-        if self.input_segment and 'use_segmentation' in cfg:
-            self.input_segment.set_value(cfg['use_segmentation'])
-        if self.input_group_mode and 'group_mode' in cfg:
-            self.input_group_mode.set_value(cfg['group_mode'])
-        if self.input_max_per_group and 'max_per_group' in cfg:
-            self.input_max_per_group.set_value(cfg['max_per_group'])
-        if nsfw_allowed() and self.input_nsfw and 'show_nsfw' in cfg:
-            self.input_nsfw.set_value(cfg['show_nsfw'])
-
-        for layer, val in cfg.get('selected_layers', {}).items():
-            if layer in self.selected_layers:
-                self.selected_layers[layer] = bool(val)
-                if layer in self._layer_checkboxes:
-                    self._layer_checkboxes[layer].set_value(bool(val))
-        for cat, val in cfg.get('selected_cats', {}).items():
-            if cat in self.selected_cats:
-                self.selected_cats[cat] = bool(val)
-                if cat in self._cat_checkboxes:
-                    self._cat_checkboxes[cat].set_value(bool(val))
-
-        if self.sw_semantic and 'sw_semantic' in cfg:
-            self.sw_semantic.set_value(cfg['sw_semantic'])
-        if self.sw_layer and 'sw_layer' in cfg:
-            self.sw_layer.set_value(cfg['sw_layer'])
-        if self.sw_source and 'sw_source' in cfg:
-            self.sw_source.set_value(cfg['sw_source'])
-        if 'prompt_format' in cfg:
-            self._apply_prompt_format(cfg['prompt_format'])
-        if 'rows_per_page' in cfg:
-            self._set_rows_per_page(cfg['rows_per_page'])
-        if self.search_input and cfg.get('search_query'):
-            self.search_input.set_value(cfg['search_query'])
-        self._update_table_columns()
+        apply_config_state(self, cfg, _ANNOUNCEMENT_VERSION)
 
     # ══════════════════════════════════════════════════════════════════════
     # 页面构建
@@ -1378,76 +1294,13 @@ class DanbooruSearchUI:
             self.favorites_count_label.text = str(len(self.favorites.get('items', [])))
 
     def _current_search_settings(self) -> dict:
-        return {
-            'search_mode': self.input_search_mode.value if self.input_search_mode else '自定义',
-            'top_k': int(self.input_top_k.value) if self.input_top_k else 10,
-            'limit': int(self.input_limit.value) if self.input_limit else 80,
-            'popularity_weight': float(self.input_weight.value) if self.input_weight else 0.15,
-            'show_nsfw': bool(self.input_nsfw.value) if self.input_nsfw else False,
-            'use_segmentation': bool(self.input_segment.value) if self.input_segment else True,
-            'target_layers': [k for k, v in self.selected_layers.items() if v],
-            'target_categories': [k for k, v in self.selected_cats.items() if v],
-            'group_mode': self.input_group_mode.value if self.input_group_mode else 'off',
-            'max_per_group': int(self.input_max_per_group.value) if self.input_max_per_group else 2,
-        }
+        return current_search_settings(self)
 
     def _apply_search_settings(self, settings: dict):
-        if not isinstance(settings, dict):
-            return
-        self._applying_preset = True
-        try:
-            mode = settings.get('search_mode')
-            if self.input_search_mode and mode in _SEARCH_MODE_OPTIONS:
-                self.input_search_mode.set_value(mode)
-            if self.input_top_k and isinstance(settings.get('top_k'), int):
-                self.input_top_k.set_value(settings['top_k'])
-            if self.input_limit and isinstance(settings.get('limit'), int):
-                self.input_limit.set_value(settings['limit'])
-            if self.input_weight and isinstance(settings.get('popularity_weight'), (int, float)):
-                self.input_weight.set_value(settings['popularity_weight'])
-            if self.input_segment and isinstance(settings.get('use_segmentation'), bool):
-                self.input_segment.set_value(settings['use_segmentation'])
-            if self.input_group_mode and settings.get('group_mode') in ('off', 'expand', 'diverse'):
-                self.input_group_mode.set_value(settings['group_mode'])
-            if self.input_max_per_group and isinstance(settings.get('max_per_group'), int):
-                self.input_max_per_group.set_value(settings['max_per_group'])
-            if nsfw_allowed() and self.input_nsfw and isinstance(settings.get('show_nsfw'), bool):
-                self.input_nsfw.set_value(settings['show_nsfw'])
-
-            layers = settings.get('target_layers')
-            if isinstance(layers, list):
-                selected = set(layers)
-                for layer in self.selected_layers:
-                    value = layer in selected
-                    self.selected_layers[layer] = value
-                    if layer in self._layer_checkboxes:
-                        self._layer_checkboxes[layer].set_value(value)
-            categories = settings.get('target_categories')
-            if isinstance(categories, list):
-                selected = set(categories)
-                for category in self.selected_cats:
-                    value = category in selected
-                    self.selected_cats[category] = value
-                    if category in self._cat_checkboxes:
-                        self._cat_checkboxes[category].set_value(value)
-        finally:
-            self._applying_preset = False
-        self._save_config()
+        apply_search_settings(self, settings, _SEARCH_MODE_OPTIONS)
 
     def _record_search_history(self, query: str):
-        settings = self._current_search_settings()
-        self.workspace_state = append_workspace_query(
-            self.workspace_state,
-            query,
-            settings,
-        )
-        self._save_staged_tags()
-        self.search_history = add_history_entry(
-            self.search_history,
-            query,
-            settings,
-            self.workspace_state,
-        )
+        record_search_history_state(self, query)
         self._save_history()
         self._update_workspace_counts()
 
@@ -1523,11 +1376,7 @@ class DanbooruSearchUI:
         await self.perform_search()
 
     def _delete_history_entry(self, item: dict, dialog):
-        history_id = item.get('history_id')
-        self.search_history['items'] = [
-            entry for entry in self.search_history.get('items', [])
-            if entry.get('history_id') != history_id
-        ]
+        remove_history_entry(self, item.get('history_id'))
         self._save_history()
         self._update_workspace_counts()
         dialog.close()
@@ -1539,7 +1388,7 @@ class DanbooruSearchUI:
             with ui.row().classes('w-full justify-end gap-2'):
                 ui.button('取消', on_click=confirm.close).props('flat')
                 def clear():
-                    self.search_history = empty_history()
+                    clear_history(self)
                     self._save_history()
                     self._update_workspace_counts()
                     confirm.close()
@@ -2163,12 +2012,10 @@ class DanbooruSearchUI:
         except _json.JSONDecodeError as exc:
             raise WorkspaceDataError('文件不是有效 JSON') from exc
         if isinstance(parsed, dict) and 'favorite' in parsed:
-            incoming = {
-                'schema_version': 1,
-                'items': [parsed['favorite']],
-            }
-            normalized, warnings = normalize_favorites(incoming)
-            candidate = merge_favorites(self.favorites, normalized)
+            candidate, warnings = merge_imported_favorite(
+                self.favorites,
+                parsed['favorite'],
+            )
             if not self._replace_favorites_safely(candidate):
                 return
             ui.notify('收藏已导入', type='positive')
@@ -2184,31 +2031,23 @@ class DanbooruSearchUI:
                 source='JSON 备份导入',
             )
             backup['workspace'] = workspace_normalization.workspace
-        if mode == 'favorites_only':
-            candidate = merge_favorites(self.favorites, backup['favorites'])
-            if not self._replace_favorites_safely(candidate):
-                return
-            message = '收藏已合并导入'
-        elif mode == 'overwrite':
-            if not self._replace_favorites_safely(backup['favorites']):
-                return
+        plan = build_backup_import_plan(
+            self.workspace_state,
+            self.search_history,
+            self.favorites,
+            backup,
+            mode,
+        )
+        if not self._replace_favorites_safely(plan.favorites):
+            return
+        if plan.workspace is not None:
             self._push_undo_snapshot()
-            self.search_history = backup['history']
-            self._apply_config_state(backup['config'])
-            self._apply_workspace_state(backup['workspace'])
+            self.search_history = plan.history
+            if plan.config is not None:
+                self._apply_config_state(plan.config)
+            self._apply_workspace_state(plan.workspace)
             self._save_history()
-            message = '本地数据已由备份覆盖'
-        else:
-            workspace = merge_workspaces(self.workspace_state, backup['workspace'])
-            merged_history = merge_history(self.search_history, backup['history'])
-            candidate = merge_favorites(self.favorites, backup['favorites'])
-            if not self._replace_favorites_safely(candidate):
-                return
-            self._push_undo_snapshot()
-            self.search_history = merged_history
-            self._apply_workspace_state(workspace)
-            self._save_history()
-            message = '备份已合并；当前标签权重和配置保持不变'
+        message = plan.message
         self._update_workspace_counts()
         ui.notify(message, type='positive', timeout=4000)
         if workspace_normalization is not None:
@@ -2422,20 +2261,10 @@ class DanbooruSearchUI:
     _STAGED_LS_KEY = LEGACY_STAGED_STORAGE_KEY
 
     def _set_selection_meta(self, tag: str, origin: str, source: str = ''):
-        self._pending_selection_meta[tag] = {
-            'origin': origin,
-            'source': source,
-        }
+        set_selection_meta(self, tag, origin, source)
 
     def _push_undo_snapshot(self):
-        snapshot = clone_workspace(self.workspace_state)
-        signature = workspace_signature(snapshot)
-        if self._undo_stack and workspace_signature(self._undo_stack[-1]) == signature:
-            return
-        self._undo_stack.append(snapshot)
-        self._undo_stack = self._undo_stack[-30:]
-        self._redo_stack.clear()
-        self._update_undo_buttons()
+        push_undo_snapshot(self)
 
     def _update_undo_buttons(self):
         if self.undo_btn is not None:
@@ -2450,118 +2279,38 @@ class DanbooruSearchUI:
         persist: bool = True,
         refresh_recommendations: bool = True,
     ):
-        self.workspace_state = clone_workspace(workspace)
-        selected = self.workspace_state['selected']
-        tags = [item['tag'] for item in selected]
-        tag_set = set(tags)
-        self._selected_order = list(tags)
-        self.tag_weights = {item['tag']: item.get('weight', 1.0) for item in selected}
-        self._pending_selection_meta = {
-            item['tag']: {
-                'origin': item.get('origin', 'unknown'),
-                'source': item.get('source', ''),
-            }
-            for item in selected
-        }
-        self._workspace_artist_tags = {
-            item['tag'] for item in selected
-            if item.get('origin') in _ARTIST_ORIGINS
-        }
-
-        table_tags = {row['tag'] for row in self.result_table.rows} if self.result_table else set()
-        self.chip_extra_selected.clear()
-        self.chip_extra_selected.update(tag for tag in tags if tag not in table_tags)
-        if self.result_table is not None:
-            self.result_table.selected = [
-                row for row in self.result_table.rows if row.get('tag') in tag_set
-            ]
-        self._apply_prompt_format(self.workspace_state.get('prompt_format', 'sdxl'))
-        self._render_selected_chips()
-        self._render_prompt_pending()
-        self._render_concept_coverage()
-        if self.selection_count_label is not None:
-            self.selection_count_label.text = str(len(tags))
-        if self.results_section is not None:
-            self.results_section.set_visibility(bool(tags) or bool(self.full_table_data))
-
-        if persist:
-            self._save_staged_tags()
-            self._save_config()
-        if refresh_recommendations:
-            show_nsfw = bool(self.input_nsfw.value) if self.input_nsfw else False
-            self._last_recommendation_seed_tags = []
-            self._refresh_recommendations_if_seed_changed(tags, show_nsfw)
+        apply_workspace_state(
+            self,
+            workspace,
+            _ARTIST_ORIGINS,
+            persist=persist,
+            refresh_recommendations=refresh_recommendations,
+        )
 
     def _undo_workspace(self):
-        if not self._undo_stack:
+        target = pop_undo_workspace(self)
+        if target is None:
             ui.notify('没有可撤销的操作', type='info', timeout=1500)
             return
-        self._redo_stack.append(clone_workspace(self.workspace_state))
-        target = self._undo_stack.pop()
         self._apply_workspace_state(target)
         self._update_undo_buttons()
         ui.notify('已撤销', type='positive', timeout=1500)
 
     def _redo_workspace(self):
-        if not self._redo_stack:
+        target = pop_redo_workspace(self)
+        if target is None:
             ui.notify('没有可恢复的操作', type='info', timeout=1500)
             return
-        self._undo_stack.append(clone_workspace(self.workspace_state))
-        self._undo_stack = self._undo_stack[-30:]
-        target = self._redo_stack.pop()
         self._apply_workspace_state(target)
         self._update_undo_buttons()
         ui.notify('已恢复', type='positive', timeout=1500)
 
     def _schedule_workspace_persist(self):
-        """去抖写入浏览器，避免每次快速勾选都发送完整工作区。"""
-        if not self._storage_write_allowed('workspace'):
-            return
-        if self._workspace_save_task and not self._workspace_save_task.done():
-            self._workspace_save_task.cancel()
-
-        async def _persist():
-            try:
-                await asyncio.sleep(WORKSPACE_SAVE_DEBOUNCE_SECONDS)
-            except asyncio.CancelledError:
-                return
-            try:
-                data = dump_workspace(self.workspace_state)
-            except WorkspaceDataError as exc:
-                print(f'[UI] 工作区保存前校验失败: {exc}', flush=True)
-                return
-
-            if not self._storage_write_allowed('workspace'):
-                return
-            client = self.client
-            try:
-                client.run_javascript(
-                    f"localStorage.setItem('{WORKSPACE_STORAGE_KEY}', {_json.dumps(data)});"
-                )
-            except RuntimeError:
-                self._storage_session_dirty.add('workspace')
-                return
-            self._storage_session_dirty.discard('workspace')
-
-        self._workspace_save_task = asyncio.ensure_future(_persist())
+        schedule_workspace_persist(self, WORKSPACE_SAVE_DEBOUNCE_SECONDS)
 
     def _save_staged_tags(self):
         """将实时选择同步到版本化 WorkspaceState，并去抖写入 localStorage。"""
-        tags = self._get_selected_tags()
-        self._selected_order = list(tags)
-        cn_names = {t: self._get_cn_name_for_tag(t) for t in tags}
-        self.workspace_state['prompt_format'] = self.prompt_format
-        self.workspace_state = sync_selected_entries(
-            self.workspace_state,
-            tags,
-            self.tag_weights,
-            cn_names,
-            self._pending_selection_meta,
-        )
-        self._workspace_artist_tags = {
-            item['tag'] for item in self.workspace_state['selected']
-            if item.get('origin') in _ARTIST_ORIGINS
-        }
+        sync_workspace_selection(self, _ARTIST_ORIGINS)
         self._schedule_workspace_persist()
 
     def _local_storage_keys(self) -> dict[str, str]:
@@ -2638,13 +2387,8 @@ class DanbooruSearchUI:
             return False
 
     def _replace_favorites_safely(self, favorites: dict) -> bool:
-        previous = self.favorites
-        self.favorites = favorites
-        if self._save_favorites():
-            self._update_workspace_counts()
+        if replace_favorites_safely(self, favorites):
             return True
-        self.favorites = previous
-        self._storage_session_dirty.discard('favorites')
         ui.notify('收藏数据过大或无法写入，操作已取消', type='negative')
         return False
 
@@ -2802,85 +2546,7 @@ class DanbooruSearchUI:
                 self.result_table.on('pagination', lambda _: self._save_config())
 
                 # 自定义行模板：行背景色按分类，整行悬浮显示 wiki（NSFW模糊行除外）
-                self.result_table.add_slot('body', r'''
-                    <q-tr :props="props"
-                          :class="props.row._nsfw_blocked ? 'nsfw-row-blocked' : ''"
-                          :style="{
-                              'background-color':
-                                  props.row.layer === 'artist'       ? 'rgba(244,114,182,0.08)' :
-                                  props.row.category === 'General'   ? 'rgba(59,130,246,0.06)' :
-                                  props.row.category === 'Character' ? 'rgba(34,197,94,0.06)'  :
-                                  props.row.category === 'Copyright' ? 'rgba(168,85,247,0.06)' : ''
-                          }">
-                        <q-td auto-width>
-                            <q-checkbox v-model="props.selected"
-                                :class="props.row._nsfw_blocked ? 'nsfw-checkbox-disabled' : ''"/>
-                        </q-td>
-                        <q-td v-for="col in props.cols" :key="col.name" :props="props">
-                            <template v-if="col.name === 'tag' || col.name === 'cn_name'">
-                                <div :class="props.row._nsfw_blocked ? 'nsfw-blur-cell' : ''">
-                                    <template v-if="col.name === 'cn_name' && col.value && props.row.layer !== 'artist'">
-                                        <span style="font-size:14px;display:inline-flex;align-items:center;gap:4px;">
-                                            <span>{{ col.value.split(',')[0] }}</span>
-                                            <q-btn icon="report_problem"
-                                                size="sm"
-                                                dense flat round
-                                                color="grey-5"
-                                                padding="xs"
-                                                @click.stop.prevent="console.debug('[DanbooruSearch] translation_feedback click', props.row); $parent.$emit('translation_feedback', props.row)">
-                                                <q-tooltip>反馈翻译错误</q-tooltip>
-                                            </q-btn>
-                                        </span>
-                                    </template>
-                                    <template v-else-if="col.name === 'tag'">
-                                        <a :href="'https://danbooru.donmai.us/wiki_pages/'+col.value"
-                                           target="_blank"
-                                           class="text-primary hover:underline font-bold inline-flex items-center"
-                                           style="text-decoration:none; font-family: Consolas, Monaco, Courier New, monospace;"
-                                           @click.stop="$emit('link_click', col.value)">
-                                            {{ col.value }}
-                                            <q-icon name="open_in_new" size="xs" class="q-ml-xs opacity-50"/>
-                                        </a>
-                                    </template>
-                                    <template v-else>{{ col.value }}</template>
-                                </div>
-                            </template>
-                            <template v-else-if="col.name === 'nsfw'">
-                                <div v-if="col.value === '1'" class="text-red-500">🔴</div>
-                                <div v-else class="text-green-500">🟢</div>
-                            </template>
-                            <template v-else-if="col.name === 'final_score'">
-                                <q-badge :color="col.value > 0.6 ? 'green' : (col.value > 0.5 ? 'teal' : 'orange')">
-                                    {{ col.value }}
-                                </q-badge>
-                            </template>
-                            <template v-else>{{ col.value }}</template>
-                        </q-td>
-                        <q-tooltip v-if="props.row.layer === 'artist' && props.row.artist_top_tags && props.row.artist_top_tags.length && !props.row._nsfw_blocked"
-                            content-class="bg-black text-white shadow-4"
-                            max-width="400px" :offset="[10,10]">
-                            <div style="font-size:14px;line-height:1.5;max-width:380px;">
-                                <b>{{ props.row.tag }}</b><br>这位画师经常画:<br>
-                                <template v-for="tag in props.row.artist_top_tags.slice(0, 10)" :key="tag">
-                                    &nbsp;&nbsp;· {{ tag }}<br>
-                                </template>
-                            </div>
-                        </q-tooltip>
-                        <q-tooltip v-else-if="(props.row.wiki || props.row.cn_name) && !props.row._nsfw_blocked"
-                            content-class="bg-black text-white shadow-4"
-                            max-width="500px" :offset="[10,10]">
-                            <div style="font-size:14px;line-height:1.5;">
-                                <span style="opacity:0.7;margin-right:4px;">{{
-                                    props.row.category === 'General'   ? '[通用]' :
-                                    props.row.category === 'Character' ? '[角色]' :
-                                    props.row.category === 'Copyright' ? '[作品]' : ''
-                                }}</span>{{ props.row.wiki }}
-                                <div v-if="props.row.cn_name"
-                                     style="margin-top:6px;opacity:0.85;">{{ props.row.cn_name }}</div>
-                            </div>
-                        </q-tooltip>
-                    </q-tr>
-                ''')
+                self.result_table.add_slot('body', RESULT_TABLE_BODY)
 
                 # ── Group 同类扩展（左栏，表格下方）──
                 ui.separator().classes('my-2')
@@ -2945,31 +2611,13 @@ class DanbooruSearchUI:
 
     def _set_related_page(self, page: int):
         """切换关联推荐页，只构建当前页的可见行。"""
-        if self._related_page_count < 1:
-            return
-        previous_page = self._related_page
-        self._related_page = max(1, min(page, self._related_page_count))
-        self._render_related_page()
-        motion_class = (
-            'motion-recommendation-enter-right'
-            if self._related_page >= previous_page
-            else 'motion-recommendation-enter-left'
+        set_paginated_recommendation_page(
+            self,
+            page,
+            state_prefix='_related',
+            render_page=self._render_related_page,
+            motion_element_id='danbooru-related-recommendations',
         )
-        self._replay_motion('danbooru-related-recommendations', motion_class)
-        if self._related_page_label is not None:
-            self._related_page_label.text = (
-                f'{self._related_page} / {self._related_page_count}'
-            )
-        if self._related_prev_button is not None:
-            if self._related_page == 1:
-                self._related_prev_button.disable()
-            else:
-                self._related_prev_button.enable()
-        if self._related_next_button is not None:
-            if self._related_page == self._related_page_count:
-                self._related_next_button.disable()
-            else:
-                self._related_next_button.enable()
 
     def _render_related_page(self):
         """重建当前关联推荐页，节点数量固定不超过 10 条。"""
@@ -2982,9 +2630,11 @@ class DanbooruSearchUI:
             return
 
         selected_now = set(self._get_selected_tags())
-        start = (self._related_page - 1) * RELATED_REC_PAGE_SIZE
-        end = start + RELATED_REC_PAGE_SIZE
-        page_results = self._related_results[start:end]
+        page_results = page_items(
+            self._related_results,
+            self._related_page,
+            RELATED_REC_PAGE_SIZE,
+        )
 
         with self.related_list_container:
             for r in page_results:
@@ -3087,47 +2737,7 @@ class DanbooruSearchUI:
 
     def _render_related_list(self, related: list, show_nsfw: bool):
         """保存关联推荐快照，并仅渲染当前页。"""
-        if self.related_list_container is None or self.related_pagination is None:
-            return
-        self.related_list_container.clear()
-        self.related_pagination.clear()
-        self._related_checkboxes.clear()
-        self._related_page = 1
-        self._related_page_label = None
-        self._related_prev_button = None
-        self._related_next_button = None
-        self._related_results = [
-            item for item in related
-            if not (item.nsfw == '1' and not show_nsfw)
-        ]
-        self._related_show_nsfw = show_nsfw
-        self._related_page_count = (
-            len(self._related_results) + RELATED_REC_PAGE_SIZE - 1
-        ) // RELATED_REC_PAGE_SIZE
-
-        if not self._related_results:
-            self._render_related_page()
-            self._replay_motion(
-                'danbooru-related-recommendations', 'motion-recommendation-enter-right'
-            )
-            return
-
-        if self._related_page_count > 1:
-            with self.related_pagination:
-                with ui.row().classes('w-full items-center justify-center gap-2 px-3 py-2'):
-                    self._related_prev_button = ui.button(
-                        '‹',
-                        on_click=lambda: self._set_related_page(self._related_page - 1),
-                    ).props('flat dense round color=grey-7')
-                    self._related_page_label = ui.label().classes(
-                        'text-xs text-gray-600 min-w-12 text-center'
-                    )
-                    self._related_next_button = ui.button(
-                        '›',
-                        on_click=lambda: self._set_related_page(self._related_page + 1),
-                    ).props('flat dense round color=grey-7')
-
-        self._set_related_page(1)
+        render_related_list(self, related, show_nsfw)
 
     # ══════════════════════════════════════════════════════════════════════
     # 交互逻辑
@@ -3174,15 +2784,7 @@ class DanbooruSearchUI:
     # ── 分词筛选 ──────────────────────────────────────────────────────────
 
     def _filter_by_source(self, keyword: str):
-        self.current_filter_keyword = keyword if keyword else 'ALL'
-        show_nsfw_val = self.input_nsfw.value
-        if not keyword or keyword == 'ALL':
-            filtered = self.full_table_data
-        else:
-            filtered = [r for r in self.full_table_data if r['source'] == keyword]
-
-        self.result_table.rows = apply_nsfw_filter(filtered, show_nsfw_val)
-        self._render_concept_coverage()
+        filter_by_source(self, keyword)
 
     def _render_concept_coverage(self):
         if self.coverage_container is None:
@@ -3457,28 +3059,10 @@ class DanbooruSearchUI:
     # ── 选择管理 ──────────────────────────────────────────────────────────
 
     def _get_selected_tags(self) -> list[str]:
-        table_tags = [row['tag'] for row in self.result_table.selected] if self.result_table else []
-        seen = set(table_tags)
-        extra_pool = set(self.chip_extra_selected)
-        extra = [t for t in self._selected_order if t in extra_pool and t not in seen]
-        seen.update(extra)
-        extra.extend(sorted(t for t in extra_pool if t not in seen))
-        return table_tags + extra
+        return selected_tags(self)
 
     def _get_recommendation_seed_tags(self, selected_tags: list[str]) -> list[str]:
-        artist_tags = (
-            set(self._current_artist_rec_tags)
-            | set(self._artist_result_tags)
-            | set(self._workspace_artist_tags)
-        )
-        if self.result_table is not None:
-            for row in self.result_table.rows:
-                if row.get('layer') != 'artist':
-                    continue
-                tag = row.get('tag')
-                if tag:
-                    artist_tags.add(tag)
-        return [tag for tag in selected_tags if tag not in artist_tags]
+        return recommendation_seed_tags(self, selected_tags)
 
     def _refresh_recommendations_if_seed_changed(self, selected_tags: list[str], show_nsfw: bool):
         seed_tags = self._get_recommendation_seed_tags(selected_tags)
@@ -3687,13 +3271,8 @@ class DanbooruSearchUI:
     # ── 关联推荐 ──────────────────────────────────────────────────────────
 
     def _refresh_related(self, related: list, show_nsfw: bool):
-        if related is None:
-            related = []
         selected_now = set(self._get_selected_tags())
-        old_related  = self.current_related
-        new_tags  = {r.tag for r in related}
-        preserved = [r for r in old_related if r.tag in selected_now and r.tag not in new_tags]
-        merged = list(related) + preserved
+        merged = merge_related_results(self.current_related, related, selected_now)
 
         self.current_related = merged
         if self.related_list_container is not None:
@@ -3724,24 +3303,12 @@ class DanbooruSearchUI:
         scopes: set[str],
     ):
         """合并同一选择快照的刷新范围，并确保运行中的线程不会被取消。"""
-        selected_tags = self._get_recommendation_seed_tags(selected_tags)
-        requested_scopes = frozenset(scopes)
-        pending = self._pending_recommendation_request
-        if (
-            pending is not None
-            and pending['selected_tags'] == selected_tags
-            and pending['show_nsfw'] == show_nsfw
+        if queue_latest_recommendation_request(
+            self,
+            selected_tags,
+            show_nsfw,
+            scopes,
         ):
-            requested_scopes = pending['scopes'] | requested_scopes
-
-        self._recommendation_generation += 1
-        self._pending_recommendation_request = {
-            'generation': self._recommendation_generation,
-            'selected_tags': list(selected_tags),
-            'show_nsfw': show_nsfw,
-            'scopes': requested_scopes,
-        }
-        if self._recommendation_task is None or self._recommendation_task.done():
             self._recommendation_task = asyncio.ensure_future(
                 self._recommendation_worker()
             )
@@ -3749,41 +3316,29 @@ class DanbooruSearchUI:
     async def _recommendation_worker(self):
         """连续消费最新选择快照；过期结果只计算不渲染。"""
         try:
-            while self._pending_recommendation_request is not None:
-                await asyncio.sleep(RECOMMENDATION_DEBOUNCE_SECONDS)
-                request = self._pending_recommendation_request
-                self._pending_recommendation_request = None
+            async def fetch(request: dict) -> dict:
+                selected_tags = request['selected_tags']
+                if not selected_tags:
+                    return {
+                        'related': [],
+                        'groups': [],
+                        'artists': [],
+                        'artist_top_tags': {},
+                    }
+                tagger = await DanbooruTagger.get_instance()
+                return await tagger.get_selection_recommendations_async(
+                    selected_tags,
+                    request['show_nsfw'],
+                    request['scopes'],
+                    related_limit=50,
+                    artist_limit=ARTIST_REC_LIMIT,
+                    artist_min_cooc=3,
+                )
+
+            async def apply(request: dict, result: dict) -> None:
                 selected_tags = request['selected_tags']
                 show_nsfw = request['show_nsfw']
                 scopes = request['scopes']
-
-                try:
-                    if selected_tags:
-                        tagger = await DanbooruTagger.get_instance()
-                        result = await tagger.get_selection_recommendations_async(
-                            selected_tags,
-                            show_nsfw,
-                            scopes,
-                            related_limit=50,
-                            artist_limit=ARTIST_REC_LIMIT,
-                            artist_min_cooc=3,
-                        )
-                    else:
-                        result = {
-                            'related': [],
-                            'groups': [],
-                            'artists': [],
-                            'artist_top_tags': {},
-                        }
-                except Exception as exc:
-                    print(f'[UI] 推荐刷新失败: {exc}', flush=True)
-                    continue
-
-                if request['generation'] != self._recommendation_generation:
-                    continue
-                if not self._client_alive():
-                    return
-
                 if 'related' in scopes:
                     self._refresh_related(result['related'], show_nsfw)
                 if 'group' in scopes:
@@ -3804,36 +3359,28 @@ class DanbooruSearchUI:
                         result['artist_top_tags'],
                         show_nsfw,
                     )
+
+            consume = consume_latest_recommendation_requests(
+                self,
+                debounce_seconds=RECOMMENDATION_DEBOUNCE_SECONDS,
+                fetch=fetch,
+                apply=apply,
+                client_alive=self._client_alive,
+                report_error=lambda exc: print(f'[UI] 推荐刷新失败: {exc}', flush=True),
+            )
+            await consume
         finally:
             self._recommendation_task = None
 
     def _set_artist_rec_page(self, page: int):
         """切换推荐画师页，只构建当前页的可见行。"""
-        if self._artist_rec_page_count < 1:
-            return
-        previous_page = self._artist_rec_page
-        self._artist_rec_page = max(1, min(page, self._artist_rec_page_count))
-        self._render_artist_rec_page()
-        motion_class = (
-            'motion-recommendation-enter-right'
-            if self._artist_rec_page >= previous_page
-            else 'motion-recommendation-enter-left'
+        set_paginated_recommendation_page(
+            self,
+            page,
+            state_prefix='_artist_rec',
+            render_page=self._render_artist_rec_page,
+            motion_element_id='danbooru-artist-recommendations',
         )
-        self._replay_motion('danbooru-artist-recommendations', motion_class)
-        if self._artist_rec_page_label is not None:
-            self._artist_rec_page_label.text = (
-                f'{self._artist_rec_page} / {self._artist_rec_page_count}'
-            )
-        if self._artist_rec_prev_button is not None:
-            if self._artist_rec_page == 1:
-                self._artist_rec_prev_button.disable()
-            else:
-                self._artist_rec_prev_button.enable()
-        if self._artist_rec_next_button is not None:
-            if self._artist_rec_page == self._artist_rec_page_count:
-                self._artist_rec_next_button.disable()
-            else:
-                self._artist_rec_next_button.enable()
 
     def _render_artist_rec_page(self):
         """重建当前画师页，节点数量固定不超过 ARTIST_REC_PAGE_SIZE。"""
@@ -3849,9 +3396,11 @@ class DanbooruSearchUI:
             return
 
         selected_now = set(self._get_selected_tags())
-        start = (self._artist_rec_page - 1) * ARTIST_REC_PAGE_SIZE
-        end = start + ARTIST_REC_PAGE_SIZE
-        page_results = self._artist_rec_results[start:end]
+        page_results = page_items(
+            self._artist_rec_results,
+            self._artist_rec_page,
+            ARTIST_REC_PAGE_SIZE,
+        )
 
         with self.artist_rec_list:
             for r in page_results:
@@ -3918,51 +3467,7 @@ class DanbooruSearchUI:
 
     def _render_artist_rec(self, artist_results, top_tags=None, show_nsfw: bool = True):
         """保存推荐快照，并仅渲染当前画师页。"""
-        if self.artist_rec_list is None or self.artist_rec_pagination is None:
-            return
-        self.artist_rec_list.clear()
-        self.artist_rec_pagination.clear()
-        self._artist_rec_checkboxes.clear()
-        self._artist_rec_rows.clear()
-        self._artist_rec_page = 1
-        self._artist_rec_page_label = None
-        self._artist_rec_prev_button = None
-        self._artist_rec_next_button = None
-        self._artist_rec_results = list(artist_results[:ARTIST_REC_LIMIT])
-        self._artist_rec_top_tags = dict(top_tags or {})
-        self._artist_rec_show_nsfw = show_nsfw
-        self._artist_rec_page_count = (
-            len(self._artist_rec_results) + ARTIST_REC_PAGE_SIZE - 1
-        ) // ARTIST_REC_PAGE_SIZE
-        self._current_artist_rec_tags = {
-            result.artist for result in self._artist_rec_results
-        }
-        self._artist_rec_sources = {
-            result.artist: '、'.join(result.sources[:3])
-            for result in self._artist_rec_results
-        }
-
-        if not self._artist_rec_results:
-            self._render_artist_rec_page()
-            self._replay_motion(
-                'danbooru-artist-recommendations', 'motion-recommendation-enter-right'
-            )
-            return
-
-        if self._artist_rec_page_count > 1:
-            with self.artist_rec_pagination:
-                with ui.row().classes('w-full items-center justify-center gap-2 px-3 py-2'):
-                    self._artist_rec_prev_button = ui.button(
-                        '‹',
-                        on_click=lambda: self._set_artist_rec_page(self._artist_rec_page - 1),
-                    ).props('flat dense round color=grey-7')
-                    self._artist_rec_page_label = ui.label().classes('text-xs text-gray-600 min-w-12 text-center')
-                    self._artist_rec_next_button = ui.button(
-                        '›',
-                        on_click=lambda: self._set_artist_rec_page(self._artist_rec_page + 1),
-                    ).props('flat dense round color=grey-7')
-
-        self._set_artist_rec_page(1)
+        render_artist_recommendations(self, artist_results, top_tags, show_nsfw)
 
     def _render_group_expansion(self, group_data: list, selected_tags: list[str], show_nsfw: bool):
         """渲染 Group 同类扩展区域。"""
@@ -4182,14 +3687,7 @@ class DanbooruSearchUI:
     # ── 表格列动态更新 ──────────────────────────────────────────────────
 
     def _update_table_columns(self, e=None):
-        cols = list(TABLE_COLUMNS)
-        if self.sw_semantic and self.sw_semantic.value:
-            cols.append(OPTIONAL_COLS['semantic'])
-        if self.sw_layer and self.sw_layer.value:
-            cols.append(OPTIONAL_COLS['layer'])
-        if self.sw_source and self.sw_source.value:
-            cols.append(OPTIONAL_COLS['source'])
-        self.result_table.columns = cols
+        update_table_columns(self, e)
 
     # ── 搜索模式 / 参数联动 ──────────────────────────────────────────────
 

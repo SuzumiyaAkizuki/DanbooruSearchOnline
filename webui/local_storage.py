@@ -11,6 +11,7 @@ from core.workspace import (
     LEGACY_STAGED_STORAGE_KEY,
     WORKSPACE_STORAGE_KEY,
     WorkspaceDataError,
+    dump_workspace,
     empty_favorites,
     empty_history,
     merge_favorites,
@@ -454,3 +455,34 @@ def finish_storage_restore_task(
         return False
     controller._storage_restore_task = None
     return was_cancelled and controller._client_connected()
+
+
+def schedule_workspace_persist(controller: Any, debounce_seconds: float) -> None:
+    """去抖写入工作区；恢复未就绪或写入失败时保留原有浏览器数据。"""
+    if not controller._storage_write_allowed('workspace'):
+        return
+    if controller._workspace_save_task and not controller._workspace_save_task.done():
+        controller._workspace_save_task.cancel()
+
+    async def persist() -> None:
+        try:
+            await asyncio.sleep(debounce_seconds)
+        except asyncio.CancelledError:
+            return
+        try:
+            data = dump_workspace(controller.workspace_state)
+        except WorkspaceDataError as exc:
+            print(f'[UI] 工作区保存前校验失败: {exc}', flush=True)
+            return
+        if not controller._storage_write_allowed('workspace'):
+            return
+        try:
+            controller.client.run_javascript(
+                f"localStorage.setItem({json.dumps(WORKSPACE_STORAGE_KEY)}, {json.dumps(data)});"
+            )
+        except RuntimeError:
+            controller._storage_session_dirty.add('workspace')
+            return
+        controller._storage_session_dirty.discard('workspace')
+
+    controller._workspace_save_task = asyncio.ensure_future(persist())
