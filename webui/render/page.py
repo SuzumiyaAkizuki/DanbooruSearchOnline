@@ -41,8 +41,14 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 display: flex;
                 align-items: center;
             }
-            .related-item { transition: background-color 0.15s ease; }
-            .related-item:hover { background-color: rgba(74, 144, 226, 0.04); }
+            .related-item {
+                transition: box-shadow var(--motion-fast) var(--motion-ease-out);
+            }
+            @media (hover: hover) {
+                .related-item:hover {
+                    box-shadow: inset 0 0 0 9999px rgba(15, 23, 42, 0.045);
+                }
+            }
             .tag-link { text-decoration: none; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; }
             .tag-link:hover { text-decoration: underline; }
             .weight-chip { display: inline-flex; align-items: center; gap: 2px;

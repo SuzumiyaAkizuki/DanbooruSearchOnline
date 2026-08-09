@@ -82,17 +82,26 @@ documentation:
   copyright_markdown: |-
     **接口使用与版权声明**
 
-    任何用户都可以免费将本服务的 API 或 MCP 接口接入自己的私有或公开服务中。
+    您可以免费将本服务提供的 API 或 MCP 接口接入个人、私有或公开服务。
 
-    如果接入公开服务，务必在主页提供链接到本服务主地址的友情链接：
-    ```
-    URL: <https://huggingface.co/spaces/SAkizuki/DanbooruSearch>
+    本项目的数据库、前端及后端代码均可用于二次开发。项目采用 **GPL-3.0** 开源协议，基于本项目代码开发的衍生作品也须遵守 GPL-3.0 协议。
+
+    如果您的公开在线服务使用了以下任一资源，请在服务主页添加指向本项目主站的友情链接：
+
+    - [公开 Bucket](https://huggingface.co/buckets/SAkizuki/DanbooruSearchEmbedding) 中的任意数据库文件；
+    - 本项目提供的 API 或 MCP 接口。
+
+    友情链接信息如下：
+
+    ```text
+    URL: https://huggingface.co/spaces/SAkizuki/DanbooruSearch
     简介: 基于语义匹配的 Danbooru 标签搜索引擎，支持多维匹配与共现关联推荐。
-    作者：[凉宫秋月](https://github.com/SuzumiyaAkizuki)
-    LOGO：https://akizukipic.oss-cn-beijing.aliyuncs.com/img/file%20%281%29.svg
+    作者: 凉宫秋月（https://github.com/SuzumiyaAkizuki）
+    LOGO: https://akizukipic.oss-cn-beijing.aliyuncs.com/img/file%20%281%29.svg
     ```
 
-    如有需求，我也可以在主页展示您的公开服务的友情链接。请按照上面的格式，把四项内容发送至邮箱：`misakaacer@gmail.com`.
+    作为回馈，我也可以在本项目主页展示您的公开服务。若有需要，请参照上述格式整理您服务的 **URL、简介、作者和 LOGO**，并发送至：`misakaacer@gmail.com`。
+
 
 notice:
   title: 注意事项

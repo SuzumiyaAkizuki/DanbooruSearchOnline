@@ -7515,9 +7515,6 @@
     "crescent-shaped_pupils": [
       "tag_group:eyes_tags"
     ],
-    "cross-diamond-shaped_pupils": [
-      "tag_group:eyes_tags"
-    ],
     "cross-shaped_pupils": [
       "tag_group:eyes_tags"
     ],
@@ -7543,9 +7540,6 @@
       "tag_group:eyes_tags"
     ],
     "heart-shaped_pupils": [
-      "tag_group:eyes_tags"
-    ],
-    "hexagram_pupils": [
       "tag_group:eyes_tags"
     ],
     "lightning_bolt-shaped_pupils": [
@@ -7773,9 +7767,6 @@
       "tag_group:verbs_and_gerunds"
     ],
     ";>": [
-      "tag_group:eyes_tags"
-    ],
-    ";": [
       "tag_group:eyes_tags"
     ],
     "covering_own_eyes": [
@@ -13949,6 +13940,10 @@
     "hanbok": [
       "tag_group:attire"
     ],
+    "vietnamese_clothes": [
+      "tag_group:attire",
+      "tag_group:fashion_style"
+    ],
     "ao_dai": [
       "tag_group:attire"
     ],
@@ -16363,9 +16358,6 @@
       "tag_group:fashion_style"
     ],
     "turkish_clothes": [
-      "tag_group:fashion_style"
-    ],
-    "vietnamese_clothes": [
       "tag_group:fashion_style"
     ],
     "fashion_style_request": [
@@ -24720,6 +24712,9 @@
     "fuchsia_(flower)": [
       "tag_group:flowers"
     ],
+    "gardenia_(flower)": [
+      "tag_group:flowers"
+    ],
     "genista_(flower)": [
       "tag_group:flowers"
     ],
@@ -24880,6 +24875,9 @@
       "tag_group:flowers"
     ],
     "peach_blossom": [
+      "tag_group:flowers"
+    ],
+    "pear_blossom": [
       "tag_group:flowers"
     ],
     "pentas_(flower)": [
@@ -30235,6 +30233,9 @@
     "miyano_mamoru": [
       "tag_group:people"
     ],
+    "miyashita_saki": [
+      "tag_group:people"
+    ],
     "miyata_kouki": [
       "tag_group:people"
     ],
@@ -30872,6 +30873,9 @@
       "tag_group:people"
     ],
     "arthur_conan_doyle": [
+      "tag_group:people"
+    ],
+    "christopher_nolan": [
       "tag_group:people"
     ],
     "david_lynch": [
@@ -37431,6 +37435,12 @@
     "yuzu_(fruit)": [
       "tag_group:food_tags"
     ],
+    "jujube_(fruit)": [
+      "tag_group:food_tags"
+    ],
+    "dried_jujube": [
+      "tag_group:food_tags"
+    ],
     "vegetable": [
       "tag_group:food_tags"
     ],
@@ -37537,6 +37547,9 @@
       "tag_group:food_tags"
     ],
     "lotus_root": [
+      "tag_group:food_tags"
+    ],
+    "artemisia_argyi": [
       "tag_group:food_tags"
     ],
     "mint": [
@@ -38833,6 +38846,9 @@
       "tag_group:food_tags"
     ],
     "rosemary_(herb)": [
+      "tag_group:food_tags"
+    ],
+    "salsa": [
       "tag_group:food_tags"
     ],
     "salt": [
@@ -49219,7 +49235,6 @@
       "clock_eyes",
       "clover-shaped_pupils",
       "crescent-shaped_pupils",
-      "cross-diamond-shaped_pupils",
       "cross-shaped_pupils",
       "crosshair_pupils",
       "crown-shaped_pupils",
@@ -49229,7 +49244,6 @@
       "gear-shaped_pupils",
       "halation_pupils",
       "heart-shaped_pupils",
-      "hexagram_pupils",
       "lightning_bolt-shaped_pupils",
       "money-shaped_pupils",
       "moon-shaped_pupils",
@@ -49324,7 +49338,6 @@
       ";p",
       ";o",
       ";3",
-      ";",
       "wince",
       "covering_own_eyes",
       "hair_over_eyes",
@@ -51471,6 +51484,7 @@
       "tasuki",
       "korean_clothes",
       "hanbok",
+      "vietnamese_clothes",
       "ao_dai",
       "mongolian_clothes",
       "slavic_clothes",
@@ -55626,6 +55640,7 @@
       "foxglove",
       "freesia_(flower)",
       "fuchsia_(flower)",
+      "gardenia_(flower)",
       "genista_(flower)",
       "gentiana_(flower)",
       "geranium",
@@ -55680,6 +55695,7 @@
       "pasqueflower",
       "passion_flower",
       "peach_blossom",
+      "pear_blossom",
       "pentas_(flower)",
       "peony_(flower)",
       "periwinkle_(flower)",
@@ -57514,6 +57530,7 @@
       "mitsuishi_kotono",
       "miyamura_yuuko",
       "miyano_mamoru",
+      "miyashita_saki",
       "miyata_kouki",
       "mizuhashi_kaori",
       "mizuki_nana",
@@ -57727,6 +57744,7 @@
       "anno_hideaki_(person)",
       "araki_hirohiko_(person)",
       "arthur_conan_doyle",
+      "christopher_nolan",
       "david_lynch",
       "derrick_j._wyatt",
       "du_fu",
@@ -59947,6 +59965,8 @@
       "tamarind",
       "umeboshi",
       "yuzu_(fruit)",
+      "jujube_(fruit)",
+      "dried_jujube",
       "vegetable",
       "asparagus",
       "bacon-wrapped_asparagus",
@@ -59983,6 +60003,7 @@
       "kimchi",
       "lettuce",
       "lotus_root",
+      "artemisia_argyi",
       "mint",
       "mushroom",
       "enoki_mushroom",
@@ -60435,6 +60456,7 @@
       "pepper_mill",
       "pepper_shaker",
       "rosemary_(herb)",
+      "salsa",
       "salt",
       "salt_shaker",
       "sauce",
