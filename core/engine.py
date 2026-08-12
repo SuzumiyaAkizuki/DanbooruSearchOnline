@@ -173,6 +173,8 @@ SCHEMA_VERSION = 4   # 升级此值将自动触发全量重建，用于破坏性
 
 # 用户显式分隔后，纯 CJK 片段超过此长度仍用 jieba 切分（避免长句被当作原子概念）
 _ATOMIC_CJK_MAX_LEN = 7
+_ARTIST_FUZZY_CUTOFF = 0.78
+_ARTIST_SEARCH_MAX_RESULTS = 3
 
 # 四路 embedding 层配置: (层名, tensor 属性名, DataFrame 列名)
 _LAYER_SPEC: list[tuple[str, str, str]] = [
@@ -1594,8 +1596,8 @@ class DanbooruTagger:
         return result
 
     @staticmethod
-    def _normalize_artist_name(name: str) -> str:
-        """Normalize user-entered artist names toward Danbooru tag form."""
+    def _normalize_danbooru_name(name: str) -> str:
+        """Normalize user-entered tag or artist names toward Danbooru form."""
         text = str(name or "").strip().lower()
         if text.startswith("@"):
             text = text[1:].strip()
@@ -1607,58 +1609,46 @@ class DanbooruTagger:
     def _compact_artist_key(name: str) -> str:
         return re.sub(r"[\W_]+", "", str(name or "").lower())
 
-    @staticmethod
-    def _edit_distance_at_most_one(left: str, right: str) -> bool:
-        if left == right:
-            return True
-        if abs(len(left) - len(right)) > 1:
-            return False
-
-        if len(left) == len(right):
-            mismatches = 0
-            for a, b in zip(left, right):
-                if a != b:
-                    mismatches += 1
-                    if mismatches > 1:
-                        return False
-            return True
-
-        short, long = (left, right) if len(left) < len(right) else (right, left)
-        i = j = edits = 0
-        while i < len(short) and j < len(long):
-            if short[i] == long[j]:
-                i += 1
-                j += 1
-                continue
-            edits += 1
-            if edits > 1:
-                return False
-            j += 1
-        return True
-
     def search_artist_rows(
         self, query: str, limit: int = 20, show_nsfw: bool = True,
     ) -> list[TagResult]:
-        """Return artist rows whose normalized name is within edit distance 1."""
-        normalized = self._normalize_artist_name(query)
+        """Return up to three artist rows ranked by compact-name similarity."""
+        normalized = self._normalize_danbooru_name(query)
         compact_query = self._compact_artist_key(normalized)
         if not compact_query:
             return []
 
-        matches: list[TagResult] = []
+        ranked_matches: list[tuple[float, int, str]] = []
         for artist in sorted(self._artist_top_tags.keys()):
-            if not self._edit_distance_at_most_one(compact_query, self._compact_artist_key(artist)):
+            similarity = difflib.SequenceMatcher(
+                None,
+                compact_query,
+                self._compact_artist_key(artist),
+            ).ratio()
+            if similarity < _ARTIST_FUZZY_CUTOFF:
                 continue
+            ranked_matches.append((
+                float(similarity),
+                int(self._artist_post_count.get(artist, 0)),
+                artist,
+            ))
+
+        ranked_matches.sort(key=lambda item: (-item[0], -item[1], item[2]))
+        max_results = max(0, min(int(limit), _ARTIST_SEARCH_MAX_RESULTS))
+
+        matches: list[TagResult] = []
+        for similarity, _post_count, artist in ranked_matches[:max_results]:
             top_tags = self.get_artist_top_tags(
                 [artist], top_n=10, show_nsfw=show_nsfw,
             ).get(artist, [])
+            score = round(similarity, 4)
             matches.append(TagResult(
                 tag=artist,
                 cn_name="画师标签",
                 category="Artist",
                 nsfw="0",
-                final_score=1.0,
-                semantic_score=1.0,
+                final_score=score,
+                semantic_score=score,
                 count=int(self._artist_post_count.get(artist, 0)),
                 source=query,
                 layer="artist",
@@ -1666,13 +1656,12 @@ class DanbooruTagger:
                 artist_top_tags=top_tags,
             ))
 
-        matches.sort(key=lambda r: (r.count, r.tag), reverse=True)
-        return matches[:limit]
+        return matches
 
     def resolve_artist_name(self, artist_name: str) -> dict[str, Any]:
         """Resolve a user-entered artist name to the artist co-occurrence index."""
         artists = set(self._artist_top_tags.keys())
-        normalized = self._normalize_artist_name(artist_name)
+        normalized = self._normalize_danbooru_name(artist_name)
 
         if artist_name in artists:
             return {
@@ -1706,7 +1695,12 @@ class DanbooruTagger:
                 "candidates": sorted(compact_matches)[:10],
             }
 
-        close = difflib.get_close_matches(normalized, sorted(artists), n=5, cutoff=0.78)
+        close = difflib.get_close_matches(
+            normalized,
+            sorted(artists),
+            n=5,
+            cutoff=_ARTIST_FUZZY_CUTOFF,
+        )
         if len(close) == 1:
             return {
                 "artist": close[0],
@@ -1722,7 +1716,7 @@ class DanbooruTagger:
     def resolve_tag_name(self, tag_name: str) -> dict[str, Any]:
         """Resolve a user-entered tag name to the canonical tag index without semantic search."""
         tags = set(self._name_to_idx.keys())
-        normalized = self._normalize_artist_name(tag_name)
+        normalized = self._normalize_danbooru_name(tag_name)
 
         if tag_name in tags:
             return {

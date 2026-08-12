@@ -133,37 +133,20 @@ class ArtistOut(BaseModel):
 
 
 async def _correct_tags(tagger: DanbooruTagger, tags: list[str]) -> tuple[list[str], list[str], dict[str, str]]:
-    valid_tags: list[str] = []
-    invalid_tags: list[str] = []
-    for tag in tags:
-        if tag in tagger._name_to_idx:
-            valid_tags.append(tag)
-        else:
-            invalid_tags.append(tag)
-
-    corrections: dict[str, str] = {}
-    for bad_tag in invalid_tags:
-        try:
-            request = SearchRequest(
-                query=bad_tag,
-                top_k=5,
-                limit=5,
-                popularity_weight=0.15,
-                use_segmentation=False,
-                target_layers=['英文'],
-            )
-            response = await tagger.search_async(request)
-            if response.results:
-                corrections[bad_tag] = response.results[0].tag
-        except Exception:
-            pass
-
+    """Resolve input tags through the deterministic canonical-tag resolver."""
     corrected_tags: list[str] = []
-    for tag in tags:
-        if tag in valid_tags:
-            corrected_tags.append(tag)
-        elif tag in corrections:
-            corrected_tags.append(corrections[tag])
+    invalid_tags: list[str] = []
+    corrections: dict[str, str] = {}
+
+    for raw_tag in tags:
+        resolved = tagger.resolve_tag_name(raw_tag)
+        canonical = resolved.get("tag")
+        if canonical:
+            corrected_tags.append(canonical)
+            if canonical != raw_tag:
+                corrections[raw_tag] = canonical
+        else:
+            invalid_tags.append(raw_tag)
 
     return corrected_tags, invalid_tags, corrections
 

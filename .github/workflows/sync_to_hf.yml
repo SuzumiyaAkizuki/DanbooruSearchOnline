@@ -56,14 +56,14 @@ jobs:
           export GIT_LFS_SKIP_SMUDGE=1
           git clone https://oauth2:${MS_TOKEN}@www.modelscope.cn/studios/SAkizuki/DanbooruSearchOnline.git ms_repo
           
-          # 拷贝根目录下的 .py 文件、依赖文件及 README.md
-          cp *.py ms_repo/ 2>/dev/null || true
-          cp requirements.txt ms_repo/ 2>/dev/null || true
-          cp README.md ms_repo/ 2>/dev/null || true
-          
-          # 拷贝 core 目录下的 .py 文件
-          mkdir -p ms_repo/core
-          cp core/*.py ms_repo/core/ 2>/dev/null || true
+          # 同步仓库代码及配置，同时保留 ModelScope 中的模型和数据文件
+          rsync -av \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='ms_repo/' \
+            --exclude='origin_database/' \
+            --exclude='tags_embedding/' \
+            ./ ms_repo/
           
           cd ms_repo
           git add .
