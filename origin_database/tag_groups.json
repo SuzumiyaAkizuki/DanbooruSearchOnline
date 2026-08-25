@@ -1335,7 +1335,8 @@
       "tag_group:patterns"
     ],
     "matsu_symbol": [
-      "tag_group:image_composition"
+      "tag_group:image_composition",
+      "tag_group:patterns"
     ],
     "ryusuimon": [
       "tag_group:image_composition",
@@ -1378,6 +1379,10 @@
     "yagasuri": [
       "tag_group:image_composition",
       "tag_group:prints",
+      "tag_group:patterns"
+    ],
+    "yukiwa_(pattern)": [
+      "tag_group:image_composition",
       "tag_group:patterns"
     ],
     "animal_print": [
@@ -1724,13 +1729,13 @@
     "red_background": [
       "tag_group:backgrounds"
     ],
-    "simple_background": [
-      "tag_group:backgrounds"
-    ],
     "white_background": [
       "tag_group:backgrounds"
     ],
     "yellow_background": [
+      "tag_group:backgrounds"
+    ],
+    "simple_background": [
       "tag_group:backgrounds"
     ],
     "colorful_background": [
@@ -1750,9 +1755,6 @@
       "tag_group:backgrounds",
       "tag_group:colors"
     ],
-    "multicolored_background": [
-      "tag_group:backgrounds"
-    ],
     "rainbow_background": [
       "tag_group:backgrounds"
     ],
@@ -1763,6 +1765,9 @@
       "tag_group:backgrounds"
     ],
     "two-tone_background": [
+      "tag_group:backgrounds"
+    ],
+    "multicolored_background": [
       "tag_group:backgrounds"
     ],
     "argyle_background": [
@@ -1879,6 +1884,13 @@
       "tag_group:backgrounds",
       "tag_group:symbols",
       "tag_group:cards"
+    ],
+    "cherry_background": [
+      "tag_group:backgrounds"
+    ],
+    "cherry": [
+      "tag_group:backgrounds",
+      "tag_group:food_tags"
     ],
     "cloud_background": [
       "tag_group:backgrounds"
@@ -2223,6 +2235,9 @@
     "censored_by_text": [
       "tag_group:censorship",
       "tag_group:text"
+    ],
+    "circle_censor": [
+      "tag_group:censorship"
     ],
     "emoji_censor": [
       "tag_group:censorship"
@@ -2650,16 +2665,25 @@
     "woman_with_a_parasol": [
       "tag_group:fine_art_parody"
     ],
+    "le_bassin_aux_nympheas": [
+      "tag_group:fine_art_parody"
+    ],
     "olympia_(manet)": [
       "tag_group:fine_art_parody"
     ],
     "the_fifer": [
       "tag_group:fine_art_parody"
     ],
+    "liberty_leading_the_people": [
+      "tag_group:fine_art_parody"
+    ],
     "the_scream": [
       "tag_group:fine_art_parody"
     ],
-    "liberty_leading_the_people": [
+    "nighthawks": [
+      "tag_group:fine_art_parody"
+    ],
+    "romeo_and_juliet_(francis_dicksee)": [
       "tag_group:fine_art_parody"
     ],
     "la_maja_desnuda": [
@@ -2675,6 +2699,9 @@
       "tag_group:fine_art_parody"
     ],
     "the_kiss": [
+      "tag_group:fine_art_parody"
+    ],
+    "the_sin_(heinrich_lossow)": [
       "tag_group:fine_art_parody"
     ],
     "kanagawa_okinami_ura": [
@@ -2693,6 +2720,9 @@
       "tag_group:fine_art_parody"
     ],
     "napoleon_crossing_the_alps": [
+      "tag_group:fine_art_parody"
+    ],
+    "stanczyk_(painting)": [
       "tag_group:fine_art_parody"
     ],
     "arrow_shirt_collar_ad_(1916)": [
@@ -2743,6 +2773,9 @@
     "the_last_supper": [
       "tag_group:fine_art_parody",
       "tag_group:food_tags"
+    ],
+    "relativity_(m.c._escher)": [
+      "tag_group:fine_art_parody"
     ],
     "pieta": [
       "tag_group:fine_art_parody"
@@ -2813,13 +2846,71 @@
     "the_bedroom_(van_gogh)": [
       "tag_group:fine_art_parody"
     ],
+    "crotch_focus": [
+      "tag_group:focus_tags"
+    ],
+    "ear_focus": [
+      "tag_group:focus_tags",
+      "tag_group:body_parts"
+    ],
+    "hair_focus": [
+      "tag_group:focus_tags"
+    ],
     "leg_focus": [
+      "tag_group:focus_tags"
+    ],
+    "mouth_focus": [
+      "tag_group:focus_tags"
+    ],
+    "neck_focus": [
+      "tag_group:focus_tags"
+    ],
+    "stomach_focus": [
+      "tag_group:focus_tags"
+    ],
+    "tail_focus": [
+      "tag_group:focus_tags"
+    ],
+    "pussy_focus": [
       "tag_group:focus_tags"
     ],
     "clothes_focus": [
       "tag_group:focus_tags"
     ],
     "footwear_focus": [
+      "tag_group:focus_tags"
+    ],
+    "flower_focus": [
+      "tag_group:focus_tags"
+    ],
+    "mountain_focus": [
+      "tag_group:focus_tags"
+    ],
+    "reflection_focus": [
+      "tag_group:focus_tags"
+    ],
+    "sky_focus": [
+      "tag_group:focus_tags"
+    ],
+    "tree_focus": [
+      "tag_group:focus_tags"
+    ],
+    "creature_focus": [
+      "tag_group:focus_tags"
+    ],
+    "digimon_focus": [
+      "tag_group:focus_tags"
+    ],
+    "kanji_focus": [
+      "tag_group:focus_tags"
+    ],
+    "mecha_focus": [
+      "tag_group:focus_tags"
+    ],
+    "pokemon_focus": [
+      "tag_group:focus_tags"
+    ],
+    "steppee_focus": [
       "tag_group:focus_tags"
     ],
     "soft_focus": [
@@ -2839,6 +2930,7 @@
     ],
     "underwater": [
       "tag_group:lighting",
+      "tag_group:locations",
       "tag_group:water"
     ],
     "dim_lighting": [
@@ -3701,6 +3793,9 @@
       "tag_group:holidays_and_celebrations"
     ],
     "heaven_(kanji)": [
+      "tag_group:symbols"
+    ],
+    "manji": [
       "tag_group:symbols"
     ],
     "two-legged_horse_(kanji)": [
@@ -5285,9 +5380,6 @@
     ],
     "december": [
       "tag_group:year_tags"
-    ],
-    "ear_focus": [
-      "tag_group:body_parts"
     ],
     "eyebrows": [
       "tag_group:body_parts",
@@ -7037,8 +7129,7 @@
       "tag_group:eyes_tags"
     ],
     "<": [
-      "tag_group:face_tags",
-      "tag_group:eyes_tags"
+      "tag_group:face_tags"
     ],
     "eyebrows_hidden_by_hair": [
       "tag_group:face_tags"
@@ -7615,6 +7706,12 @@
     "orange_sclera": [
       "tag_group:eyes_tags"
     ],
+    "pink_sclera": [
+      "tag_group:eyes_tags"
+    ],
+    "purple_sclera": [
+      "tag_group:eyes_tags"
+    ],
     "red_sclera": [
       "tag_group:eyes_tags"
     ],
@@ -8076,6 +8173,9 @@
     "smelling_hair": [
       "tag_group:hair"
     ],
+    "strangling_with_hair": [
+      "tag_group:hair"
+    ],
     "whipping_hair": [
       "tag_group:hair"
     ],
@@ -8299,6 +8399,21 @@
       "tag_group:hair"
     ],
     "floating_hair": [
+      "tag_group:hair"
+    ],
+    "hair_around_arms": [
+      "tag_group:hair"
+    ],
+    "hair_around_ear": [
+      "tag_group:hair"
+    ],
+    "hair_around_horn": [
+      "tag_group:hair"
+    ],
+    "hair_around_neck": [
+      "tag_group:hair"
+    ],
+    "hair_around_own_leg": [
       "tag_group:hair"
     ],
     "hair_in_own_mouth": [
@@ -8551,6 +8666,9 @@
     "double_bun": [
       "tag_group:hair_styles"
     ],
+    "very_low_bun": [
+      "tag_group:hair_styles"
+    ],
     "cone_hair_bun": [
       "tag_group:hair_styles"
     ],
@@ -8774,6 +8892,9 @@
       "tag_group:hair_styles"
     ],
     "fluffy_hair": [
+      "tag_group:hair_styles"
+    ],
+    "kinky_hair": [
       "tag_group:hair_styles"
     ],
     "kishimen_hair": [
@@ -12883,8 +13004,7 @@
     ],
     "lace": [
       "tag_group:accessories",
-      "tag_group:sexual_attire",
-      "tag_group:embellishment"
+      "tag_group:sexual_attire"
     ],
     "nail_art": [
       "tag_group:accessories"
@@ -13960,26 +14080,32 @@
       "tag_group:fashion_style"
     ],
     "bulgarian_clothes": [
-      "tag_group:attire"
+      "tag_group:attire",
+      "tag_group:fashion_style"
     ],
     "belarusian_clothes": [
-      "tag_group:attire"
+      "tag_group:attire",
+      "tag_group:fashion_style"
     ],
     "croatian_clothes": [
-      "tag_group:attire"
+      "tag_group:attire",
+      "tag_group:fashion_style"
     ],
     "czech_clothes": [
-      "tag_group:attire"
+      "tag_group:attire",
+      "tag_group:fashion_style"
     ],
     "polish_clothes": [
       "tag_group:attire",
       "tag_group:fashion_style"
     ],
     "serbian_clothes": [
-      "tag_group:attire"
+      "tag_group:attire",
+      "tag_group:fashion_style"
     ],
     "slovak_clothes": [
-      "tag_group:attire"
+      "tag_group:attire",
+      "tag_group:fashion_style"
     ],
     "ukrainian_clothes": [
       "tag_group:attire",
@@ -14179,6 +14305,12 @@
       "tag_group:attire"
     ],
     "wing_print": [
+      "tag_group:attire"
+    ],
+    "xiangyun_print": [
+      "tag_group:attire"
+    ],
+    "constellation_print": [
       "tag_group:attire"
     ],
     "criss-cross_straps": [
@@ -15772,16 +15904,6 @@
     "up_sleeve": [
       "tag_group:sleeves"
     ],
-    "gem-studded": [
-      "tag_group:embellishment"
-    ],
-    "glitter": [
-      "tag_group:embellishment",
-      "tag_group:makeup"
-    ],
-    "sequins": [
-      "tag_group:embellishment"
-    ],
     "aqua-framed_eyewear": [
       "tag_group:eyewear"
     ],
@@ -15933,6 +16055,9 @@
     "eyewear_view": [
       "tag_group:eyewear"
     ],
+    "finger_on_eyewear": [
+      "tag_group:eyewear"
+    ],
     "fogged_glasses": [
       "tag_group:eyewear"
     ],
@@ -16026,27 +16151,16 @@
     "contact_lens": [
       "tag_group:eyewear"
     ],
-    "aristocratic_clothes": [
+    "ballet_class_clothes": [
       "tag_group:fashion_style"
     ],
     "biker_clothes": [
       "tag_group:fashion_style"
     ],
-    "goth_fashion": [
+    "contemporary_traditional_clothes": [
       "tag_group:fashion_style"
-    ],
-    "hip_hop": [
-      "tag_group:fashion_style",
-      "tag_group:audio_tags"
     ],
     "preppy_fashion": [
-      "tag_group:fashion_style"
-    ],
-    "punk": [
-      "tag_group:fashion_style",
-      "tag_group:audio_tags"
-    ],
-    "raver": [
       "tag_group:fashion_style"
     ],
     "runway_fashion": [
@@ -16055,12 +16169,6 @@
     "sportswear": [
       "tag_group:fashion_style",
       "tag_group:sports"
-    ],
-    "streetwear": [
-      "tag_group:fashion_style"
-    ],
-    "techwear": [
-      "tag_group:fashion_style"
     ],
     "winter_clothes": [
       "tag_group:fashion_style"
@@ -16095,9 +16203,6 @@
     "y2k_fashion": [
       "tag_group:fashion_style"
     ],
-    "bodycon": [
-      "tag_group:fashion_style"
-    ],
     "cyber_fashion": [
       "tag_group:fashion_style"
     ],
@@ -16117,9 +16222,6 @@
       "tag_group:fashion_style"
     ],
     "himekaji": [
-      "tag_group:fashion_style"
-    ],
-    "idol_clothes": [
       "tag_group:fashion_style"
     ],
     "jirai_kei": [
@@ -16177,6 +16279,9 @@
     "rokku_gyaru": [
       "tag_group:fashion_style"
     ],
+    "accurate_lolita_coord": [
+      "tag_group:fashion_style"
+    ],
     "classic_lolita": [
       "tag_group:fashion_style"
     ],
@@ -16210,6 +16315,52 @@
     "wa_lolita": [
       "tag_group:fashion_style"
     ],
+    "bodycon": [
+      "tag_group:fashion_style"
+    ],
+    "idol_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "wishcore": [
+      "tag_group:fashion_style"
+    ],
+    "yabi_fashion": [
+      "tag_group:fashion_style"
+    ],
+    "goth_fashion": [
+      "tag_group:fashion_style"
+    ],
+    "cybergoth": [
+      "tag_group:fashion_style"
+    ],
+    "e-kid_fashion": [
+      "tag_group:fashion_style"
+    ],
+    "emo_fashion": [
+      "tag_group:fashion_style"
+    ],
+    "grunge_(fashion)": [
+      "tag_group:fashion_style"
+    ],
+    "military_goth": [
+      "tag_group:fashion_style"
+    ],
+    "pastel_goth": [
+      "tag_group:fashion_style"
+    ],
+    "perky_goth": [
+      "tag_group:fashion_style"
+    ],
+    "punk": [
+      "tag_group:fashion_style",
+      "tag_group:audio_tags"
+    ],
+    "scene_fashion": [
+      "tag_group:fashion_style"
+    ],
+    "trad_goth": [
+      "tag_group:fashion_style"
+    ],
     "balletcore": [
       "tag_group:fashion_style"
     ],
@@ -16222,23 +16373,15 @@
     "burlesque": [
       "tag_group:fashion_style"
     ],
-    "cybergoth": [
-      "tag_group:fashion_style"
-    ],
-    "e-kid_fashion": [
-      "tag_group:fashion_style"
-    ],
-    "emo_fashion": [
-      "tag_group:fashion_style"
-    ],
     "flapper_girl": [
       "tag_group:fashion_style"
     ],
     "greaser_fashion": [
       "tag_group:fashion_style"
     ],
-    "grunge_(fashion)": [
-      "tag_group:fashion_style"
+    "hip_hop": [
+      "tag_group:fashion_style",
+      "tag_group:audio_tags"
     ],
     "hippie": [
       "tag_group:fashion_style"
@@ -16249,37 +16392,46 @@
     "mcbling": [
       "tag_group:fashion_style"
     ],
-    "military_goth": [
-      "tag_group:fashion_style"
-    ],
     "mod_fashion": [
       "tag_group:fashion_style"
     ],
     "office_siren": [
       "tag_group:fashion_style"
     ],
-    "pastel_goth": [
-      "tag_group:fashion_style"
-    ],
-    "perky_goth": [
+    "raver": [
       "tag_group:fashion_style"
     ],
     "rockabilly": [
       "tag_group:fashion_style"
     ],
-    "scene_fashion": [
+    "streetwear": [
       "tag_group:fashion_style"
     ],
-    "trad_goth": [
+    "techwear": [
       "tag_group:fashion_style"
     ],
     "twee_fashion": [
       "tag_group:fashion_style"
     ],
-    "wishcore": [
+    "ancient_greek_clothes": [
       "tag_group:fashion_style"
     ],
-    "yabi_fashion": [
+    "aristocratic_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "aztec_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "byzantine_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "incan_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "mayan_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "neo-classical_clothes": [
       "tag_group:fashion_style"
     ],
     "regency_era": [
@@ -16291,7 +16443,13 @@
     "rococo_movement": [
       "tag_group:fashion_style"
     ],
+    "roman_clothes": [
+      "tag_group:fashion_style"
+    ],
     "romantic_period": [
+      "tag_group:fashion_style"
+    ],
+    "sumerian_clothes": [
       "tag_group:fashion_style"
     ],
     "victorian": [
@@ -16300,31 +16458,37 @@
     "african_clothes": [
       "tag_group:fashion_style"
     ],
+    "amazigh_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "nigerian_clothes": [
+      "tag_group:fashion_style"
+    ],
     "ainu_clothes": [
       "tag_group:fashion_style"
     ],
-    "colombian_clothes": [
+    "bai_clothes": [
       "tag_group:fashion_style"
     ],
-    "dutch_clothes": [
+    "dai_clothes": [
       "tag_group:fashion_style"
     ],
-    "french_clothes": [
+    "de'ang_clothes": [
       "tag_group:fashion_style"
     ],
-    "german_clothes": [
-      "tag_group:fashion_style"
-    ],
-    "hawaiian_clothes": [
+    "filipino_clothes": [
       "tag_group:fashion_style"
     ],
     "indonesian_clothes": [
       "tag_group:fashion_style"
     ],
-    "italian_clothes": [
+    "iranian_clothes": [
       "tag_group:fashion_style"
     ],
-    "kazakh_clothes": [
+    "karakalpak_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "kyrgyz_clothes": [
       "tag_group:fashion_style"
     ],
     "malaysian_clothes": [
@@ -16333,22 +16497,22 @@
     "manchu_clothes": [
       "tag_group:fashion_style"
     ],
-    "mayan_clothes": [
-      "tag_group:fashion_style"
-    ],
-    "mexican_clothes": [
-      "tag_group:fashion_style"
-    ],
     "miao_clothes": [
       "tag_group:fashion_style"
     ],
-    "minoan_clothes": [
+    "palestinian_clothes": [
       "tag_group:fashion_style"
     ],
-    "spanish_clothes": [
+    "ryuusou": [
       "tag_group:fashion_style"
     ],
-    "swedish_clothes": [
+    "taiwanese_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "tajik_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "tatar_clothes": [
       "tag_group:fashion_style"
     ],
     "thai_clothes": [
@@ -16358,6 +16522,102 @@
       "tag_group:fashion_style"
     ],
     "turkish_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "uygur_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "uzbek_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "yi_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "zhuang_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "alsatian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "danish_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "dutch_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "estonian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "finnish_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "french_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "georgian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "german_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "hungarian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "italian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "kazakh_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "lithuanian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "minoan_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "norwegian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "romanian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "sami_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "scottish_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "spanish_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "swedish_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "swiss_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "traditional_greek_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "hawaiian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "mexican_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "panamanian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "chilean_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "colombian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "peruvian_clothes": [
+      "tag_group:fashion_style"
+    ],
+    "portuguese_clothes": [
       "tag_group:fashion_style"
     ],
     "fashion_style_request": [
@@ -16388,6 +16648,9 @@
       "tag_group:makeup"
     ],
     "glitter_makeup": [
+      "tag_group:makeup"
+    ],
+    "glitter": [
       "tag_group:makeup"
     ],
     "gyaru_makeup": [
@@ -18631,14 +18894,14 @@
     "neck_violin": [
       "tag_group:bdsm_and_torture"
     ],
+    "pillory": [
+      "tag_group:bdsm_and_torture",
+      "tag_group:sex_objects"
+    ],
     "stationary_restraints": [
       "tag_group:bdsm_and_torture"
     ],
     "stocks": [
-      "tag_group:bdsm_and_torture",
-      "tag_group:sex_objects"
-    ],
-    "pillory": [
       "tag_group:bdsm_and_torture",
       "tag_group:sex_objects"
     ],
@@ -18704,6 +18967,9 @@
     "brazen_bull": [
       "tag_group:bdsm_and_torture"
     ],
+    "eyelid_speculum": [
+      "tag_group:bdsm_and_torture"
+    ],
     "garrote_(torture_instrument)": [
       "tag_group:bdsm_and_torture"
     ],
@@ -18719,9 +18985,6 @@
     "iron_maiden": [
       "tag_group:bdsm_and_torture"
     ],
-    "eyelid_speculum": [
-      "tag_group:bdsm_and_torture"
-    ],
     "testicle_crusher": [
       "tag_group:bdsm_and_torture"
     ],
@@ -18734,12 +18997,12 @@
     "trampling_table": [
       "tag_group:bdsm_and_torture"
     ],
-    "x-cross_(bdsm)": [
-      "tag_group:bdsm_and_torture"
-    ],
     "wooden_horse": [
       "tag_group:bdsm_and_torture",
       "tag_group:sex_objects"
+    ],
+    "x-cross_(bdsm)": [
+      "tag_group:bdsm_and_torture"
     ],
     "mind_break": [
       "tag_group:bdsm_and_torture"
@@ -18806,6 +19069,10 @@
     "mutilation": [
       "tag_group:bdsm_and_torture"
     ],
+    "spanking": [
+      "tag_group:bdsm_and_torture",
+      "tag_group:verbs_and_gerunds"
+    ],
     "tooth_pulling": [
       "tag_group:bdsm_and_torture"
     ],
@@ -18813,10 +19080,6 @@
       "tag_group:bdsm_and_torture"
     ],
     "whipping": [
-      "tag_group:bdsm_and_torture",
-      "tag_group:verbs_and_gerunds"
-    ],
-    "spanking": [
       "tag_group:bdsm_and_torture",
       "tag_group:verbs_and_gerunds"
     ],
@@ -19823,7 +20086,7 @@
     "maerchen_(sound_horizon)": [
       "tag_group:audio_tags"
     ],
-    "moira": [
+    "moira_(sound_horizon)": [
       "tag_group:audio_tags"
     ],
     "nein_(album)": [
@@ -22837,7 +23100,8 @@
       "tag_group:cats"
     ],
     "cat_cafe": [
-      "tag_group:cats"
+      "tag_group:cats",
+      "tag_group:locations"
     ],
     "cat_day": [
       "tag_group:cats",
@@ -25126,6 +25390,9 @@
       "tag_group:flowers"
     ],
     "smelling_flower": [
+      "tag_group:flowers"
+    ],
+    "wilted_flower": [
       "tag_group:flowers"
     ],
     "wreath": [
@@ -27462,7 +27729,8 @@
       "tag_group:companies_and_brand_names"
     ],
     "gatorade": [
-      "tag_group:companies_and_brand_names"
+      "tag_group:companies_and_brand_names",
+      "tag_group:food_tags"
     ],
     "georgia_max_coffee": [
       "tag_group:companies_and_brand_names",
@@ -28785,6 +29053,9 @@
     "indoors": [
       "tag_group:locations"
     ],
+    "aisle": [
+      "tag_group:locations"
+    ],
     "ballroom": [
       "tag_group:locations"
     ],
@@ -28812,6 +29083,9 @@
       "tag_group:locations"
     ],
     "otaku_room": [
+      "tag_group:locations"
+    ],
+    "boxing_ring": [
       "tag_group:locations"
     ],
     "cafeteria": [
@@ -28842,6 +29116,9 @@
     "fitting_room": [
       "tag_group:locations"
     ],
+    "genkan": [
+      "tag_group:locations"
+    ],
     "fitness_gym": [
       "tag_group:locations"
     ],
@@ -28852,6 +29129,9 @@
       "tag_group:locations"
     ],
     "school_gym": [
+      "tag_group:locations"
+    ],
+    "hallway": [
       "tag_group:locations"
     ],
     "infirmary": [
@@ -28883,6 +29163,19 @@
       "tag_group:locations",
       "tag_group:water"
     ],
+    "poolside": [
+      "tag_group:locations",
+      "tag_group:water"
+    ],
+    "public_restroom": [
+      "tag_group:locations"
+    ],
+    "sauna": [
+      "tag_group:locations"
+    ],
+    "backstage": [
+      "tag_group:locations"
+    ],
     "staff_room": [
       "tag_group:locations"
     ],
@@ -28896,6 +29189,9 @@
       "tag_group:locations"
     ],
     "workshop": [
+      "tag_group:locations"
+    ],
+    "wrestling_ring": [
       "tag_group:locations"
     ],
     "beach": [
@@ -28929,6 +29225,9 @@
     "glacier": [
       "tag_group:locations"
     ],
+    "grasslands": [
+      "tag_group:locations"
+    ],
     "hill": [
       "tag_group:locations"
     ],
@@ -28958,6 +29257,12 @@
       "tag_group:locations"
     ],
     "savannah": [
+      "tag_group:locations"
+    ],
+    "salt_flats": [
+      "tag_group:locations"
+    ],
+    "tundra": [
       "tag_group:locations"
     ],
     "wetland": [
@@ -29037,7 +29342,16 @@
     "rural": [
       "tag_group:locations"
     ],
+    "suburb": [
+      "tag_group:locations"
+    ],
+    "slums": [
+      "tag_group:locations"
+    ],
     "town": [
+      "tag_group:locations"
+    ],
+    "town_square": [
       "tag_group:locations"
     ],
     "village": [
@@ -29058,7 +29372,13 @@
     "graveyard": [
       "tag_group:locations"
     ],
+    "horse_racing_track": [
+      "tag_group:locations"
+    ],
     "jetty": [
+      "tag_group:locations"
+    ],
+    "farm": [
       "tag_group:locations"
     ],
     "rice_paddy": [
@@ -29074,6 +29394,9 @@
     "harbor": [
       "tag_group:locations"
     ],
+    "junkyard": [
+      "tag_group:locations"
+    ],
     "market": [
       "tag_group:locations",
       "tag_group:food_tags"
@@ -29081,7 +29404,16 @@
     "market_stall": [
       "tag_group:locations"
     ],
+    "marina": [
+      "tag_group:locations"
+    ],
+    "maritime_port": [
+      "tag_group:locations"
+    ],
     "playground": [
+      "tag_group:locations"
+    ],
+    "parking_garage": [
       "tag_group:locations"
     ],
     "parking_lot": [
@@ -29094,11 +29426,10 @@
       "tag_group:locations",
       "tag_group:technology"
     ],
-    "poolside": [
-      "tag_group:locations",
-      "tag_group:water"
-    ],
     "waterpark": [
+      "tag_group:locations"
+    ],
+    "racetrack": [
       "tag_group:locations"
     ],
     "railroad_tracks": [
@@ -29134,19 +29465,22 @@
     "street": [
       "tag_group:locations"
     ],
-    "school_entrance": [
+    "running_track": [
+      "tag_group:locations"
+    ],
+    "shooting_range": [
       "tag_group:locations"
     ],
     "soccer_field": [
-      "tag_group:locations"
-    ],
-    "running_track": [
       "tag_group:locations"
     ],
     "trench": [
       "tag_group:locations"
     ],
     "tunnel": [
+      "tag_group:locations"
+    ],
+    "wharf": [
       "tag_group:locations"
     ],
     "well": [
@@ -29177,6 +29511,12 @@
     "arcade": [
       "tag_group:locations"
     ],
+    "archery_dojo": [
+      "tag_group:locations"
+    ],
+    "ashiyu": [
+      "tag_group:locations"
+    ],
     "bar_(place)": [
       "tag_group:locations",
       "tag_group:food_tags"
@@ -29202,6 +29542,10 @@
       "tag_group:locations",
       "tag_group:food_tags"
     ],
+    "maid_cafe": [
+      "tag_group:locations",
+      "tag_group:food_tags"
+    ],
     "casino": [
       "tag_group:locations"
     ],
@@ -29215,6 +29559,9 @@
       "tag_group:locations"
     ],
     "convention": [
+      "tag_group:locations"
+    ],
+    "dance_studio": [
       "tag_group:locations"
     ],
     "garage": [
@@ -29238,6 +29585,12 @@
     "hotel": [
       "tag_group:locations"
     ],
+    "love_hotel": [
+      "tag_group:locations"
+    ],
+    "motel": [
+      "tag_group:locations"
+    ],
     "hut": [
       "tag_group:locations"
     ],
@@ -29248,6 +29601,9 @@
       "tag_group:locations"
     ],
     "refinery": [
+      "tag_group:locations"
+    ],
+    "oil_rig": [
       "tag_group:locations"
     ],
     "power_plant": [
@@ -29303,10 +29659,19 @@
     "rooftop": [
       "tag_group:locations"
     ],
+    "on_roof": [
+      "tag_group:locations"
+    ],
     "ruins": [
       "tag_group:locations"
     ],
     "school": [
+      "tag_group:locations"
+    ],
+    "school_entrance": [
+      "tag_group:locations"
+    ],
+    "school_gateway": [
       "tag_group:locations"
     ],
     "sewer": [
@@ -29316,6 +29681,9 @@
       "tag_group:locations"
     ],
     "shack": [
+      "tag_group:locations"
+    ],
+    "shed": [
       "tag_group:locations"
     ],
     "shop": [
@@ -29329,13 +29697,25 @@
     "bookstore": [
       "tag_group:locations"
     ],
+    "candy_store": [
+      "tag_group:locations"
+    ],
     "convenience_store": [
+      "tag_group:locations"
+    ],
+    "clothes_shop": [
       "tag_group:locations"
     ],
     "flower_shop": [
       "tag_group:locations"
     ],
+    "grocery_store": [
+      "tag_group:locations"
+    ],
     "pharmacy": [
+      "tag_group:locations"
+    ],
+    "record_store": [
       "tag_group:locations"
     ],
     "salon": [
@@ -29354,13 +29734,34 @@
     "skyscraper": [
       "tag_group:locations"
     ],
+    "soapland": [
+      "tag_group:locations"
+    ],
+    "stable": [
+      "tag_group:locations"
+    ],
     "stadium": [
       "tag_group:locations"
     ],
     "arena": [
       "tag_group:locations"
     ],
+    "baseball_stadium": [
+      "tag_group:locations"
+    ],
     "stilt_house": [
+      "tag_group:locations"
+    ],
+    "strip_club": [
+      "tag_group:locations"
+    ],
+    "subway": [
+      "tag_group:locations"
+    ],
+    "subway_entrance": [
+      "tag_group:locations"
+    ],
+    "subway_station": [
       "tag_group:locations"
     ],
     "theater": [
@@ -29391,6 +29792,9 @@
       "tag_group:locations"
     ],
     "train_station": [
+      "tag_group:locations"
+    ],
+    "train_station_platform": [
       "tag_group:locations"
     ],
     "treehouse": [
@@ -29515,11 +29919,17 @@
     "youkai_mountain": [
       "tag_group:locations"
     ],
+    "battlefield": [
+      "tag_group:locations"
+    ],
     "space": [
       "tag_group:locations",
       "tag_group:technology"
     ],
     "asteroid": [
+      "tag_group:locations"
+    ],
+    "in_orbit": [
       "tag_group:locations"
     ],
     "planet": [
@@ -29528,6 +29938,9 @@
     "space_station": [
       "tag_group:locations",
       "tag_group:technology"
+    ],
+    "underwater_city": [
+      "tag_group:locations"
     ],
     "vehicle_interior": [
       "tag_group:locations"
@@ -29557,6 +29970,13 @@
     "location_request": [
       "tag_group:locations",
       "tag_group:real_world_locations"
+    ],
+    "real_world_location": [
+      "tag_group:locations",
+      "tag_group:real_world_locations"
+    ],
+    "in-universe_location": [
+      "tag_group:locations"
     ],
     "abby_trott": [
       "tag_group:people"
@@ -30971,7 +31391,7 @@
     "ray_bradbury": [
       "tag_group:people"
     ],
-    "sei_shounagon": [
+    "sei_shounagon_(real_life)": [
       "tag_group:people"
     ],
     "stan_lee": [
@@ -31028,7 +31448,7 @@
     "werner_herzog": [
       "tag_group:people"
     ],
-    "william_shakespeare": [
+    "william_shakespeare_(real_life)": [
       "tag_group:people"
     ],
     "willis_o'brien": [
@@ -31049,7 +31469,7 @@
     "michelangelo_(sculptor)": [
       "tag_group:people"
     ],
-    "leonardo_da_vinci": [
+    "leonardo_da_vinci_(real_life)": [
       "tag_group:people"
     ],
     "salvador_dali_(illustrated)": [
@@ -31538,6 +31958,9 @@
     "andrew_wk": [
       "tag_group:people"
     ],
+    "ariana_grande": [
+      "tag_group:people"
+    ],
     "audrey_nuna": [
       "tag_group:people"
     ],
@@ -31698,6 +32121,9 @@
       "tag_group:people"
     ],
     "herman_li": [
+      "tag_group:people"
+    ],
+    "huh_yunjin": [
       "tag_group:people"
     ],
     "hyuna_(singer)": [
@@ -32003,7 +32429,7 @@
     "weird_al_yankovic": [
       "tag_group:people"
     ],
-    "wolfgang_amadeus_mozart": [
+    "wolfgang_amadeus_mozart_(real_life)": [
       "tag_group:people"
     ],
     "xxxtentacion": [
@@ -32297,10 +32723,10 @@
     "emmanuel_macron": [
       "tag_group:people"
     ],
-    "marie_antoinette": [
+    "marie_antoinette_(real_life)": [
       "tag_group:people"
     ],
-    "napoleon_bonaparte": [
+    "napoleon_bonaparte_(real_life)": [
       "tag_group:people"
     ],
     "philippe_petain": [
@@ -32393,7 +32819,7 @@
     "ozawa_ichirou": [
       "tag_group:people"
     ],
-    "sakamoto_ryouma": [
+    "sakamoto_ryouma_(real_life)": [
       "tag_group:people"
     ],
     "abe_shinzou": [
@@ -32450,10 +32876,10 @@
     "georgy_malenkov": [
       "tag_group:people"
     ],
-    "grigori_rasputin": [
+    "grigori_rasputin_(real_life)": [
       "tag_group:people"
     ],
-    "ivan_the_terrible": [
+    "ivan_the_terrible_(real_life)": [
       "tag_group:people"
     ],
     "joseph_stalin": [
@@ -32766,7 +33192,7 @@
     "julius_robert_oppenheimer": [
       "tag_group:people"
     ],
-    "nikola_tesla": [
+    "nikola_tesla_(real_life)": [
       "tag_group:people"
     ],
     "rene_descartes": [
@@ -33115,6 +33541,9 @@
       "tag_group:people"
     ],
     "rodrigo_de_paul": [
+      "tag_group:people"
+    ],
+    "rodrygo_silva_de_goes": [
       "tag_group:people"
     ],
     "roman_weidenfeller": [
@@ -34096,7 +34525,7 @@
     "georgy_zhukov": [
       "tag_group:people"
     ],
-    "gilles_de_rais": [
+    "gilles_de_rais_(real_life)": [
       "tag_group:people"
     ],
     "hannibal_barca": [
@@ -34111,7 +34540,7 @@
     "horatio_nelson": [
       "tag_group:people"
     ],
-    "jeanne_d'arc": [
+    "jeanne_d'arc_(real_life)": [
       "tag_group:people"
     ],
     "jimmy_doolittle": [
@@ -34120,7 +34549,7 @@
     "katou_tateo": [
       "tag_group:people"
     ],
-    "leonidas_i": [
+    "leonidas_i_(real_life)": [
       "tag_group:people"
     ],
     "lin_biao": [
@@ -34636,6 +35065,9 @@
     "doug_walker": [
       "tag_group:people"
     ],
+    "edp445": [
+      "tag_group:people"
+    ],
     "filthy_frank": [
       "tag_group:people"
     ],
@@ -34968,9 +35400,6 @@
     ],
     "real_life": [
       "tag_group:people"
-    ],
-    "real_world_location": [
-      "tag_group:real_world_locations"
     ],
     "afghanistan": [
       "tag_group:real_world_locations"
@@ -37243,9 +37672,6 @@
     "cacao_fruit": [
       "tag_group:food_tags"
     ],
-    "cherry": [
-      "tag_group:food_tags"
-    ],
     "chokecherry": [
       "tag_group:food_tags"
     ],
@@ -39214,6 +39640,12 @@
     "strawberry_juice": [
       "tag_group:food_tags"
     ],
+    "sports_drink": [
+      "tag_group:food_tags"
+    ],
+    "aquarius_(drink)": [
+      "tag_group:food_tags"
+    ],
     "soda": [
       "tag_group:food_tags"
     ],
@@ -39407,9 +39839,6 @@
       "tag_group:food_tags"
     ],
     "barista": [
-      "tag_group:food_tags"
-    ],
-    "maid_cafe": [
       "tag_group:food_tags"
     ],
     "diner": [
@@ -42292,7 +42721,7 @@
     "chaos_code": [
       "tag_group:fighting_games"
     ],
-    "choukou_senki_kikaiou": [
+    "choukou_senki_kikaioh": [
       "tag_group:fighting_games"
     ],
     "cyberbots": [
@@ -42929,10 +43358,13 @@
     "call_of_cthulhu": [
       "tag_group:role-playing_games"
     ],
-    "emo-klore_trpg": [
+    "double_cross_(f.e.a.r.)": [
       "tag_group:role-playing_games"
     ],
     "dungeons_&_dragons": [
+      "tag_group:role-playing_games"
+    ],
+    "emo-klore_trpg": [
       "tag_group:role-playing_games"
     ],
     "konflikt_'47": [
@@ -44601,7 +45033,7 @@
     "borderlands_2": [
       "tag_group:shooter_games"
     ],
-    "borderlands_the_presequel": [
+    "borderlands:_the_pre-sequel": [
       "tag_group:shooter_games"
     ],
     "borderlands_3": [
@@ -46408,9 +46840,6 @@
     "krita_(medium)": [
       "tag_group:drawing_software"
     ],
-    "mario_paint_(medium)": [
-      "tag_group:drawing_software"
-    ],
     "medibang_paint_(medium)": [
       "tag_group:drawing_software"
     ],
@@ -46667,6 +47096,9 @@
       "tag_group:drawing_software"
     ],
     "iphone_notes_(medium)": [
+      "tag_group:drawing_software"
+    ],
+    "mario_paint_(medium)": [
       "tag_group:drawing_software"
     ],
     "microsoft_excel_(medium)": [
@@ -47109,6 +47541,7 @@
       "uroko_(pattern)",
       "tatewaku",
       "yagasuri",
+      "yukiwa_(pattern)",
       "animal_print",
       "cow_print",
       "leopard_print",
@@ -47197,20 +47630,20 @@
       "pink_background",
       "purple_background",
       "red_background",
-      "simple_background",
-      "transparent_background",
       "white_background",
       "yellow_background",
+      "simple_background",
+      "transparent_background",
       "colorful_background",
       "gradient_background",
       "greyscale_with_colored_background",
       "halftone_background",
       "monochrome_background",
-      "multicolored_background",
       "rainbow_background",
       "heaven_condition",
       "three-toned_background",
       "two-tone_background",
+      "multicolored_background",
       "argyle_background",
       "checkered_background",
       "cross_background",
@@ -47247,6 +47680,8 @@
       "butterfly",
       "card_background",
       "playing_card",
+      "cherry_background",
+      "cherry",
       "cloud_background",
       "cloud",
       "fiery_background",
@@ -47369,6 +47804,7 @@
       "blank_censor",
       "blur_censor",
       "censored_by_text",
+      "circle_censor",
       "emoji_censor",
       "glitch_censor",
       "heart_censor",
@@ -47536,21 +47972,26 @@
       "self-portrait_with_death_playing_the_fiddle",
       "david_with_the_head_of_goliath",
       "woman_with_a_parasol",
+      "le_bassin_aux_nympheas",
       "olympia_(manet)",
       "the_fifer",
-      "the_scream",
       "liberty_leading_the_people",
+      "the_scream",
+      "nighthawks",
+      "romeo_and_juliet_(francis_dicksee)",
       "la_maja_desnuda",
       "la_maja_vestida",
       "saturn_devouring_his_son",
       "witches'_sabbath_(francisco_goya)",
       "the_kiss",
+      "the_sin_(heinrich_lossow)",
       "kanagawa_okinami_ura",
       "gaifu_kaisei",
       "barge_haulers_on_the_volga",
       "ivan_the_terrible_and_his_son_ivan",
       "reply_of_the_zaporozhian_cossacks",
       "napoleon_crossing_the_alps",
+      "stanczyk_(painting)",
       "arrow_shirt_collar_ad_(1916)",
       "couple_descending_staircase_(leyendecker)",
       "man_and_woman_dancing_(leyendecker)",
@@ -47567,6 +48008,7 @@
       "lady_with_an_ermine",
       "mona_lisa",
       "the_last_supper",
+      "relativity_(m.c._escher)",
       "pieta",
       "the_creation_of_adam",
       "triple_self-portrait_(norman_rockwell)",
@@ -47599,29 +48041,48 @@
       "ass_focus",
       "back_focus",
       "breast_focus",
+      "crotch_focus",
       "eye_focus",
+      "ear_focus",
       "foot_focus",
       "hand_focus",
+      "hair_focus",
       "hip_focus",
       "leg_focus",
+      "mouth_focus",
       "navel_focus",
+      "neck_focus",
       "pectoral_focus",
-      "penis_focus",
+      "stomach_focus",
+      "tail_focus",
       "thigh_focus",
+      "penis_focus",
+      "pussy_focus",
       "other_focus",
-      "animal_focus",
       "book_focus",
       "clothes_focus",
       "cloud_focus",
       "food_focus",
       "footwear_focus",
+      "flower_focus",
+      "mountain_focus",
       "object_focus",
-      "text_focus",
+      "plant_focus",
+      "reflection_focus",
+      "sky_focus",
+      "tree_focus",
       "vehicle_focus",
       "weapon_focus",
       "wind_chime_focus",
+      "animal_focus",
+      "creature_focus",
+      "digimon_focus",
+      "kanji_focus",
       "monster_focus",
-      "plant_focus",
+      "mecha_focus",
+      "pokemon_focus",
+      "steppee_focus",
+      "text_focus",
       "soft_focus"
     ],
     "tag_group:lighting": [
@@ -47843,6 +48304,7 @@
       "kikumon",
       "kikkoumon",
       "kojitsunagi_(pattern)",
+      "matsu_symbol",
       "ryusuimon",
       "sakuramon",
       "sayagata",
@@ -47853,6 +48315,7 @@
       "uchiwa_(medium)",
       "uroko_(pattern)",
       "yagasuri",
+      "yukiwa_(pattern)",
       "double_happiness",
       "meandros",
       "shou_(symbol)",
@@ -47988,6 +48451,7 @@
       "good_fortune_symbol",
       "dao_fu",
       "heaven_(kanji)",
+      "manji",
       "two-legged_horse_(kanji)",
       "minus_sign",
       "omega_symbol",
@@ -49268,6 +49732,8 @@
       "mismatched_sclera",
       "no_sclera",
       "orange_sclera",
+      "pink_sclera",
+      "purple_sclera",
       "red_sclera",
       "solid_eyes",
       "yellow_sclera",
@@ -49328,7 +49794,6 @@
       "+_+",
       "._.",
       "<o>_<o>",
-      "<",
       "x_x",
       "blinking",
       "closed_eyes",
@@ -49442,6 +49907,7 @@
       "licking_another's_hair",
       "kissing_hair",
       "smelling_hair",
+      "strangling_with_hair",
       "whipping_hair",
       "hair_brush",
       "hair_dryer",
@@ -49508,6 +49974,11 @@
       "severed_hair",
       "expressive_hair",
       "floating_hair",
+      "hair_around_arms",
+      "hair_around_ear",
+      "hair_around_horn",
+      "hair_around_neck",
+      "hair_around_own_leg",
       "hair_in_own_mouth",
       "hair_spread_out",
       "hair_hanging_down",
@@ -49596,6 +50067,7 @@
       "bantu_knots",
       "single_hair_bun",
       "double_bun",
+      "very_low_bun",
       "cone_hair_bun",
       "donut_hair_bun",
       "heart_hair_bun",
@@ -49671,6 +50143,7 @@
       "straight_hair",
       "wavy_hair",
       "fluffy_hair",
+      "kinky_hair",
       "kishimen_hair",
       "arched_bangs",
       "asymmetrical_bangs",
@@ -51687,6 +52160,8 @@
       "star_print",
       "wave_print",
       "wing_print",
+      "xiangyun_print",
+      "constellation_print",
       "chinese_knot",
       "criss-cross_straps",
       "criss-cross_back-straps",
@@ -52324,12 +52799,6 @@
       "sleeve_cuffs",
       "up_sleeve"
     ],
-    "tag_group:embellishment": [
-      "gem-studded",
-      "glitter",
-      "lace",
-      "sequins"
-    ],
     "tag_group:eyewear": [
       "glasses",
       "goggles",
@@ -52387,6 +52856,7 @@
       "eyewear_strap",
       "eyewear_switch",
       "eyewear_view",
+      "finger_on_eyewear",
       "fogged_glasses",
       "hand_on_eyewear",
       "looking_over_eyewear",
@@ -52423,19 +52893,14 @@
       "contact_lens"
     ],
     "tag_group:fashion_style": [
-      "aristocratic_clothes",
+      "ballet_class_clothes",
       "biker_clothes",
       "casual",
+      "contemporary_traditional_clothes",
       "formal_clothes",
-      "goth_fashion",
-      "hip_hop",
       "preppy_fashion",
-      "punk",
-      "raver",
       "runway_fashion",
       "sportswear",
-      "streetwear",
-      "techwear",
       "winter_clothes",
       "1910s_fashion",
       "1920s_fashion",
@@ -52447,7 +52912,6 @@
       "1980s_fashion",
       "1990s_fashion",
       "y2k_fashion",
-      "bodycon",
       "choco_girl",
       "cyber_fashion",
       "decora",
@@ -52458,7 +52922,6 @@
       "hadeko",
       "heisei_retro",
       "himekaji",
-      "idol_clothes",
       "jersey_maid",
       "jirai_kei",
       "mori_kei",
@@ -52482,6 +52945,7 @@
       "onee_gyaru",
       "rokku_gyaru",
       "lolita_fashion",
+      "accurate_lolita_coord",
       "classic_lolita",
       "country_lolita",
       "gothic_lolita",
@@ -52493,73 +52957,130 @@
       "sweet_lolita",
       "viet_lolita",
       "wa_lolita",
+      "bodycon",
+      "idol_clothes",
+      "wishcore",
+      "yabi_fashion",
+      "goth_fashion",
+      "cybergoth",
+      "e-kid_fashion",
+      "emo_fashion",
+      "grunge_(fashion)",
+      "military_goth",
+      "pastel_goth",
+      "perky_goth",
+      "punk",
+      "scene_fashion",
+      "trad_goth",
       "balletcore",
       "beatnik",
       "boho-chic",
       "burlesque",
-      "cybergoth",
-      "e-kid_fashion",
-      "emo_fashion",
       "flapper_girl",
       "greaser_fashion",
-      "grunge_(fashion)",
+      "hip_hop",
       "hippie",
       "hipster",
       "mcbling",
-      "military_goth",
       "mod_fashion",
       "office_siren",
-      "pastel_goth",
-      "perky_goth",
+      "raver",
       "rockabilly",
-      "scene_fashion",
       "steampunk",
-      "trad_goth",
+      "streetwear",
+      "techwear",
       "twee_fashion",
       "whimsy_twee",
-      "wishcore",
-      "yabi_fashion",
       "ancient_egyptian_clothes",
+      "ancient_greek_clothes",
+      "aristocratic_clothes",
+      "aztec_clothes",
+      "byzantine_clothes",
       "dunhuang_style",
       "greco-roman_clothes",
+      "incan_clothes",
+      "mayan_clothes",
+      "neo-classical_clothes",
       "regency_era",
       "renaissance_clothes",
       "rococo_movement",
+      "roman_clothes",
       "romantic_period",
+      "sumerian_clothes",
       "victorian",
       "african_clothes",
+      "amazigh_clothes",
+      "nigerian_clothes",
       "ainu_clothes",
       "arabian_clothes",
-      "chinese_clothes",
-      "colombian_clothes",
-      "dutch_clothes",
-      "french_clothes",
-      "german_clothes",
-      "hawaiian_clothes",
       "asian_indian_clothes",
+      "bai_clothes",
+      "chinese_clothes",
+      "dai_clothes",
+      "de'ang_clothes",
+      "filipino_clothes",
       "indonesian_clothes",
-      "italian_clothes",
+      "iranian_clothes",
       "japanese_clothes",
-      "kazakh_clothes",
+      "karakalpak_clothes",
       "korean_clothes",
+      "kyrgyz_clothes",
       "malaysian_clothes",
       "manchu_clothes",
-      "mayan_clothes",
-      "mexican_clothes",
       "miao_clothes",
-      "minoan_clothes",
       "mongolian_clothes",
-      "native_american_clothes",
-      "polish_clothes",
-      "russian_clothes",
-      "slavic_clothes",
-      "spanish_clothes",
-      "swedish_clothes",
+      "palestinian_clothes",
+      "ryuusou",
+      "taiwanese_clothes",
+      "tajik_clothes",
+      "tatar_clothes",
       "thai_clothes",
       "tibetan_clothes",
       "turkish_clothes",
-      "ukrainian_clothes",
+      "uygur_clothes",
+      "uzbek_clothes",
       "vietnamese_clothes",
+      "yi_clothes",
+      "zhuang_clothes",
+      "alsatian_clothes",
+      "belarusian_clothes",
+      "bulgarian_clothes",
+      "croatian_clothes",
+      "czech_clothes",
+      "danish_clothes",
+      "dutch_clothes",
+      "estonian_clothes",
+      "finnish_clothes",
+      "french_clothes",
+      "georgian_clothes",
+      "german_clothes",
+      "hungarian_clothes",
+      "italian_clothes",
+      "kazakh_clothes",
+      "lithuanian_clothes",
+      "minoan_clothes",
+      "norwegian_clothes",
+      "polish_clothes",
+      "romanian_clothes",
+      "russian_clothes",
+      "sami_clothes",
+      "scottish_clothes",
+      "serbian_clothes",
+      "slavic_clothes",
+      "slovak_clothes",
+      "spanish_clothes",
+      "swedish_clothes",
+      "swiss_clothes",
+      "traditional_greek_clothes",
+      "ukrainian_clothes",
+      "hawaiian_clothes",
+      "native_american_clothes",
+      "mexican_clothes",
+      "panamanian_clothes",
+      "chilean_clothes",
+      "colombian_clothes",
+      "peruvian_clothes",
+      "portuguese_clothes",
       "fashion",
       "fashion_style_request"
     ],
@@ -53460,34 +53981,34 @@
       "human_table",
       "humiliation",
       "orgasm_denial",
-      "slave",
-      "sex_slave",
-      "sensory_deprivation",
-      "stepped_on",
       "pet_play",
       "public_indecency",
       "public_nudity",
       "public_use",
+      "slave",
+      "sex_slave",
+      "sensory_deprivation",
+      "stepped_on",
+      "fire_play",
       "ice_play",
       "wax_play",
-      "fire_play",
       "bondage",
       "cuffs",
       "chained",
       "neck_violin",
+      "pillory",
       "shackles",
       "shibari",
       "spreader_bar",
       "stationary_restraints",
       "stealth_bondage",
       "stocks",
-      "pillory",
       "yoke_(bdsm)",
+      "box_tie",
       "frogtie",
       "hogtie",
       "hogtie_carry",
       "reverse_prayer",
-      "box_tie",
       "cage",
       "behind_bars",
       "cage_interior",
@@ -53506,33 +54027,33 @@
       "heropin",
       "imminent_torture",
       "nipple_torture",
-      "predicament_bondage",
       "post_orgasm_torture",
+      "predicament_bondage",
       "ryona",
       "reverse_ryona",
       "tickle_torture",
       "brazen_bull",
+      "eyelid_speculum",
       "garrote_(torture_instrument)",
       "harmful_spikes",
       "humbler",
       "ishidaki",
       "iron_maiden",
-      "eyelid_speculum",
       "testicle_crusher",
       "testicle_weights",
       "torture_instruments",
       "trampling_table",
-      "x-cross_(bdsm)",
       "wooden_horse",
+      "x-cross_(bdsm)",
       "empty_eyes",
       "mind_break",
       "pain",
       "regression_(psychology)",
       "clamps",
-      "nipple_clamps",
-      "labia_clamps",
-      "testicle_clamps",
       "clitoris_clamp",
+      "labia_clamps",
+      "nipple_clamps",
+      "testicle_clamps",
       "amputee",
       "branded",
       "branding_iron",
@@ -53550,10 +54071,10 @@
       "goat's_tongue",
       "impaled",
       "mutilation",
+      "spanking",
       "tooth_pulling",
       "water_torture",
       "whipping",
-      "spanking",
       "elbowing",
       "kicking",
       "kneeing",
@@ -53563,8 +54084,8 @@
       "bitchsuit",
       "bondage_outfit",
       "dominatrix",
-      "gimp_suit",
       "gimp_mask",
+      "gimp_suit",
       "latex",
       "shibarikini"
     ],
@@ -53906,7 +54427,7 @@
       "let_it_be",
       "lost_(sound_horizon)",
       "maerchen_(sound_horizon)",
-      "moira",
+      "moira_(sound_horizon)",
       "nein_(album)",
       "nevermind",
       "news_of_the_world",
@@ -55787,6 +56308,7 @@
       "petals_on_liquid",
       "plant",
       "smelling_flower",
+      "wilted_flower",
       "wreath",
       "head_wreath"
     ],
@@ -57038,6 +57560,7 @@
     ],
     "tag_group:locations": [
       "indoors",
+      "aisle",
       "ballroom",
       "bathroom",
       "bathtub",
@@ -57047,6 +57570,7 @@
       "hotel_room",
       "messy_room",
       "otaku_room",
+      "boxing_ring",
       "cafeteria",
       "changing_room",
       "classroom",
@@ -57058,10 +57582,12 @@
       "dungeon",
       "prison_cell",
       "fitting_room",
+      "genkan",
       "fitness_gym",
       "gym_storeroom",
       "locker_room",
       "school_gym",
+      "hallway",
       "infirmary",
       "kitchen",
       "laboratory",
@@ -57071,12 +57597,17 @@
       "office",
       "cubicle",
       "pool",
+      "poolside",
+      "public_restroom",
+      "sauna",
       "stage",
+      "backstage",
       "staff_room",
       "storage_room",
       "armory",
       "closet",
       "workshop",
+      "wrestling_ring",
       "outdoors",
       "beach",
       "shore",
@@ -57088,6 +57619,7 @@
       "forest",
       "bamboo_forest",
       "glacier",
+      "grasslands",
       "hill",
       "island",
       "floating_island",
@@ -57100,6 +57632,8 @@
       "park",
       "plain",
       "savannah",
+      "salt_flats",
+      "tundra",
       "wetland",
       "water",
       "geyser",
@@ -57125,7 +57659,10 @@
       "city",
       "floating_city",
       "rural",
+      "suburb",
+      "slums",
       "town",
+      "town_square",
       "village",
       "dam",
       "dock",
@@ -57133,21 +57670,27 @@
       "shipyard",
       "garden",
       "graveyard",
+      "horse_racing_track",
       "jetty",
+      "farm",
       "field",
       "flower_field",
       "rice_paddy",
       "wheat_field",
       "fountain",
       "harbor",
+      "junkyard",
       "market",
       "market_stall",
+      "marina",
+      "maritime_port",
       "playground",
+      "parking_garage",
       "parking_lot",
       "pier",
       "phone_booth",
-      "poolside",
       "waterpark",
+      "racetrack",
       "railroad_tracks",
       "railroad_crossing",
       "road",
@@ -57159,11 +57702,12 @@
       "sidewalk",
       "stone_walkway",
       "street",
-      "school_entrance",
-      "soccer_field",
       "running_track",
+      "shooting_range",
+      "soccer_field",
       "trench",
       "tunnel",
+      "wharf",
       "well",
       "zoo",
       "building",
@@ -57173,6 +57717,8 @@
       "apartment",
       "aquarium",
       "arcade",
+      "archery_dojo",
+      "ashiyu",
       "bar_(place)",
       "izakaya",
       "tavern",
@@ -57181,11 +57727,14 @@
       "bus_stop",
       "bowling_alley",
       "cafe",
+      "cat_cafe",
+      "maid_cafe",
       "casino",
       "castle",
       "floating_castle",
       "construction_site",
       "convention",
+      "dance_studio",
       "garage",
       "gas_station",
       "gazebo",
@@ -57193,10 +57742,13 @@
       "hospital",
       "house",
       "hotel",
+      "love_hotel",
+      "motel",
       "hut",
       "industrial",
       "factory",
       "refinery",
+      "oil_rig",
       "power_plant",
       "nuclear_powerplant",
       "cooling_tower",
@@ -57215,25 +57767,40 @@
       "prison",
       "restaurant",
       "rooftop",
+      "on_roof",
       "ruins",
       "school",
+      "school_entrance",
+      "school_gateway",
       "sewer",
       "skating_rink",
       "shack",
+      "shed",
       "shop",
       "bakery",
       "bookstore",
+      "candy_store",
       "convenience_store",
+      "clothes_shop",
       "flower_shop",
+      "grocery_store",
       "pharmacy",
+      "record_store",
       "salon",
       "sex_shop",
       "supermarket",
       "weapon_shop",
       "skyscraper",
+      "soapland",
+      "stable",
       "stadium",
       "arena",
+      "baseball_stadium",
       "stilt_house",
+      "strip_club",
+      "subway",
+      "subway_entrance",
+      "subway_station",
       "theater",
       "amphitheater",
       "movie_theater",
@@ -57244,6 +57811,7 @@
       "watchtower",
       "minaret",
       "train_station",
+      "train_station_platform",
       "treehouse",
       "windmill",
       "church",
@@ -57286,13 +57854,17 @@
       "voile",
       "youkai_mountain",
       "architecture",
+      "battlefield",
       "cityscape",
       "landscape",
       "space",
       "asteroid",
+      "in_orbit",
       "moon",
       "planet",
       "space_station",
+      "underwater",
+      "underwater_city",
       "vehicle_interior",
       "airplane_interior",
       "bus_interior",
@@ -57301,7 +57873,9 @@
       "spacecraft_interior",
       "tank_interior",
       "train_interior",
-      "location_request"
+      "location_request",
+      "real_world_location",
+      "in-universe_location"
     ],
     "tag_group:people": [
       "voice_actor",
@@ -57776,7 +58350,7 @@
       "oshii_mamoru",
       "quentin_tarantino",
       "ray_bradbury",
-      "sei_shounagon",
+      "sei_shounagon_(real_life)",
       "stan_lee",
       "stephen_hillenburg",
       "steven_spielberg",
@@ -57795,14 +58369,14 @@
       "umezu_kazuo",
       "walt_disney",
       "werner_herzog",
-      "william_shakespeare",
+      "william_shakespeare_(real_life)",
       "willis_o'brien",
       "yamaguchi_noboru_(author)",
       "frida_kahlo",
       "h.r._giger",
       "hirai_hisashi_(person)",
       "michelangelo_(sculptor)",
-      "leonardo_da_vinci",
+      "leonardo_da_vinci_(real_life)",
       "salvador_dali_(illustrated)",
       "vincent_van_gogh_(person)",
       "aaron_paul",
@@ -57966,6 +58540,7 @@
       "alizee",
       "amano_tsuki",
       "andrew_wk",
+      "ariana_grande",
       "audrey_nuna",
       "avril_lavigne",
       "axl_rose",
@@ -58024,6 +58599,7 @@
       "heize_(singer)",
       "herman_li",
       "hirasawa_susumu",
+      "huh_yunjin",
       "hyuna_(singer)",
       "irene_(red_velvet)",
       "iu_(singer)",
@@ -58132,7 +58708,7 @@
       "wada_akiko",
       "wada_kouji",
       "weird_al_yankovic",
-      "wolfgang_amadeus_mozart",
+      "wolfgang_amadeus_mozart_(real_life)",
       "xxxtentacion",
       "yagami_kumi",
       "yamagata_yukio",
@@ -58230,8 +58806,8 @@
       "charles_de_gaulle",
       "edouard_daladier",
       "emmanuel_macron",
-      "marie_antoinette",
-      "napoleon_bonaparte",
+      "marie_antoinette_(real_life)",
+      "napoleon_bonaparte_(real_life)",
       "philippe_petain",
       "adolf_hitler",
       "friedrich_engels",
@@ -58262,7 +58838,7 @@
       "nonomura_ryuutarou",
       "oda_nobunaga_(real_life)",
       "ozawa_ichirou",
-      "sakamoto_ryouma",
+      "sakamoto_ryouma_(real_life)",
       "abe_shinzou",
       "takaichi_sanae",
       "tokugawa_ieyasu_(real_life)",
@@ -58281,8 +58857,8 @@
       "catherine_the_great",
       "dmitry_medvedev",
       "georgy_malenkov",
-      "grigori_rasputin",
-      "ivan_the_terrible",
+      "grigori_rasputin_(real_life)",
+      "ivan_the_terrible_(real_life)",
       "joseph_stalin",
       "lavrentiy_beria",
       "leon_trotsky",
@@ -58386,7 +58962,7 @@
       "josef_mengele",
       "jordan_peterson",
       "julius_robert_oppenheimer",
-      "nikola_tesla",
+      "nikola_tesla_(real_life)",
       "rene_descartes",
       "sigmund_freud",
       "stephen_hawking",
@@ -58505,6 +59081,7 @@
       "piotr_trochowski",
       "richarlison",
       "rodrigo_de_paul",
+      "rodrygo_silva_de_goes",
       "roman_weidenfeller",
       "romelu_lukaku",
       "ron-robert_zieler",
@@ -58838,15 +59415,15 @@
       "george_s_patton",
       "gerhard_barkhorn",
       "georgy_zhukov",
-      "gilles_de_rais",
+      "gilles_de_rais_(real_life)",
       "hannibal_barca",
       "hans-ulrich_rudel",
       "hijikata_toshizou_(real_life)",
       "horatio_nelson",
-      "jeanne_d'arc",
+      "jeanne_d'arc_(real_life)",
       "jimmy_doolittle",
       "katou_tateo",
-      "leonidas_i",
+      "leonidas_i_(real_life)",
       "lin_biao",
       "lu_bu_(real_life)",
       "lydia_v_litvyak",
@@ -59018,6 +59595,7 @@
       "clavicular",
       "count_dankula",
       "doug_walker",
+      "edp445",
       "filthy_frank",
       "imjaystation",
       "internet_historian",
@@ -60585,6 +61163,10 @@
       "juice",
       "amazake_(drink)",
       "strawberry_juice",
+      "sports_drink",
+      "gatorade",
+      "pocari_sweat",
+      "aquarius_(drink)",
       "soda",
       "7up",
       "calpis",
@@ -60873,7 +61455,6 @@
       "papa_john's",
       "pizza_hut",
       "cheese-kun",
-      "pocari_sweat",
       "red_bull",
       "smirnoff_(vodka)",
       "snickers_(brand)",
@@ -62040,7 +62621,7 @@
       "buriki_one",
       "capcom_fighting_jam",
       "chaos_code",
-      "choukou_senki_kikaiou",
+      "choukou_senki_kikaioh",
       "cyberbots",
       "darkstalkers",
       "dead_or_alive",
@@ -62256,8 +62837,9 @@
       "arianrhod_rpg",
       "armour_astir:_advent",
       "call_of_cthulhu",
-      "emo-klore_trpg",
+      "double_cross_(f.e.a.r.)",
       "dungeons_&_dragons",
+      "emo-klore_trpg",
       "konflikt_'47",
       "lancer_rpg",
       "meikyuu_kingdom",
@@ -62824,7 +63406,7 @@
       "borderlands_(series)",
       "borderlands_1",
       "borderlands_2",
-      "borderlands_the_presequel",
+      "borderlands:_the_pre-sequel",
       "borderlands_3",
       "call_of_duty",
       "the_citadel",
@@ -63532,7 +64114,6 @@
       "kid_pix_(medium)",
       "kleki_(medium)",
       "krita_(medium)",
-      "mario_paint_(medium)",
       "medibang_paint_(medium)",
       "microsoft_paint_(medium)",
       "mypaint_(medium)",
@@ -63627,6 +64208,7 @@
       "goodnotes_(medium)",
       "heartopia_(medium)",
       "iphone_notes_(medium)",
+      "mario_paint_(medium)",
       "microsoft_excel_(medium)",
       "microsoft_powerpoint_(medium)",
       "microsoft_word_(medium)",
@@ -63689,7 +64271,6 @@
     "tag_group:legwear": "腿部穿戴",
     "tag_group:sexual_attire": "性感着装",
     "tag_group:sleeves": "袖子",
-    "tag_group:embellishment": "装饰",
     "tag_group:eyewear": "眼镜/眼饰",
     "tag_group:fashion_style": "时尚风格",
     "tag_group:makeup": "化妆",
