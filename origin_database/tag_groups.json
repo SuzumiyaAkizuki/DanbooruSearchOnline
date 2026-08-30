@@ -303,9 +303,6 @@
     "sideways": [
       "tag_group:image_composition"
     ],
-    "three-quarter_view": [
-      "tag_group:image_composition"
-    ],
     "straight-on": [
       "tag_group:image_composition"
     ],
@@ -2085,41 +2082,29 @@
     "censored_background": [
       "tag_group:censorship"
     ],
-    "censored_anus": [
-      "tag_group:censorship"
-    ],
-    "censored_nipples": [
-      "tag_group:censorship"
-    ],
-    "censored_clitoris": [
-      "tag_group:censorship"
-    ],
-    "censored_testicles": [
-      "tag_group:censorship"
-    ],
-    "censored_urethra": [
-      "tag_group:censorship"
-    ],
     "censored_gesture": [
       "tag_group:censorship"
     ],
     "censored_poop": [
       "tag_group:censorship"
     ],
-    "censored_profanity": [
+    "censored_symbol": [
       "tag_group:censorship"
     ],
-    "censored_symbol": [
+    "censored_violence": [
+      "tag_group:censorship"
+    ],
+    "censored_identity": [
       "tag_group:censorship"
     ],
     "censored_text": [
       "tag_group:censorship",
       "tag_group:text"
     ],
-    "redaction": [
+    "censored_profanity": [
       "tag_group:censorship"
     ],
-    "censored_violence": [
+    "redaction": [
       "tag_group:censorship"
     ],
     "fake_censor": [
@@ -2143,47 +2128,25 @@
     "censored_insect": [
       "tag_group:censorship"
     ],
-    "censored_identity": [
+    "censored_anus": [
+      "tag_group:censorship"
+    ],
+    "censored_nipples": [
+      "tag_group:censorship"
+    ],
+    "censored_clitoris": [
+      "tag_group:censorship"
+    ],
+    "censored_testicles": [
+      "tag_group:censorship"
+    ],
+    "censored_urethra": [
       "tag_group:censorship"
     ],
     "blood_censor": [
       "tag_group:censorship"
     ],
     "censored_with_cum": [
-      "tag_group:censorship"
-    ],
-    "convenient_censoring": [
-      "tag_group:censorship"
-    ],
-    "convenient_uncensoring": [
-      "tag_group:censorship"
-    ],
-    "convenient_arm": [
-      "tag_group:censorship"
-    ],
-    "convenient_hair": [
-      "tag_group:censorship",
-      "tag_group:hair_styles"
-    ],
-    "convenient_head": [
-      "tag_group:censorship"
-    ],
-    "convenient_leg": [
-      "tag_group:censorship"
-    ],
-    "convenient_necklace": [
-      "tag_group:censorship"
-    ],
-    "convenient_tail": [
-      "tag_group:censorship"
-    ],
-    "convenient_tentacle": [
-      "tag_group:censorship"
-    ],
-    "soap_censor": [
-      "tag_group:censorship"
-    ],
-    "steam_censor": [
       "tag_group:censorship"
     ],
     "feather_censor": [
@@ -2196,9 +2159,6 @@
       "tag_group:censorship"
     ],
     "petal_censor": [
-      "tag_group:censorship"
-    ],
-    "food_censor": [
       "tag_group:censorship"
     ],
     "light_censor": [
@@ -2223,13 +2183,48 @@
       "tag_group:censorship",
       "tag_group:wings"
     ],
+    "convenient_censoring": [
+      "tag_group:censorship"
+    ],
+    "convenient_uncensoring": [
+      "tag_group:censorship"
+    ],
+    "convenient_arm": [
+      "tag_group:censorship"
+    ],
+    "convenient_hair": [
+      "tag_group:censorship",
+      "tag_group:hair_styles"
+    ],
+    "hair_over_breasts": [
+      "tag_group:censorship",
+      "tag_group:hair_styles"
+    ],
+    "convenient_head": [
+      "tag_group:censorship"
+    ],
+    "convenient_leg": [
+      "tag_group:censorship"
+    ],
+    "convenient_necklace": [
+      "tag_group:censorship"
+    ],
+    "convenient_tail": [
+      "tag_group:censorship"
+    ],
+    "convenient_tentacle": [
+      "tag_group:censorship"
+    ],
+    "soap_censor": [
+      "tag_group:censorship"
+    ],
+    "steam_censor": [
+      "tag_group:censorship"
+    ],
     "bar_censor": [
       "tag_group:censorship"
     ],
     "blank_censor": [
-      "tag_group:censorship"
-    ],
-    "blur_censor": [
       "tag_group:censorship"
     ],
     "censored_by_text": [
@@ -2246,6 +2241,21 @@
       "tag_group:censorship"
     ],
     "heart_censor": [
+      "tag_group:censorship"
+    ],
+    "scribble_censor": [
+      "tag_group:censorship"
+    ],
+    "shadow_censor": [
+      "tag_group:censorship"
+    ],
+    "sparkle_censor": [
+      "tag_group:censorship"
+    ],
+    "speech_bubble_censor": [
+      "tag_group:censorship"
+    ],
+    "star_censor": [
       "tag_group:censorship"
     ],
     "novelty_censor": [
@@ -2278,22 +2288,7 @@
     "treasure_mark_censor": [
       "tag_group:censorship"
     ],
-    "scribble_censor": [
-      "tag_group:censorship"
-    ],
-    "shadow_censor": [
-      "tag_group:censorship"
-    ],
-    "silhouette_censor": [
-      "tag_group:censorship"
-    ],
-    "sparkle_censor": [
-      "tag_group:censorship"
-    ],
-    "speech_bubble_censor": [
-      "tag_group:censorship"
-    ],
-    "star_censor": [
+    "blur_censor": [
       "tag_group:censorship"
     ],
     "checkered_censor": [
@@ -9039,9 +9034,6 @@
       "tag_group:hair_styles"
     ],
     "hair_bikini": [
-      "tag_group:hair_styles"
-    ],
-    "hair_over_breasts": [
       "tag_group:hair_styles"
     ],
     "hair_over_one_breast": [
@@ -22116,6 +22108,9 @@
     "java_sparrow": [
       "tag_group:birds"
     ],
+    "white_java_sparrow": [
+      "tag_group:birds"
+    ],
     "zebra_finch": [
       "tag_group:birds"
     ],
@@ -22401,6 +22396,9 @@
     "blue-eyed_cockatoo": [
       "tag_group:birds"
     ],
+    "citron-crested_cockatoo": [
+      "tag_group:birds"
+    ],
     "major_mitchell's_cockatoo": [
       "tag_group:birds"
     ],
@@ -22441,6 +22439,9 @@
       "tag_group:birds"
     ],
     "pacific_parrotlet": [
+      "tag_group:birds"
+    ],
+    "superb_parrot": [
       "tag_group:birds"
     ],
     "yellow-headed_amazon": [
@@ -28466,6 +28467,9 @@
     "summer_festival": [
       "tag_group:holidays_and_celebrations"
     ],
+    "qixi_festival": [
+      "tag_group:holidays_and_celebrations"
+    ],
     "panties_day": [
       "tag_group:holidays_and_celebrations"
     ],
@@ -28514,7 +28518,7 @@
     "shichi-go-san": [
       "tag_group:holidays_and_celebrations"
     ],
-    "ii_fuufu_no_hi": [
+    "good_couple_day": [
       "tag_group:holidays_and_celebrations"
     ],
     "hanukkah": [
@@ -28538,7 +28542,7 @@
     "good_meat_day": [
       "tag_group:holidays_and_celebrations"
     ],
-    "nice_knee_socks_day": [
+    "good_thighhighs_day": [
       "tag_group:holidays_and_celebrations"
     ],
     "anniversary": [
@@ -30134,6 +30138,9 @@
     "dani_chambers": [
       "tag_group:people"
     ],
+    "eden_riegel": [
+      "tag_group:people"
+    ],
     "elizabeth_maxwell": [
       "tag_group:people"
     ],
@@ -30915,6 +30922,9 @@
       "tag_group:people"
     ],
     "sarah_miller-crews": [
+      "tag_group:people"
+    ],
+    "sasamoto_yuko": [
       "tag_group:people"
     ],
     "satou_amina": [
@@ -35710,7 +35720,7 @@
     "hiroshima_prefecture": [
       "tag_group:real_world_locations"
     ],
-    "hiroshima": [
+    "hiroshima_(city)": [
       "tag_group:real_world_locations"
     ],
     "kure_(city)": [
@@ -35794,7 +35804,7 @@
     "kyoto_prefecture": [
       "tag_group:real_world_locations"
     ],
-    "kyoto": [
+    "kyoto_(city)": [
       "tag_group:real_world_locations"
     ],
     "maizuru_(city)": [
@@ -35824,7 +35834,7 @@
     "nagasaki_prefecture": [
       "tag_group:real_world_locations"
     ],
-    "nagasaki": [
+    "nagasaki_(city)": [
       "tag_group:real_world_locations"
     ],
     "sasebo": [
@@ -35896,13 +35906,10 @@
     "tokushima_prefecture": [
       "tag_group:real_world_locations"
     ],
-    "tokyo_prefecture": [
+    "tokyo": [
       "tag_group:real_world_locations"
     ],
     "fuchu_(tokyo)": [
-      "tag_group:real_world_locations"
-    ],
-    "tokyo_(city)": [
       "tag_group:real_world_locations"
     ],
     "tachikawa_(tokyo)": [
@@ -43322,7 +43329,7 @@
     "shantae_(series)": [
       "tag_group:platform_games"
     ],
-    "shinobi_(game)": [
+    "shinobi_(series)": [
       "tag_group:platform_games"
     ],
     "sonic_(series)": [
@@ -44155,7 +44162,7 @@
     "luminous_arc_infinity": [
       "tag_group:role-playing_games"
     ],
-    "lunar": [
+    "lunar_(series)": [
       "tag_group:role-playing_games"
     ],
     "lunar:_the_silver_star": [
@@ -44760,7 +44767,7 @@
     "summon_night:_swordcraft_story": [
       "tag_group:role-playing_games"
     ],
-    "summon_night_swordcraft_story_2": [
+    "summon_night:_swordcraft_story_2": [
       "tag_group:role-playing_games"
     ],
     "summon_night_craft_sword_monogatari_hajimari_no_ishi": [
@@ -47243,7 +47250,6 @@
       "high_up",
       "multiple_views",
       "sideways",
-      "three-quarter_view",
       "straight-on",
       "upside-down",
       "atmospheric_perspective",
@@ -47751,18 +47757,14 @@
     "tag_group:censorship": [
       "censored",
       "censored_background",
-      "censored_anus",
-      "censored_nipples",
-      "censored_clitoris",
-      "censored_testicles",
-      "censored_urethra",
       "censored_gesture",
       "censored_poop",
-      "censored_profanity",
       "censored_symbol",
-      "censored_text",
-      "redaction",
       "censored_violence",
+      "censored_identity",
+      "censored_text",
+      "censored_profanity",
+      "redaction",
       "fake_censor",
       "bubble_filter",
       "censored_eyebrows",
@@ -47770,27 +47772,19 @@
       "censored_food",
       "censored_hands",
       "censored_insect",
-      "censored_identity",
+      "censored_anus",
+      "censored_nipples",
+      "censored_clitoris",
+      "censored_testicles",
+      "censored_urethra",
       "decensored",
       "uncensored",
       "blood_censor",
       "censored_with_cum",
-      "convenient_censoring",
-      "convenient_uncensoring",
-      "convenient_arm",
-      "convenient_hair",
-      "convenient_head",
-      "convenient_leg",
-      "convenient_necklace",
-      "convenient_tail",
-      "convenient_tentacle",
-      "soap_censor",
-      "steam_censor",
       "feather_censor",
       "fire_censor",
       "flower_censor",
       "petal_censor",
-      "food_censor",
       "light_censor",
       "one_finger_selfie_challenge_(meme)",
       "ribbon_censor",
@@ -47798,16 +47792,32 @@
       "smoke_censor",
       "water_censor",
       "wing_censor",
+      "convenient_censoring",
+      "convenient_uncensoring",
+      "convenient_arm",
+      "convenient_hair",
+      "hair_over_breasts",
+      "convenient_head",
+      "convenient_leg",
+      "convenient_necklace",
+      "convenient_tail",
+      "convenient_tentacle",
+      "soap_censor",
+      "steam_censor",
       "fake_scrollbar",
       "out-of-frame_censoring",
       "bar_censor",
       "blank_censor",
-      "blur_censor",
       "censored_by_text",
       "circle_censor",
       "emoji_censor",
       "glitch_censor",
       "heart_censor",
+      "scribble_censor",
+      "shadow_censor",
+      "sparkle_censor",
+      "speech_bubble_censor",
+      "star_censor",
       "novelty_censor",
       "can't_show_this_(meme)",
       "character_censor",
@@ -47818,12 +47828,7 @@
       "rabbit_censor",
       "tape_censor",
       "treasure_mark_censor",
-      "scribble_censor",
-      "shadow_censor",
-      "silhouette_censor",
-      "sparkle_censor",
-      "speech_bubble_censor",
-      "star_censor",
+      "blur_censor",
       "checkered_censor",
       "inconsistent_censoring",
       "mosaic_censoring",
@@ -55176,6 +55181,7 @@
       "double-barred_finch",
       "gouldian_finch",
       "java_sparrow",
+      "white_java_sparrow",
       "zebra_finch",
       "flamingo",
       "frogmouth",
@@ -55271,6 +55277,7 @@
       "cockatiel",
       "cockatoo",
       "blue-eyed_cockatoo",
+      "citron-crested_cockatoo",
       "major_mitchell's_cockatoo",
       "palm_cockatoo",
       "sulphur-crested_cockatoo",
@@ -55285,6 +55292,7 @@
       "red-and-green_macaw",
       "scarlet_macaw",
       "pacific_parrotlet",
+      "superb_parrot",
       "yellow-headed_amazon",
       "peacock",
       "pelican",
@@ -57350,6 +57358,7 @@
       "obon",
       "marine_day",
       "summer_festival",
+      "qixi_festival",
       "panties_day",
       "honey_day",
       "cirno_day",
@@ -57366,7 +57375,7 @@
       "pocky_day",
       "remembrance_day",
       "shichi-go-san",
-      "ii_fuufu_no_hi",
+      "good_couple_day",
       "hanukkah",
       "christmas",
       "breasts_day",
@@ -57374,7 +57383,7 @@
       "manga_day",
       "meat_day",
       "good_meat_day",
-      "nice_knee_socks_day",
+      "good_thighhighs_day",
       "anniversary",
       "birthday",
       "happy_birthday",
@@ -57931,6 +57940,7 @@
       "david_hayter",
       "daman_mills",
       "dani_chambers",
+      "eden_riegel",
       "elizabeth_maxwell",
       "elsie_lovelock",
       "emi_lo",
@@ -58192,6 +58202,7 @@
       "sanpei_yuuko",
       "sarah_anne_williams",
       "sarah_miller-crews",
+      "sasamoto_yuko",
       "satou_amina",
       "satou_rina",
       "satou_satomi",
@@ -59813,7 +59824,7 @@
       "gifu_prefecture",
       "gunma_prefecture",
       "hiroshima_prefecture",
-      "hiroshima",
+      "hiroshima_(city)",
       "kure_(city)",
       "onomichi_(city)",
       "takehara_(hiroshima)",
@@ -59841,7 +59852,7 @@
       "kochi_prefecture",
       "kumamoto_prefecture",
       "kyoto_prefecture",
-      "kyoto",
+      "kyoto_(city)",
       "maizuru_(city)",
       "mie_prefecture",
       "miyagi_prefecture",
@@ -59851,7 +59862,7 @@
       "okaya_city",
       "suwa_city",
       "nagasaki_prefecture",
-      "nagasaki",
+      "nagasaki_(city)",
       "sasebo",
       "nara_prefecture",
       "nara_(city)",
@@ -59875,9 +59886,8 @@
       "numazu",
       "tochigi_prefecture",
       "tokushima_prefecture",
-      "tokyo_prefecture",
+      "tokyo",
       "fuchu_(tokyo)",
-      "tokyo_(city)",
       "tachikawa_(tokyo)",
       "tottori_prefecture",
       "toyama_prefecture",
@@ -62823,7 +62833,7 @@
       "prince_of_persia",
       "rayman_(series)",
       "shantae_(series)",
-      "shinobi_(game)",
+      "shinobi_(series)",
       "sonic_(series)",
       "sonic_the_hedgehog_(classic)",
       "strider_(game)",
@@ -63106,7 +63116,7 @@
       "luminous_arc_2",
       "luminous_arc_3",
       "luminous_arc_infinity",
-      "lunar",
+      "lunar_(series)",
       "lunar:_the_silver_star",
       "lunar_2:_eternal_blue",
       "magical_vacation",
@@ -63310,7 +63320,7 @@
       "summon_night_5",
       "summon_night_6_lost_borders",
       "summon_night:_swordcraft_story",
-      "summon_night_swordcraft_story_2",
+      "summon_night:_swordcraft_story_2",
       "summon_night_craft_sword_monogatari_hajimari_no_ishi",
       "summon_night_ex-thesis",
       "summon_night_twin_age",
