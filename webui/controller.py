@@ -1301,11 +1301,11 @@ class DanbooruSearchUI:
             return
         clear_restore_cache(self.client)
 
-    async def _backup_local_storage_key(self, source_key: str, backup_key: str) -> bool:
+    async def _backup_local_storage_key(self, source_key: str, backup_storage_key: str) -> bool:
         """Copy an existing value inside the browser before replacing it."""
         if not self._client_connected():
             return False
-        return await backup_key(self.client, source_key, backup_key)
+        return await backup_key(self.client, source_key, backup_storage_key)
 
     async def _backup_history_before_compaction(self) -> bool:
         """Preserve the original history in-browser before replacing it with v2."""

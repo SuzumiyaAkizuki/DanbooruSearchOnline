@@ -1123,7 +1123,8 @@
       "tag_group:lighting"
     ],
     "chiaroscuro": [
-      "tag_group:image_composition"
+      "tag_group:image_composition",
+      "tag_group:lighting"
     ],
     "chromatic_aberration": [
       "tag_group:image_composition",
@@ -1961,7 +1962,8 @@
       "tag_group:backgrounds"
     ],
     "lightning": [
-      "tag_group:backgrounds"
+      "tag_group:backgrounds",
+      "tag_group:lighting"
     ],
     "paw_print_background": [
       "tag_group:backgrounds"
@@ -2018,7 +2020,8 @@
       "tag_group:backgrounds"
     ],
     "star_(sky)": [
-      "tag_group:backgrounds"
+      "tag_group:backgrounds",
+      "tag_group:lighting"
     ],
     "text_background": [
       "tag_group:backgrounds",
@@ -2931,10 +2934,10 @@
     "dim_lighting": [
       "tag_group:lighting"
     ],
-    "sunlight": [
+    "moonlight": [
       "tag_group:lighting"
     ],
-    "moonlight": [
+    "sunlight": [
       "tag_group:lighting"
     ],
     "crack_of_light": [
@@ -3010,6 +3013,22 @@
     "night": [
       "tag_group:lighting"
     ],
+    "sun": [
+      "tag_group:lighting"
+    ],
+    "moon": [
+      "tag_group:lighting",
+      "tag_group:locations"
+    ],
+    "embers": [
+      "tag_group:lighting"
+    ],
+    "aurora": [
+      "tag_group:lighting"
+    ],
+    "starry_sky": [
+      "tag_group:lighting"
+    ],
     "stage_lights": [
       "tag_group:lighting"
     ],
@@ -3018,35 +3037,24 @@
       "tag_group:audio_tags",
       "tag_group:locations"
     ],
-    "sun": [
+    "ceiling_light": [
       "tag_group:lighting"
     ],
-    "moon": [
-      "tag_group:lighting",
-      "tag_group:locations"
-    ],
-    "glowstick": [
-      "tag_group:lighting"
-    ],
-    "lamp": [
-      "tag_group:lighting",
-      "tag_group:makeup"
-    ],
-    "desk_lamp": [
+    "chandelier": [
       "tag_group:lighting"
     ],
     "lamppost": [
       "tag_group:lighting"
     ],
-    "wall_lamp": [
+    "candlelight": [
+      "tag_group:lighting"
+    ],
+    "glowstick": [
       "tag_group:lighting"
     ],
     "torch": [
       "tag_group:lighting",
       "tag_group:fire"
-    ],
-    "embers": [
-      "tag_group:lighting"
     ],
     "flashlight": [
       "tag_group:lighting"
@@ -3055,19 +3063,23 @@
       "tag_group:lighting",
       "tag_group:fire"
     ],
-    "oil_lamp": [
-      "tag_group:lighting"
-    ],
     "wooden_lantern": [
       "tag_group:lighting"
     ],
-    "ceiling_light": [
+    "lamp": [
+      "tag_group:lighting",
+      "tag_group:makeup"
+    ],
+    "wall_lamp": [
       "tag_group:lighting"
     ],
-    "chandelier": [
+    "desk_lamp": [
       "tag_group:lighting"
     ],
-    "candlelight": [
+    "floor_lamp": [
+      "tag_group:lighting"
+    ],
+    "oil_lamp": [
       "tag_group:lighting"
     ],
     "muzzle_flash": [
@@ -3121,6 +3133,10 @@
     "vertical_stripes": [
       "tag_group:prints"
     ],
+    "double_vertical_stripe": [
+      "tag_group:prints",
+      "tag_group:attire"
+    ],
     "colored_stripes": [
       "tag_group:prints"
     ],
@@ -3130,28 +3146,6 @@
     ],
     "tiger_stripes": [
       "tag_group:prints"
-    ],
-    "double_vertical_stripe": [
-      "tag_group:prints",
-      "tag_group:attire"
-    ],
-    "invasion_stripes": [
-      "tag_group:prints"
-    ],
-    "bat_print": [
-      "tag_group:prints",
-      "tag_group:attire"
-    ],
-    "bear_print": [
-      "tag_group:prints",
-      "tag_group:attire"
-    ],
-    "bird_print": [
-      "tag_group:prints"
-    ],
-    "snake_print": [
-      "tag_group:prints",
-      "tag_group:attire"
     ],
     "fireworks_print": [
       "tag_group:prints"
@@ -3201,16 +3195,37 @@
       "tag_group:prints",
       "tag_group:attire"
     ],
+    "invasion_stripes": [
+      "tag_group:prints"
+    ],
+    "bat_print": [
+      "tag_group:prints",
+      "tag_group:attire"
+    ],
+    "bear_print": [
+      "tag_group:prints",
+      "tag_group:attire"
+    ],
+    "panda_print": [
+      "tag_group:prints"
+    ],
+    "bird_print": [
+      "tag_group:prints"
+    ],
+    "snake_print": [
+      "tag_group:prints",
+      "tag_group:attire"
+    ],
+    "patterned": [
+      "tag_group:prints",
+      "tag_group:patterns"
+    ],
     "patterned_hair": [
       "tag_group:prints",
       "tag_group:hair_color"
     ],
     "patterned_clothing": [
       "tag_group:prints"
-    ],
-    "patterned": [
-      "tag_group:prints",
-      "tag_group:patterns"
     ],
     "print_ascot": [
       "tag_group:prints"
@@ -4483,10 +4498,19 @@
     "calendar_(object)": [
       "tag_group:text"
     ],
+    "cast_writing": [
+      "tag_group:text"
+    ],
     "clothes_writing": [
       "tag_group:text"
     ],
     "foreground_text": [
+      "tag_group:text"
+    ],
+    "hand_fan_writing": [
+      "tag_group:text"
+    ],
+    "mug_writing": [
       "tag_group:text"
     ],
     "name_tag": [
@@ -4501,9 +4525,15 @@
     "speech_bubble": [
       "tag_group:text"
     ],
+    "sword_writing": [
+      "tag_group:text"
+    ],
     "text_in_eyes": [
       "tag_group:text",
       "tag_group:eyes_tags"
+    ],
+    "towel_writing": [
+      "tag_group:text"
     ],
     "video_game_dialogue_box": [
       "tag_group:text"
@@ -6408,36 +6438,29 @@
       "tag_group:sex_objects"
     ],
     "nipple_piercing": [
-      "tag_group:breasts_tags",
-      "tag_group:piercings"
+      "tag_group:breasts_tags"
     ],
     "areola_piercing": [
-      "tag_group:breasts_tags",
-      "tag_group:piercings"
+      "tag_group:breasts_tags"
     ],
     "nipple_bar": [
-      "tag_group:breasts_tags",
-      "tag_group:piercings"
+      "tag_group:breasts_tags"
     ],
     "nipple_bells": [
       "tag_group:breasts_tags"
     ],
     "nipple_chain": [
       "tag_group:breasts_tags",
-      "tag_group:piercings",
       "tag_group:sex_objects"
     ],
     "nipple_lock": [
-      "tag_group:breasts_tags",
-      "tag_group:piercings"
+      "tag_group:breasts_tags"
     ],
     "nipple_rings": [
-      "tag_group:breasts_tags",
-      "tag_group:piercings"
+      "tag_group:breasts_tags"
     ],
     "nipple_stretcher": [
-      "tag_group:breasts_tags",
-      "tag_group:piercings"
+      "tag_group:breasts_tags"
     ],
     "nipple_tag": [
       "tag_group:breasts_tags"
@@ -7392,8 +7415,7 @@
       "tag_group:ears_tags"
     ],
     "ear_piercing": [
-      "tag_group:ears_tags",
-      "tag_group:piercings"
+      "tag_group:ears_tags"
     ],
     "ear_protection": [
       "tag_group:ears_tags",
@@ -7402,8 +7424,7 @@
     "earrings": [
       "tag_group:ears_tags",
       "tag_group:accessories",
-      "tag_group:attire",
-      "tag_group:piercings"
+      "tag_group:attire"
     ],
     "single_earring": [
       "tag_group:ears_tags"
@@ -8145,9 +8166,6 @@
       "tag_group:hair",
       "tag_group:gestures",
       "tag_group:verbs_and_gerunds"
-    ],
-    "playing_with_hair": [
-      "tag_group:hair"
     ],
     "playing_with_another's_hair": [
       "tag_group:hair"
@@ -10217,9 +10235,6 @@
     "whistle_around_neck": [
       "tag_group:neck_and_neckwear"
     ],
-    "collared_blouse": [
-      "tag_group:neck_and_neckwear"
-    ],
     "collared_cape": [
       "tag_group:neck_and_neckwear"
     ],
@@ -11641,12 +11656,10 @@
       "tag_group:pussy"
     ],
     "clitoral_piercing": [
-      "tag_group:pussy",
-      "tag_group:piercings"
+      "tag_group:pussy"
     ],
     "clitoris_ring": [
-      "tag_group:pussy",
-      "tag_group:piercings"
+      "tag_group:pussy"
     ],
     "bandaid_on_pussy": [
       "tag_group:pussy"
@@ -12133,8 +12146,7 @@
       "tag_group:wings"
     ],
     "wing_piercing": [
-      "tag_group:wings",
-      "tag_group:piercings"
+      "tag_group:wings"
     ],
     "pierced_wings": [
       "tag_group:wings"
@@ -12789,13 +12801,11 @@
     ],
     "hoop_earrings": [
       "tag_group:accessories",
-      "tag_group:attire",
-      "tag_group:piercings"
+      "tag_group:attire"
     ],
     "stud_earrings": [
       "tag_group:accessories",
-      "tag_group:attire",
-      "tag_group:piercings"
+      "tag_group:attire"
     ],
     "face_chain": [
       "tag_group:accessories",
@@ -12999,9 +13009,6 @@
       "tag_group:sexual_attire"
     ],
     "nail_art": [
-      "tag_group:accessories"
-    ],
-    "fake_nails": [
       "tag_group:accessories"
     ],
     "nail_ornament": [
@@ -13589,6 +13596,9 @@
     "geta": [
       "tag_group:attire"
     ],
+    "paduka": [
+      "tag_group:attire"
+    ],
     "sports_sandals": [
       "tag_group:attire"
     ],
@@ -14133,8 +14143,7 @@
       "tag_group:fashion_style"
     ],
     "ear_chain": [
-      "tag_group:attire",
-      "tag_group:piercings"
+      "tag_group:attire"
     ],
     "monocle": [
       "tag_group:attire",
@@ -14203,7 +14212,6 @@
     ],
     "piercing": [
       "tag_group:attire",
-      "tag_group:piercings",
       "tag_group:sex_objects"
     ],
     "watch_fob": [
@@ -19127,7 +19135,19 @@
     "walkman": [
       "tag_group:audio_tags"
     ],
+    "wireless_earphones": [
+      "tag_group:audio_tags"
+    ],
+    "airpods": [
+      "tag_group:audio_tags"
+    ],
     "earbuds": [
+      "tag_group:audio_tags"
+    ],
+    "wireless_headphones": [
+      "tag_group:audio_tags"
+    ],
+    "airpods_max": [
       "tag_group:audio_tags"
     ],
     "behind-the-head_headphones": [
@@ -21624,123 +21644,6 @@
     "door_knocker": [
       "tag_group:doors_and_gates"
     ],
-    "piercing_through_clothes": [
-      "tag_group:piercings"
-    ],
-    "barbell_piercing": [
-      "tag_group:piercings"
-    ],
-    "ring_piercing": [
-      "tag_group:piercings"
-    ],
-    "cross_piercing": [
-      "tag_group:piercings"
-    ],
-    "wing-shaped_piercing": [
-      "tag_group:piercings"
-    ],
-    "industrial_piercing": [
-      "tag_group:piercings"
-    ],
-    "spiked_ear_piercing": [
-      "tag_group:piercings"
-    ],
-    "plug_(piercing)": [
-      "tag_group:piercings"
-    ],
-    "animal_ear_piercing": [
-      "tag_group:piercings"
-    ],
-    "eyebrow_piercing": [
-      "tag_group:piercings"
-    ],
-    "anti-eyebrow_piercing": [
-      "tag_group:piercings"
-    ],
-    "eyelid_piercing": [
-      "tag_group:piercings"
-    ],
-    "lip_piercing": [
-      "tag_group:piercings"
-    ],
-    "labret_piercing": [
-      "tag_group:piercings"
-    ],
-    "neck_piercing": [
-      "tag_group:piercings"
-    ],
-    "nose_piercing": [
-      "tag_group:piercings"
-    ],
-    "bridge_piercing": [
-      "tag_group:piercings"
-    ],
-    "tongue_piercing": [
-      "tag_group:piercings"
-    ],
-    "back_piercing": [
-      "tag_group:piercings"
-    ],
-    "corset_piercing": [
-      "tag_group:piercings"
-    ],
-    "collarbone_piercing": [
-      "tag_group:piercings"
-    ],
-    "navel_piercing": [
-      "tag_group:piercings"
-    ],
-    "nipple_jewelry": [
-      "tag_group:piercings"
-    ],
-    "pussy_piercing": [
-      "tag_group:piercings"
-    ],
-    "labia_piercing": [
-      "tag_group:piercings"
-    ],
-    "fourchette_piercing": [
-      "tag_group:piercings"
-    ],
-    "pussy_jewelry": [
-      "tag_group:piercings"
-    ],
-    "penis_piercing": [
-      "tag_group:piercings"
-    ],
-    "ampallang": [
-      "tag_group:piercings"
-    ],
-    "dydoe": [
-      "tag_group:piercings"
-    ],
-    "foreskin_piercing": [
-      "tag_group:piercings"
-    ],
-    "frenulum_piercing": [
-      "tag_group:piercings"
-    ],
-    "lorum_piercing": [
-      "tag_group:piercings"
-    ],
-    "prince_albert": [
-      "tag_group:piercings"
-    ],
-    "perineum_piercing": [
-      "tag_group:piercings"
-    ],
-    "scrotum_piercing": [
-      "tag_group:piercings"
-    ],
-    "captive_bead_ring": [
-      "tag_group:piercings"
-    ],
-    "linked_piercing": [
-      "tag_group:piercings"
-    ],
-    "parallel_piercings": [
-      "tag_group:piercings"
-    ],
     "anal_beads": [
       "tag_group:sex_objects"
     ],
@@ -22671,7 +22574,7 @@
       "tag_group:birds",
       "tag_group:legendary_creatures"
     ],
-    "suzaku": [
+    "suzaku_(mythology)": [
       "tag_group:birds",
       "tag_group:legendary_creatures"
     ],
@@ -22832,7 +22735,7 @@
     "tabby_cat": [
       "tag_group:cats"
     ],
-    "byakko": [
+    "byakko_(mythology)": [
       "tag_group:cats",
       "tag_group:legendary_creatures"
     ],
@@ -23139,7 +23042,7 @@
     "cat_teaser": [
       "tag_group:cats"
     ],
-    "cat_tower": [
+    "cat_tree": [
       "tag_group:cats"
     ],
     "cat_transcendence_(meme)": [
@@ -23280,7 +23183,7 @@
     "kaenbyou_rin": [
       "tag_group:cats"
     ],
-    "kamineko": [
+    "kamineko_(azumanga_daioh)": [
       "tag_group:cats"
     ],
     "keyboard_cat": [
@@ -24602,10 +24505,10 @@
     "cait_sith_(mythology)": [
       "tag_group:legendary_creatures"
     ],
-    "genbu": [
+    "genbu_(mythology)": [
       "tag_group:legendary_creatures"
     ],
-    "seiryuu": [
+    "seiryuu_(mythology)": [
       "tag_group:legendary_creatures"
     ],
     "christianity": [
@@ -25465,6 +25368,9 @@
       "tag_group:sports",
       "tag_group:people"
     ],
+    "australian_rules_football": [
+      "tag_group:sports"
+    ],
     "badminton": [
       "tag_group:sports"
     ],
@@ -26158,6 +26064,15 @@
     "washington_commanders": [
       "tag_group:sports"
     ],
+    "australian_football_league": [
+      "tag_group:sports"
+    ],
+    "adelaide_football_club": [
+      "tag_group:sports"
+    ],
+    "greater_western_sydney_giants": [
+      "tag_group:sports"
+    ],
     "primera_division_(argentina)": [
       "tag_group:sports"
     ],
@@ -26231,6 +26146,9 @@
       "tag_group:sports"
     ],
     "aston_villa": [
+      "tag_group:sports"
+    ],
+    "brentford_fc": [
       "tag_group:sports"
     ],
     "brighton_&_hove_albion_fc": [
@@ -26411,6 +26329,9 @@
       "tag_group:sports"
     ],
     "atlas_fc": [
+      "tag_group:sports"
+    ],
+    "cf_monterrey": [
       "tag_group:sports"
     ],
     "club_america": [
@@ -35909,10 +35830,58 @@
     "tokyo": [
       "tag_group:real_world_locations"
     ],
+    "arakawa_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "bunkyo_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "chiyoda_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "chuo_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
     "fuchu_(tokyo)": [
       "tag_group:real_world_locations"
     ],
+    "itabashi_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "kita_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "koto_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "minato_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "nakano_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "shibuya_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "shinagawa_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "shinjuku_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "suginami_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "sumida_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
     "tachikawa_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "taito_(tokyo)": [
+      "tag_group:real_world_locations"
+    ],
+    "toshima_(tokyo)": [
       "tag_group:real_world_locations"
     ],
     "tottori_prefecture": [
@@ -37438,7 +37407,7 @@
     "shoot_dance_(meme)": [
       "tag_group:dances"
     ],
-    "soda_shake_(meme)": [
+    "cola_shake_(meme)": [
       "tag_group:dances"
     ],
     "spooky_dance": [
@@ -48102,8 +48071,8 @@
       "moonbeam",
       "underwater",
       "dim_lighting",
-      "sunlight",
       "moonlight",
+      "sunlight",
       "crack_of_light",
       "dappled_sunlight",
       "shadow",
@@ -48128,25 +48097,31 @@
       "sunset",
       "dusk",
       "night",
-      "stage_lights",
-      "stage",
       "sun",
       "moon",
-      "glowstick",
-      "lamp",
-      "desk_lamp",
-      "lamppost",
-      "wall_lamp",
-      "torch",
       "fire",
       "embers",
-      "flashlight",
-      "lantern",
-      "oil_lamp",
-      "wooden_lantern",
+      "lightning",
+      "aurora",
+      "star_(sky)",
+      "starry_sky",
+      "stage_lights",
+      "stage",
       "ceiling_light",
       "chandelier",
+      "lamppost",
       "candlelight",
+      "glowstick",
+      "torch",
+      "flashlight",
+      "lantern",
+      "wooden_lantern",
+      "lamp",
+      "wall_lamp",
+      "desk_lamp",
+      "floor_lamp",
+      "oil_lamp",
+      "chiaroscuro",
       "muzzle_flash",
       "headlight",
       "floodlights",
@@ -48176,24 +48151,14 @@
       "polka_dot",
       "sayagata",
       "seigaiha",
+      "yagasuri",
       "striped",
       "diagonal_stripes",
       "vertical_stripes",
+      "double_vertical_stripe",
       "colored_stripes",
       "multicolored_stripes",
       "tiger_stripes",
-      "double_vertical_stripe",
-      "invasion_stripes",
-      "yagasuri",
-      "animal_print",
-      "bat_print",
-      "bear_print",
-      "bird_print",
-      "cow_print",
-      "leopard_print",
-      "tiger_print",
-      "snake_print",
-      "zebra_print",
       "fireworks_print",
       "flag_print",
       "floral_print",
@@ -48208,9 +48173,20 @@
       "musical_note_print",
       "piano_print",
       "watermelon_print",
+      "invasion_stripes",
+      "animal_print",
+      "bat_print",
+      "bear_print",
+      "panda_print",
+      "bird_print",
+      "cow_print",
+      "leopard_print",
+      "tiger_print",
+      "snake_print",
+      "zebra_print",
+      "patterned",
       "patterned_hair",
       "patterned_clothing",
-      "patterned",
       "patterned_background",
       "print_ascot",
       "print_boots",
@@ -48694,15 +48670,20 @@
       "billboard",
       "body_writing",
       "calendar_(object)",
+      "cast_writing",
       "clothes_writing",
       "foreground_text",
+      "hand_fan_writing",
+      "mug_writing",
       "name_tag",
       "narration",
       "poster_(object)",
       "segment_display",
       "speech_bubble",
+      "sword_writing",
       "text_background",
       "text_in_eyes",
+      "towel_writing",
       "video_game_dialogue_box",
       "backwards_text",
       "colored_text_highlight",
@@ -49905,7 +49886,6 @@
       "holding_another's_hair",
       "ruffling_hair",
       "twirling_hair",
-      "playing_with_hair",
       "playing_with_another's_hair",
       "playing_with_own_hair",
       "hairjob",
@@ -50599,7 +50579,6 @@
       "mask_around_neck",
       "towel_around_neck",
       "whistle_around_neck",
-      "collared_blouse",
       "collared_cape",
       "collared_capelet",
       "collared_coat",
@@ -51580,7 +51559,6 @@
       "rhinestone",
       "lace",
       "nail_art",
-      "fake_nails",
       "nail_ornament",
       "o-ring",
       "heart_o-ring",
@@ -51806,6 +51784,7 @@
       "flip-flops",
       "gladiator_sandals",
       "geta",
+      "paduka",
       "sports_sandals",
       "waraji",
       "zouri",
@@ -54106,11 +54085,15 @@
       "stereo",
       "walkman",
       "earphones",
+      "wireless_earphones",
+      "airpods",
       "earbuds",
       "earpiece",
       "ear_protection",
       "earmuffs",
       "headphones",
+      "wireless_headphones",
+      "airpods_max",
       "behind-the-head_headphones",
       "bunny_headphones",
       "cat_ear_headphones",
@@ -54969,63 +54952,6 @@
       "door_knocker",
       "window"
     ],
-    "tag_group:piercings": [
-      "piercing",
-      "piercing_through_clothes",
-      "barbell_piercing",
-      "ring_piercing",
-      "cross_piercing",
-      "wing-shaped_piercing",
-      "industrial_piercing",
-      "spiked_ear_piercing",
-      "hoop_earrings",
-      "stud_earrings",
-      "ear_piercing",
-      "ear_chain",
-      "plug_(piercing)",
-      "animal_ear_piercing",
-      "eyebrow_piercing",
-      "anti-eyebrow_piercing",
-      "eyelid_piercing",
-      "lip_piercing",
-      "labret_piercing",
-      "neck_piercing",
-      "nose_piercing",
-      "bridge_piercing",
-      "tongue_piercing",
-      "areola_piercing",
-      "back_piercing",
-      "corset_piercing",
-      "collarbone_piercing",
-      "navel_piercing",
-      "nipple_piercing",
-      "nipple_bar",
-      "nipple_chain",
-      "nipple_lock",
-      "nipple_rings",
-      "nipple_stretcher",
-      "nipple_jewelry",
-      "wing_piercing",
-      "pussy_piercing",
-      "clitoral_piercing",
-      "clitoris_ring",
-      "labia_piercing",
-      "fourchette_piercing",
-      "pussy_jewelry",
-      "penis_piercing",
-      "ampallang",
-      "dydoe",
-      "foreskin_piercing",
-      "frenulum_piercing",
-      "lorum_piercing",
-      "prince_albert",
-      "perineum_piercing",
-      "scrotum_piercing",
-      "captive_bead_ring",
-      "linked_piercing",
-      "parallel_piercings",
-      "earrings"
-    ],
     "tag_group:sex_objects": [
       "anal_beads",
       "anal_tail",
@@ -55368,7 +55294,7 @@
       "great_spotted_woodpecker",
       "fenghuang",
       "phoenix",
-      "suzaku",
+      "suzaku_(mythology)",
       "aqua_bird",
       "black_bird",
       "blue_bird",
@@ -55423,7 +55349,7 @@
       "tortoiseshell_cat",
       "tuxedo_cat",
       "tabby_cat",
-      "byakko",
+      "byakko_(mythology)",
       "nekomata",
       "cat_bun",
       "cat_loaf",
@@ -55535,7 +55461,7 @@
       "cat-shaped_pillow",
       "cat_shooting_lightning",
       "cat_teaser",
-      "cat_tower",
+      "cat_tree",
       "cat_transcendence_(meme)",
       "catfight",
       "catfish",
@@ -55582,7 +55508,7 @@
       "hime_granzchesta",
       "jiji_(majo_no_takkyuubin)",
       "kaenbyou_rin",
-      "kamineko",
+      "kamineko_(azumanga_daioh)",
       "keyboard_cat",
       "kuro_(doko_demo_issyo)",
       "lily_(majo_no_takkyuubin)",
@@ -56035,11 +55961,11 @@
       "celtic_mythology",
       "brigit_(mythology)",
       "cait_sith_(mythology)",
-      "byakko",
+      "byakko_(mythology)",
       "fenghuang",
-      "genbu",
-      "seiryuu",
-      "suzaku",
+      "genbu_(mythology)",
+      "seiryuu_(mythology)",
+      "suzaku_(mythology)",
       "christianity",
       "egyptian_mythology",
       "apep_(mythology)",
@@ -56345,6 +56271,7 @@
     "tag_group:sports": [
       "playing_sports",
       "american_football_(sport)",
+      "australian_rules_football",
       "badminton",
       "baseball_(sport)",
       "basketball_(sport)",
@@ -56575,6 +56502,9 @@
       "seattle_seahawks",
       "tampa_bay_buccaneers",
       "washington_commanders",
+      "australian_football_league",
+      "adelaide_football_club",
+      "greater_western_sydney_giants",
       "primera_division_(argentina)",
       "club_atletico_boca_juniors",
       "club_atletico_river_plate",
@@ -56600,6 +56530,7 @@
       "premier_league",
       "arsenal_fc",
       "aston_villa",
+      "brentford_fc",
       "brighton_&_hove_albion_fc",
       "chelsea_fc",
       "everton_fc",
@@ -56660,6 +56591,7 @@
       "zweigen_kanazawa",
       "liga_mx",
       "atlas_fc",
+      "cf_monterrey",
       "club_america",
       "club_deportivo_guadalajara",
       "cruz_azul",
@@ -59887,8 +59819,24 @@
       "tochigi_prefecture",
       "tokushima_prefecture",
       "tokyo",
+      "arakawa_(tokyo)",
+      "bunkyo_(tokyo)",
+      "chiyoda_(tokyo)",
+      "chuo_(tokyo)",
       "fuchu_(tokyo)",
+      "itabashi_(tokyo)",
+      "kita_(tokyo)",
+      "koto_(tokyo)",
+      "minato_(tokyo)",
+      "nakano_(tokyo)",
+      "shibuya_(tokyo)",
+      "shinagawa_(tokyo)",
+      "shinjuku_(tokyo)",
+      "suginami_(tokyo)",
+      "sumida_(tokyo)",
       "tachikawa_(tokyo)",
+      "taito_(tokyo)",
+      "toshima_(tokyo)",
       "tottori_prefecture",
       "toyama_prefecture",
       "toyama_city",
@@ -60402,7 +60350,7 @@
       "shikairo_days_dance_(meme)",
       "shiroko_oddloop_dance",
       "shoot_dance_(meme)",
-      "soda_shake_(meme)",
+      "cola_shake_(meme)",
       "spooky_dance",
       "toca_toca_toca_dance_(meme)",
       "torture_dance",
@@ -64294,7 +64242,6 @@
     "tag_group:holding_tags": "手持物品",
     "tag_group:cards": "卡牌",
     "tag_group:doors_and_gates": "门/闸",
-    "tag_group:piercings": "穿刺/钉饰",
     "tag_group:sex_objects": "性玩具/道具",
     "tag_group:birds": "鸟类",
     "tag_group:cats": "猫",
