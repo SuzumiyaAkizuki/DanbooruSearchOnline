@@ -58,7 +58,21 @@ def build_help_dialog(controller: Any, *, ui_text: dict, sponsor_notice_text: st
                     with ui.element('div').classes('help-section-heading'):
                         ui.label(ui_text['help']['update_title']).classes('help-section-heading-title')
                         ui.label(ui_text['help']['update_summary']).classes('help-section-heading-subtitle')
-                    ui.markdown(ui_text['help']['guide_markdown']).classes('help-content')
+                    ui.markdown(ui_text['help']['update_markdown']).classes('help-content')
+
+                with ui.column().classes('help-section'):
+                    with ui.element('div').classes(
+                        'help-section-heading help-section-heading--notice'
+                    ):
+                        ui.label(ui_text['notice']['title']).classes('help-section-heading-title')
+                        ui.label(ui_text['notice']['subtitle']).classes('help-section-heading-subtitle')
+                    ui.markdown(ui_text['notice']['body_markdown']).classes('help-content')
+
+                with ui.column().classes('help-section'):
+                    with ui.element('div').classes('help-section-heading'):
+                        ui.label(ui_text['tutorial']['title']).classes('help-section-heading-title')
+                        ui.label(ui_text['tutorial']['subtitle']).classes('help-section-heading-subtitle')
+                    ui.markdown(ui_text['tutorial']['body_markdown']).classes('help-content')
 
                 with ui.column().classes('help-section'):
                     with ui.element('div').classes(
@@ -74,14 +88,6 @@ def build_help_dialog(controller: Any, *, ui_text: dict, sponsor_notice_text: st
                         ui.markdown(ui_text['documentation']['copyright_markdown']).classes(
                             'help-content'
                         )
-
-                with ui.column().classes('help-section'):
-                    with ui.element('div').classes(
-                        'help-section-heading help-section-heading--notice'
-                    ):
-                        ui.label(ui_text['notice']['title']).classes('help-section-heading-title')
-                        ui.label(ui_text['notice']['subtitle']).classes('help-section-heading-subtitle')
-                    ui.markdown(ui_text['notice']['body_markdown']).classes('help-content')
 
                 with ui.element('div').classes(
                     'w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3'

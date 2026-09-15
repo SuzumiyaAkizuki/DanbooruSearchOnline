@@ -5,10 +5,49 @@ sponsor:
     如果你想继续折腾，也可以看看基于这个小工具的更多工具链
 
 help:
-  update_title: 最近更新：标签工作区与查询理解
+  update_title: 最近更新：REST API 来源声明
   update_summary: >-
-    本次更新优化了标签已选区，现已支持历史记录、收藏等功能。这些信息始终保存在你的计算机中，不会被服务器收集。
-  guide_markdown: |-
+    近期 REST API 调用量明显增长。观察期内未声明来源不影响使用；未来未声明请求可能受到限流等流量治理措施影响。
+  update_markdown: |-
+    ### REST API 来源声明
+
+    为便于容量评估、服务优化和识别公开集成，建议 REST API 接入方主动声明客户端名称与公开服务地址：
+
+    ```http
+    X-DanbooruSearch-Client: example-service/1.0
+    X-DanbooruSearch-Site: https://example.com
+    ```
+
+    完整的搜索请求示例：
+
+    ```bash
+    curl --request POST \
+      --url 'https://sakizuki-danboorusearch.hf.space/api/search' \
+      --header 'Content-Type: application/json' \
+      --header 'X-DanbooruSearch-Client: example-service/1.0' \
+      --header 'X-DanbooruSearch-Site: https://example.com' \
+      --data '{
+        "query": "白色水手服的女孩",
+        "top_k": 5,
+        "limit": 80,
+        "popularity_weight": 0.15,
+        "show_nsfw": false,
+        "use_segmentation": true,
+        "target_layers": ["英文", "中文扩展词", "释义", "中文核心词", "artist"],
+        "target_categories": ["General", "Character", "Copyright"],
+        "group_mode": "off",
+        "max_per_group": 2
+      }'
+    ```
+
+    - 两个请求头在当前观察期内均为可选项；缺失、无效或无法确认时，**不影响 API 正常响应**。
+    - 观察期结束后，未声明请求 **未来可能** 被纳入限流等流量治理措施；具体规则如需实施，将另行公布。
+    - 归因仅记录小时级、服务级聚合信息，不保存 IP、查询内容、请求体、Cookie、Authorization、完整 User-Agent 或完整 Referer。
+
+tutorial:
+  title: 使用教程
+  subtitle: 了解搜索、工作区、历史、收藏、导入和推荐等常用功能。
+  body_markdown: |-
     ### 1. 搜索与查询理解
 
     搜索后的“查询理解”优化了原先的分词筛选功能，增加了是否覆盖的标记：
@@ -65,7 +104,7 @@ help:
 
 documentation:
   title: 文档与集成
-  subtitle: 查看使用指南、接口文档、插件与公开服务接入说明。
+  subtitle: 查看接口文档、工具链、插件与公开服务接入说明。
   links:
     - label: 工具链使用指南
       url: http://intro.sakizuki.site/index.html

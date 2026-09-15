@@ -2645,6 +2645,9 @@
     "rainbow_order": [
       "tag_group:colors"
     ],
+    "iridescent": [
+      "tag_group:colors"
+    ],
     "the_fallen_angel_(painting)": [
       "tag_group:fine_art_parody"
     ],
@@ -2702,7 +2705,7 @@
     "the_sin_(heinrich_lossow)": [
       "tag_group:fine_art_parody"
     ],
-    "kanagawa_okinami_ura": [
+    "kanagawa_oki_nami_ura": [
       "tag_group:fine_art_parody"
     ],
     "gaifu_kaisei": [
@@ -4026,6 +4029,9 @@
     "star_of_life": [
       "tag_group:symbols"
     ],
+    "sefirot": [
+      "tag_group:symbols"
+    ],
     "sigil_of_lucifer": [
       "tag_group:symbols"
     ],
@@ -4053,6 +4059,9 @@
     "bagua": [
       "tag_group:symbols"
     ],
+    "triple_moon_goddess": [
+      "tag_group:symbols"
+    ],
     "tryzub": [
       "tag_group:symbols"
     ],
@@ -4060,6 +4069,15 @@
       "tag_group:symbols"
     ],
     "mitsudomoe_(shape)": [
+      "tag_group:symbols"
+    ],
+    "triquetra": [
+      "tag_group:symbols"
+    ],
+    "triskelion": [
+      "tag_group:symbols"
+    ],
+    "valknut_(symbol)": [
       "tag_group:symbols"
     ],
     "warning_sign": [
@@ -15258,6 +15276,9 @@
     "hat_tassel": [
       "tag_group:headwear"
     ],
+    "x_hair_ornament": [
+      "tag_group:headwear"
+    ],
     "hat_ribbon": [
       "tag_group:headwear"
     ],
@@ -19763,9 +19784,6 @@
     "music": [
       "tag_group:audio_tags"
     ],
-    "notes": [
-      "tag_group:audio_tags"
-    ],
     "sheet_music": [
       "tag_group:audio_tags"
     ],
@@ -23683,7 +23701,7 @@
     "honey_and_clover": [
       "tag_group:dogs"
     ],
-    "menchi": [
+    "menchi_(excel_saga)": [
       "tag_group:dogs"
     ],
     "excel_saga": [
@@ -24031,7 +24049,7 @@
     "kobato.": [
       "tag_group:dogs"
     ],
-    "maromi": [
+    "maromi_(mousou_dairinin)": [
       "tag_group:dogs"
     ],
     "mousou_dairinin": [
@@ -24273,6 +24291,9 @@
       "tag_group:legendary_creatures"
     ],
     "kraken": [
+      "tag_group:legendary_creatures"
+    ],
+    "krampus_(mythology)": [
       "tag_group:legendary_creatures"
     ],
     "lamia": [
@@ -29593,9 +29614,6 @@
     "school": [
       "tag_group:locations"
     ],
-    "school_entrance": [
-      "tag_group:locations"
-    ],
     "school_gateway": [
       "tag_group:locations"
     ],
@@ -32393,6 +32411,9 @@
     "alex_jones": [
       "tag_group:people"
     ],
+    "aoshima_tatsuya": [
+      "tag_group:people"
+    ],
     "arino_shin'ya": [
       "tag_group:people"
     ],
@@ -32433,6 +32454,9 @@
       "tag_group:people"
     ],
     "jon_stewart": [
+      "tag_group:people"
+    ],
+    "okayasu_yuzuru": [
       "tag_group:people"
     ],
     "regis_philbin": [
@@ -33937,6 +33961,9 @@
     "iwata_yasunari": [
       "tag_group:people"
     ],
+    "maekawa_kazuya": [
+      "tag_group:people"
+    ],
     "matoba_hitoshi": [
       "tag_group:people"
     ],
@@ -33956,6 +33983,9 @@
       "tag_group:people"
     ],
     "okabe_yukio": [
+      "tag_group:people"
+    ],
+    "oono_takuya": [
       "tag_group:people"
     ],
     "olivier_peslier": [
@@ -33980,6 +34010,9 @@
       "tag_group:people"
     ],
     "tanabe_hironobu": [
+      "tag_group:people"
+    ],
+    "tomomichi_yasuo": [
       "tag_group:people"
     ],
     "tosaki_keita": [
@@ -34714,7 +34747,7 @@
     "chris_g": [
       "tag_group:people"
     ],
-    "cr1tikal": [
+    "moistcr1tikal": [
       "tag_group:people"
     ],
     "dan_avidan": [
@@ -37852,6 +37885,12 @@
     "bacon-wrapped_asparagus": [
       "tag_group:food_tags"
     ],
+    "bamboo_shoot": [
+      "tag_group:food_tags"
+    ],
+    "menma": [
+      "tag_group:food_tags"
+    ],
     "beans": [
       "tag_group:food_tags"
     ],
@@ -38089,19 +38128,25 @@
     "chicken_(food)": [
       "tag_group:food_tags"
     ],
+    "chicken_feet_(food)": [
+      "tag_group:food_tags"
+    ],
     "chicken_leg": [
       "tag_group:food_tags"
     ],
     "chicken_nuggets": [
       "tag_group:food_tags"
     ],
+    "chicken_wing": [
+      "tag_group:food_tags"
+    ],
     "fried_chicken": [
       "tag_group:food_tags"
     ],
-    "yakitori": [
+    "roast_chicken": [
       "tag_group:food_tags"
     ],
-    "chicken_wing": [
+    "yakitori": [
       "tag_group:food_tags"
     ],
     "crab": [
@@ -38110,7 +38155,13 @@
     "doner_kebab": [
       "tag_group:food_tags"
     ],
-    "egg": [
+    "duck_(food)": [
+      "tag_group:food_tags"
+    ],
+    "peking_duck_(food)": [
+      "tag_group:food_tags"
+    ],
+    "egg_(food)": [
       "tag_group:food_tags"
     ],
     "broken_egg": [
@@ -38176,16 +38227,31 @@
     "kabayaki": [
       "tag_group:food_tags"
     ],
-    "fish": [
+    "fish_(food)": [
+      "tag_group:food_tags"
+    ],
+    "canned_fish": [
+      "tag_group:food_tags"
+    ],
+    "filet-o-fish": [
       "tag_group:food_tags"
     ],
     "fish_skeleton": [
+      "tag_group:food_tags"
+    ],
+    "fried_fish": [
+      "tag_group:food_tags"
+    ],
+    "grilled_fish": [
       "tag_group:food_tags"
     ],
     "sashimi": [
       "tag_group:food_tags"
     ],
     "katsuo_no_tataki": [
+      "tag_group:food_tags"
+    ],
+    "goose_(food)": [
       "tag_group:food_tags"
     ],
     "gyuudon": [
@@ -38393,6 +38459,9 @@
       "tag_group:food_tags"
     ],
     "jumeok-bap": [
+      "tag_group:food_tags"
+    ],
+    "kiritanpo_(food)": [
       "tag_group:food_tags"
     ],
     "onigiri": [
@@ -39326,6 +39395,9 @@
       "tag_group:food_tags"
     ],
     "jiaozi": [
+      "tag_group:food_tags"
+    ],
+    "pierogi": [
       "tag_group:food_tags"
     ],
     "tangyuan": [
@@ -43341,6 +43413,9 @@
       "tag_group:role-playing_games"
     ],
     "emo-klore_trpg": [
+      "tag_group:role-playing_games"
+    ],
+    "grancrest": [
       "tag_group:role-playing_games"
     ],
     "konflikt_'47": [
@@ -47936,7 +48011,8 @@
       "rainbow_order",
       "chromatic_aberration",
       "heavy_chromatic_aberration",
-      "anaglyph"
+      "anaglyph",
+      "iridescent"
     ],
     "tag_group:fine_art_parody": [
       "fine_art_parody",
@@ -47959,7 +48035,7 @@
       "witches'_sabbath_(francisco_goya)",
       "the_kiss",
       "the_sin_(heinrich_lossow)",
-      "kanagawa_okinami_ura",
+      "kanagawa_oki_nami_ura",
       "gaifu_kaisei",
       "barge_haulers_on_the_volga",
       "ivan_the_terrible_and_his_son_ivan",
@@ -48506,6 +48582,7 @@
       "restroom_symbol",
       "rod_of_asclepius",
       "star_of_life",
+      "sefirot",
       "sigil_of_lucifer",
       "signal_bar",
       "skull_and_crossbones",
@@ -48515,9 +48592,13 @@
       "swastika",
       "trigram",
       "bagua",
+      "triple_moon_goddess",
       "tryzub",
       "tomoe_(symbol)",
       "mitsudomoe_(shape)",
+      "triquetra",
+      "triskelion",
+      "valknut_(symbol)",
       "warning_sign",
       "wheelchair_sign",
       "wheel_of_dharma",
@@ -52510,6 +52591,7 @@
       "star_hat_ornament",
       "skull_hat_ornament",
       "hat_tassel",
+      "x_hair_ornament",
       "hat_ribbon",
       "lappet",
       "claw_hair_clip",
@@ -54301,7 +54383,6 @@
       "guitar_case",
       "playing_instrument",
       "music",
-      "notes",
       "musical_note",
       "spoken_musical_note",
       "treble_clef",
@@ -55682,7 +55763,7 @@
       "mother_2",
       "leader_(honey_and_clover)",
       "honey_and_clover",
-      "menchi",
+      "menchi_(excel_saga)",
       "excel_saga",
       "missile_(ghost_trick)",
       "ghost_trick",
@@ -55796,7 +55877,7 @@
       "rozen_maiden",
       "ioryogi",
       "kobato.",
-      "maromi",
+      "maromi_(mousou_dairinin)",
       "mousou_dairinin",
       "goofy",
       "disney",
@@ -55883,6 +55964,7 @@
       "kage-nashi_dog",
       "kitsune",
       "kraken",
+      "krampus_(mythology)",
       "lamia",
       "medusa_(mythology)",
       "longma",
@@ -57711,7 +57793,6 @@
       "on_roof",
       "ruins",
       "school",
-      "school_entrance",
       "school_gateway",
       "sewer",
       "skating_rink",
@@ -58662,6 +58743,7 @@
       "yulia_olegovna_volkova",
       "yuval_raphael",
       "alex_jones",
+      "aoshima_tatsuya",
       "arino_shin'ya",
       "bob_ross",
       "charlie_kirk",
@@ -58676,6 +58758,7 @@
       "jeremy_clarkson",
       "jimmy_fallon",
       "jon_stewart",
+      "okayasu_yuzuru",
       "regis_philbin",
       "richard_hammond",
       "sakana-kun",
@@ -59182,6 +59265,7 @@
       "ishigami_shin'ichi",
       "iwata_mirai",
       "iwata_yasunari",
+      "maekawa_kazuya",
       "matoba_hitoshi",
       "matsuyama_kouhei",
       "mirco_demuro",
@@ -59189,6 +59273,7 @@
       "nakanowatari_seiichi",
       "nishiura_katsuichi",
       "okabe_yukio",
+      "oono_takuya",
       "olivier_peslier",
       "sakai_ryusei",
       "satou_tetsuzou",
@@ -59197,6 +59282,7 @@
       "tabara_seiki",
       "take_yutaka",
       "tanabe_hironobu",
+      "tomomichi_yasuo",
       "tosaki_keita",
       "tsunoda_kouichi",
       "uchida_hiroyuki",
@@ -59444,7 +59530,7 @@
       "boogie2988",
       "caseoh",
       "chris_g",
-      "cr1tikal",
+      "moistcr1tikal",
       "dan_avidan",
       "darksydephil",
       "destiny_(streamer)",
@@ -60506,6 +60592,8 @@
       "vegetable",
       "asparagus",
       "bacon-wrapped_asparagus",
+      "bamboo_shoot",
+      "menma",
       "beans",
       "green_bean",
       "red_bean_paste",
@@ -60586,14 +60674,18 @@
       "bacon",
       "boned_meat",
       "chicken_(food)",
+      "chicken_feet_(food)",
       "chicken_leg",
       "chicken_nuggets",
-      "fried_chicken",
-      "yakitori",
       "chicken_wing",
+      "fried_chicken",
+      "roast_chicken",
+      "yakitori",
       "crab",
       "doner_kebab",
-      "egg",
+      "duck_(food)",
+      "peking_duck_(food)",
+      "egg_(food)",
       "broken_egg",
       "egg_yolk",
       "eggshell",
@@ -60616,10 +60708,15 @@
       "tamagokake_gohan",
       "eel",
       "kabayaki",
-      "fish",
+      "fish_(food)",
+      "canned_fish",
+      "filet-o-fish",
       "fish_skeleton",
+      "fried_fish",
+      "grilled_fish",
       "sashimi",
       "katsuo_no_tataki",
+      "goose_(food)",
       "gyuudon",
       "hamburger_steak",
       "loco_moco",
@@ -60690,6 +60787,7 @@
       "curry_rice",
       "fried_rice",
       "jumeok-bap",
+      "kiritanpo_(food)",
       "onigiri",
       "rice_on_face",
       "rice_paddy",
@@ -61018,6 +61116,7 @@
       "croquette",
       "har_gow",
       "jiaozi",
+      "pierogi",
       "tangyuan",
       "wonton",
       "zongzi",
@@ -62798,6 +62897,7 @@
       "double_cross_(f.e.a.r.)",
       "dungeons_&_dragons",
       "emo-klore_trpg",
+      "grancrest",
       "konflikt_'47",
       "lancer_rpg",
       "meikyuu_kingdom",

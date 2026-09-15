@@ -9,7 +9,7 @@ from fastapi.responses import PlainTextResponse
 from nicegui import app, ui
 
 from api_fastapi import app as api_app
-from core import counter, telemetry
+from core import counter, telemetry, traffic_attribution
 from core.engine import DanbooruTagger
 from mcp_server import mcp
 from platform_utils import get_host_port, is_cloud
@@ -57,6 +57,7 @@ if __name__ in {'__main__', '__mp_main__'}:
             print('[UI] 开始预热计数器与引擎', flush=True)
             await counter.init()
             await telemetry.init()
+            await traffic_attribution.init()
             cold_start_started_at = time.perf_counter()
             await telemetry.increment('engine_cold_start_attempt')
             try:
@@ -80,7 +81,11 @@ if __name__ in {'__main__', '__mp_main__'}:
     @app.on_shutdown
     def _shutdown():
         async def force_sync_all():
-            await asyncio.gather(counter.force_sync(), telemetry.force_sync())
+            await asyncio.gather(
+                counter.force_sync(),
+                telemetry.force_sync(),
+                traffic_attribution.force_sync(),
+            )
 
         try:
             loop = asyncio.get_event_loop()

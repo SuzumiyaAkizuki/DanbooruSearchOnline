@@ -27,15 +27,17 @@ FastAPI 适配层（可选）。
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 from typing import Literal
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.engine import DanbooruTagger
 from core.models import SearchRequest, SearchResponse
 import core.counter as counter
 import core.telemetry as telemetry
+import core.traffic_attribution as traffic_attribution
 
 
 # ── Pydantic I/O 模型（API 层专用，与 core.models 解耦）──
@@ -166,9 +168,71 @@ def _with_corrections(results: list[dict[str, Any]], corrections: dict[str, str]
 # lifespan / 预热由 ui_nicegui.py 的 @app.on_startup 统一管理，此处不重复。
 app = FastAPI(
     title="Danbooru Tag Searcher API",
-    description="通过 /api/docs 查看完整接口文档。",
+    description=(
+        "通过 /api/docs 查看完整接口文档。公开服务接入时，建议通过可选请求头 "
+        "X-DanbooruSearch-Client 声明客户端名称，并通过 "
+        "X-DanbooruSearch-Site 声明公开服务地址。当前观察期内，未声明不会影响正常使用；"
+        "未来未声明请求可能会受到限流等流量治理措施影响。"
+    ),
     version="1.0.0",
 )
+
+
+def _attribution_endpoint(request: Request) -> str | None:
+    path = request.url.path.rstrip("/")
+    method = request.method.upper()
+    if method == "POST":
+        for endpoint in ("search", "related", "artists"):
+            if path.endswith(f"/{endpoint}"):
+                return endpoint
+    if method == "GET" and path.endswith("/health"):
+        return "health"
+    return None
+
+
+@app.middleware("http")
+async def observe_rest_attribution(request: Request, call_next):
+    """Observe aggregate REST source signals without gating or rejecting calls."""
+    endpoint = _attribution_endpoint(request)
+    if endpoint is None:
+        return await call_next(request)
+
+    started_at = time.perf_counter()
+    observation = None
+    try:
+        observation = traffic_attribution.start_request(request.headers)
+    except Exception as exc:
+        print(f"[TrafficAttribution] 请求观察启动失败，已忽略: {type(exc).__name__}", flush=True)
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        if observation is not None:
+            try:
+                await traffic_attribution.finish_request(
+                    observation,
+                    endpoint=endpoint,
+                    status_code=500,
+                    duration_ms=(time.perf_counter() - started_at) * 1000,
+                )
+            except Exception as exc:
+                print(f"[TrafficAttribution] 请求观察写入失败，已忽略: {type(exc).__name__}", flush=True)
+        raise
+
+    if observation is not None:
+        try:
+            await traffic_attribution.finish_request(
+                observation,
+                endpoint=endpoint,
+                status_code=response.status_code,
+                duration_ms=(time.perf_counter() - started_at) * 1000,
+            )
+        except Exception as exc:
+            print(f"[TrafficAttribution] 请求观察写入失败，已忽略: {type(exc).__name__}", flush=True)
+
+    for name, value in traffic_attribution.ATTRIBUTION_RESPONSE_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 # ── 端点 ──
@@ -176,6 +240,12 @@ app = FastAPI(
 @app.post("/search", response_model=SearchOut)
 async def search(body: SearchIn) -> SearchOut:
     await telemetry.increment("rest_search")
+    traffic_attribution.note_safe_parameters(
+        limit=body.limit,
+        top_k=body.top_k,
+        group_mode=body.group_mode,
+        use_segmentation=body.use_segmentation,
+    )
     tagger = await DanbooruTagger.get_instance()
 
     # SearchIn → core.models.SearchRequest（两者字段一一对应，直接解包）
@@ -210,6 +280,7 @@ async def related(body: RelatedIn) -> dict[str, Any]:
     - target_categories：仅返回指定类别；未传入时不过滤
     """
     await telemetry.increment("rest_related")
+    traffic_attribution.note_safe_parameters(limit=body.limit)
     tagger = await DanbooruTagger.get_instance()
     corrected_tags, invalid_tags, corrections = await _correct_tags(tagger, body.tags)
     if not corrected_tags:
@@ -252,6 +323,7 @@ async def artists(body: ArtistIn) -> dict[str, Any]:
     - min_cooc：单个 (tag, artist) 对的最小共现次数，默认 3
     """
     await telemetry.increment("rest_artists")
+    traffic_attribution.note_safe_parameters(limit=body.limit, min_cooc=body.min_cooc)
     tagger = await DanbooruTagger.get_instance()
     if not body.tags:
         return {"error": "tags 列表不能为空"}

@@ -130,6 +130,56 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 color: #2563a8;
                 text-decoration: underline;
             }
+            .release-notice-row {
+                display: flex;
+                flex-wrap: nowrap;
+                align-items: center;
+                gap: 12px;
+            }
+            .release-notice {
+                background: #fff8e1;
+                border-color: #ffcc80;
+            }
+            .release-notice-icon,
+            .release-notice-detail,
+            .release-notice-close {
+                flex: 0 0 auto;
+            }
+            .release-notice-copy {
+                flex: 1 1 auto;
+                min-width: 0;
+                color: #7c4a03;
+                font-size: 13px;
+                line-height: 1.55;
+            }
+            .release-notice-detail {
+                min-height: 32px;
+                padding-right: 12px;
+                padding-left: 12px;
+            }
+            .release-notice .release-notice-detail {
+                color: #ff8f00;
+            }
+            .release-notice .release-notice-detail:hover {
+                background: #fff3cd;
+            }
+            .release-notice .release-notice-close {
+                color: #a85d00;
+            }
+            @media (max-width: 640px) {
+                .release-notice-row {
+                    gap: 7px;
+                }
+                .release-notice-copy {
+                    font-size: 12px;
+                    line-height: 1.5;
+                }
+                .release-notice-detail {
+                    min-height: 30px;
+                    padding-right: 8px;
+                    padding-left: 8px;
+                }
+            }
             .help-section {
                 width: 100%;
                 gap: 12px;
@@ -342,15 +392,19 @@ def build_release_announcement(controller: Any) -> None:
         'w-full release-notice section-surface px-3 py-2'
     )
     with controller.announcement_banner:
-        with ui.row().classes('w-full items-center justify-between gap-2'):
-            with ui.row().classes('items-center gap-2 min-w-0 flex-wrap'):
-                ui.icon('new_releases', size='18px', color='primary')
-                ui.label(
-                    '新版已加入标签工作区、Prompt 导入、Alias 纠错和分渠道统计。'
-                ).classes('text-sm text-slate-700')
-                ui.button(
-                    '查看详情', on_click=controller.help_dialog.open,
-                ).props('flat dense no-caps color=primary').classes('text-xs')
+        with ui.row().classes('w-full release-notice-row'):
+            ui.icon('info_outline', size='22px', color='amber-8').classes(
+                'release-notice-icon'
+            )
+            ui.label(
+                '近期 REST API 调用量明显增长。建议接入方声明 X-DanbooruSearch-Client 与 '
+                'X-DanbooruSearch-Site；观察期内未声明不影响使用，未来可能受到限流。'
+            ).classes('release-notice-copy')
+            ui.button(
+                '查看详情', on_click=controller.help_dialog.open,
+            ).props('outline dense no-caps').classes(
+                'release-notice-detail'
+            )
             ui.button(
                 icon='close', on_click=controller._dismiss_release_announcement,
-            ).props('flat dense round color=grey-6')
+            ).props('flat dense round').classes('release-notice-close')
