@@ -266,9 +266,9 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 overflow: hidden;
             }
             .two-col-layout > .col-right {
-                flex: 0 0 36% !important;
+                flex: 1 1 0 !important;
                 min-width: 0 !important;
-                max-width: 36% !important;
+                max-width: none !important;
                 overflow: hidden;
             }
 

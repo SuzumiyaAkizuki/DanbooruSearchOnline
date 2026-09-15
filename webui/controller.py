@@ -2022,6 +2022,11 @@ class DanbooruSearchUI:
                 if 'group' in scopes:
                     if selected_tags:
                         await self._capture_group_scroll_positions()
+                        # 等待浏览器期间页面可能已销毁，或选择快照已过期。
+                        if not self._client_alive():
+                            return
+                        if request['generation'] != self._recommendation_generation:
+                            return
                         self._render_group_expansion(
                             result['groups'], selected_tags, show_nsfw,
                         )

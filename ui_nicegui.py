@@ -14,6 +14,7 @@ from core.engine import DanbooruTagger
 from mcp_server import mcp
 from platform_utils import get_host_port, is_cloud
 from webui import controller as _controller
+from webui.connection_guard import NiceGUIPollingDisconnectGuard
 from webui.routes import register_main_page
 
 
@@ -49,6 +50,7 @@ register_main_page(
 
 if __name__ in {'__main__', '__mp_main__'}:
     host, port = get_host_port()
+    app.add_middleware(NiceGUIPollingDisconnectGuard)
 
     @app.on_startup
     def _warmup():
