@@ -14,7 +14,7 @@ MOTION_STYLE = '''
                 background-color var(--motion-fast) ease;
 }
 .motion-search-input.q-field--focused .q-field__control {
-    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.12);
+    box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .motion-search-button {
     transition: transform var(--motion-fast) var(--motion-ease-out),
@@ -23,7 +23,7 @@ MOTION_STYLE = '''
 @media (hover: hover) {
     .motion-search-button:not(.disabled):hover {
         transform: translateY(-1px);
-        box-shadow: 0 3px 8px rgba(51, 65, 85, 0.18);
+        box-shadow: 0 3px 8px var(--shadow);
     }
 }
 .motion-search-button:active { transform: translateY(0); }

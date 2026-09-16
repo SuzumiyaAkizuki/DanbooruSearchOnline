@@ -53,7 +53,7 @@ def build_workspace_toolbar(controller: Any) -> None:
 
 def build_selection_bar(controller: Any) -> None:
     """构建已选标签栏及其操作入口。"""
-    controller.selection_bar_card = ui.element('div').classes('w-full bg-blue-50 p-4')
+    controller.selection_bar_card = ui.element('div').classes('w-full selection-surface p-4')
     with controller.selection_bar_card:
         with ui.row().classes('w-full items-center justify-between'):
             with ui.row().classes('items-center gap-2'):
@@ -259,12 +259,12 @@ def render_selected_tag_chip(controller: Any, tag: str, step: float, *, animate:
             ui.html('&minus;')
         ui.label(display_label).style(
             'font-family:Consolas,Monaco,monospace;font-size:12px;'
-            'color:#2c5282;max-width:240px;overflow:hidden;'
+            'color:var(--chip-text);max-width:240px;overflow:hidden;'
             'text-overflow:ellipsis;white-space:nowrap;'
         )
         if w != 1.0:
             ui.label(w_str).classes('weight-label').style(
-                'color:#e65100;font-weight:bold;'
+                'color:var(--boost-text);font-weight:bold;'
             )
         plus_btn = ui.element('button').classes('weight-btn').on(
             'click', lambda t=tag, s=step: controller._adjust_weight(t, +s)

@@ -19,10 +19,10 @@ RESULT_TABLE_BODY = r'''
           :class="props.row._nsfw_blocked ? 'nsfw-row-blocked' : ''"
           :style="{
               'background-color':
-                  props.row.layer === 'artist'       ? 'rgba(244,114,182,0.08)' :
-                  props.row.category === 'General'   ? 'rgba(59,130,246,0.06)' :
-                  props.row.category === 'Character' ? 'rgba(34,197,94,0.06)'  :
-                  props.row.category === 'Copyright' ? 'rgba(168,85,247,0.06)' : ''
+                  props.row.layer === 'artist'       ? 'var(--artist-row-bg)' :
+                  props.row.category === 'General'   ? 'var(--general-bg)' :
+                  props.row.category === 'Character' ? 'var(--character-bg)'  :
+                  props.row.category === 'Copyright' ? 'var(--copyright-bg)' : ''
           }">
         <q-td auto-width>
             <q-checkbox v-model="props.selected"
@@ -204,9 +204,9 @@ def render_concept_coverage(controller: Any) -> None:
 
     def decorate_chip(chip: Any, source: str) -> None:
         if source in controller.current_cached_queries:
-            chip.style('outline: 1px dashed rgba(100,116,139,0.45); outline-offset: 1px;')
+            chip.style('outline: 1px dashed var(--pending-border); outline-offset: 1px;')
         if source == controller.current_filter_keyword:
-            chip.style('box-shadow: 0 0 0 2px #4a90e2;')
+            chip.style('box-shadow: 0 0 0 2px var(--primary);')
 
     with controller.coverage_container:
         with ui.element('div').classes('w-full query-insight-panel section-surface'):

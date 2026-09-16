@@ -4,10 +4,12 @@ from typing import Any
 
 from nicegui import ui
 
+from webui.theme import apply_theme
+
 
 def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) -> None:
     controller.client = ui.context.client
-    ui.colors(primary='#4A90E2', secondary='#5E6C84', accent='#FF6B6B')
+    controller.dark_mode = apply_theme()
     ui.add_head_html(motion_style)
     ui.add_head_html('''
         <meta name="description" content="基于语义匹配的 Danbooru 标签搜索引擎，支持中英双语描述、多维匹配、智能分词与共现关联推荐。">
@@ -29,7 +31,7 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
             }
             .recommendation-grid {
                 overflow: hidden;
-                background: #ffffff;
+                background: var(--surface);
                 border-top: 1px solid var(--cell-border);
                 border-bottom: 1px solid var(--cell-border);
             }
@@ -46,37 +48,33 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
             }
             @media (hover: hover) {
                 .related-item:hover {
-                    box-shadow: inset 0 0 0 9999px rgba(15, 23, 42, 0.045);
+                    box-shadow: inset 0 0 0 9999px var(--hover-overlay);
                 }
             }
             .tag-link { text-decoration: none; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; }
             .tag-link:hover { text-decoration: underline; }
             .weight-chip { display: inline-flex; align-items: center; gap: 2px;
                            border-radius: 16px; padding: 2px 6px 2px 4px;
-                           background: #e3edf7; border: 1px solid #b3cde8;
+                           background: var(--chip-bg); border: 1px solid var(--chip-border);
                            font-size: 12px; margin: 3px; white-space: nowrap; }
-            .weight-chip.boosted  { background: #fff3e0; border-color: #ffb74d; }
-            .weight-chip.reduced  { background: #f3e5f5; border-color: #ce93d8; }
+            .weight-chip.boosted  { background: var(--boost-bg); border-color: var(--boost-border); }
+            .weight-chip.reduced  { background: var(--reduce-bg); border-color: var(--reduce-border); }
             .weight-btn { cursor: pointer; width: 18px; height: 18px; border-radius: 50%;
                           display: inline-flex; align-items: center; justify-content: center;
                           font-size: 13px; font-weight: bold; line-height: 1;
-                          border: none; background: rgba(0,0,0,0.08);
-                          color: #555; transition: background 0.15s; padding: 0; }
-            .weight-btn:hover { background: rgba(0,0,0,0.18); }
+                          border: none; background: var(--button-bg);
+                          color: var(--button-text); transition: background 0.15s; padding: 0; }
+            .weight-btn:hover { background: var(--button-hover); }
             .weight-label { font-family: Consolas, Monaco, monospace; font-size: 11px;
-                            color: #888; min-width: 28px; text-align: center; }
+                            color: var(--subtle); min-width: 28px; text-align: center; }
 
             :root {
-                --section-surface: #f8fafc;
-                --section-border: #dbe4ee;
-                --cell-border: #e2e8f0;
-                --section-heading: #334155;
                 --section-radius: 8px;
             }
             .product-search-card {
-                background: #ffffff;
+                background: var(--surface);
                 border: 1px solid var(--section-border);
-                border-top: 3px solid #4a90e2;
+                border-top: 3px solid var(--primary);
                 border-radius: var(--section-radius);
                 box-shadow: none;
             }
@@ -99,35 +97,35 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 font-size: 12px;
             }
             .service-state-panel.loading {
-                background: #eff6ff;
-                border: 1px solid #bfdbfe;
-                color: #1d4ed8;
+                background: var(--info-bg);
+                border: 1px solid var(--info-border);
+                color: var(--info-text);
             }
             .service-state-panel.ready {
-                background: #ecfdf5;
-                border: 1px solid #a7f3d0;
-                color: #047857;
+                background: var(--service-ready-bg);
+                border: 1px solid var(--service-ready-border);
+                color: var(--service-ready-text);
             }
             .service-state-panel.busy {
-                background: #fff7ed;
-                border: 1px solid #fed7aa;
-                color: #c2410c;
+                background: var(--warning-bg);
+                border: 1px solid var(--warning-border);
+                color: var(--warning-text);
             }
             .query-insight-panel {
                 padding: 10px 12px;
             }
             .homepage-support-note {
-                color: #64748b;
+                color: var(--muted);
                 font-size: 12px;
                 line-height: 1.6;
             }
             .homepage-support-note a {
-                color: #4a90e2;
+                color: var(--primary);
                 font-weight: 500;
                 text-decoration: none;
             }
             .homepage-support-note a:hover {
-                color: #2563a8;
+                color: var(--link);
                 text-decoration: underline;
             }
             .release-notice-row {
@@ -137,8 +135,8 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 gap: 12px;
             }
             .release-notice {
-                background: #fff8e1;
-                border-color: #ffcc80;
+                background: var(--notice-bg);
+                border-color: var(--notice-border);
             }
             .release-notice-icon,
             .release-notice-detail,
@@ -148,7 +146,7 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
             .release-notice-copy {
                 flex: 1 1 auto;
                 min-width: 0;
-                color: #7c4a03;
+                color: var(--notice-text);
                 font-size: 13px;
                 line-height: 1.55;
             }
@@ -158,13 +156,13 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 padding-left: 12px;
             }
             .release-notice .release-notice-detail {
-                color: #ff8f00;
+                color: var(--notice-action);
             }
             .release-notice .release-notice-detail:hover {
-                background: #fff3cd;
+                background: var(--notice-hover);
             }
             .release-notice .release-notice-close {
-                color: #a85d00;
+                color: var(--notice-close);
             }
             @media (max-width: 640px) {
                 .release-notice-row {
@@ -183,7 +181,7 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
             .help-section {
                 width: 100%;
                 gap: 12px;
-                background: #ffffff;
+                background: var(--surface);
             }
             .help-section-heading {
                 display: flex;
@@ -191,45 +189,45 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 width: 100%;
                 gap: 5px;
                 padding: 12px 16px;
-                border: 1px solid #b9d7f7;
+                border: 1px solid var(--help-border);
                 border-radius: 8px;
-                background: #eef6ff;
+                background: var(--help-bg);
             }
             .help-section-heading-title {
-                color: #174f91;
+                color: var(--help-title);
                 font-size: 15px;
                 font-weight: 700;
                 line-height: 1.4;
             }
             .help-section-heading-subtitle {
-                color: #2563a8;
+                color: var(--link);
                 font-size: 13px;
                 font-weight: 400;
                 line-height: 1.55;
             }
             .help-section-heading--documentation {
-                border-color: #a7e3c4;
-                background: #ecfdf5;
+                border-color: var(--help-success-border);
+                background: var(--success-bg);
             }
             .help-section-heading--documentation .help-section-heading-title {
-                color: #047857;
+                color: var(--success-text);
             }
             .help-section-heading--documentation .help-section-heading-subtitle {
-                color: #16855f;
+                color: var(--help-success-text);
             }
             .help-section-heading--notice {
-                border-color: #fed7aa;
-                background: #fff7ed;
+                border-color: var(--warning-border);
+                background: var(--warning-bg);
             }
             .help-section-heading--notice .help-section-heading-title {
-                color: #c2410c;
+                color: var(--warning-text);
             }
             .help-section-heading--notice .help-section-heading-subtitle {
-                color: #b45309;
+                color: var(--amber);
             }
             .help-content {
                 width: 100%;
-                color: #334155;
+                color: var(--text);
                 font-size: 14px;
                 line-height: 1.75;
             }
@@ -240,15 +238,15 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
             }
             .help-content h3,
             .help-content h4 {
-                color: #334155;
+                color: var(--text);
             }
             .help-link {
-                color: #2563a8;
+                color: var(--link);
                 font-size: 14px;
                 line-height: 1.6;
             }
             .help-link:hover {
-                color: #174f86;
+                color: var(--link-hover);
                 text-decoration: underline;
             }
 

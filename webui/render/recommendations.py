@@ -178,9 +178,9 @@ def render_related_page(controller: Any) -> None:
 
             # 行背景色按分类区分
             CAT_BG = {
-                'General':   'background-color: rgba(59,130,246,0.06);',   # 淡蓝
-                'Character': 'background-color: rgba(34,197,94,0.06);',    # 淡绿
-                'Copyright': 'background-color: rgba(168,85,247,0.06);',   # 淡紫
+                'General':   'background-color: var(--general-bg);',   # 淡蓝
+                'Character': 'background-color: var(--character-bg);',    # 淡绿
+                'Copyright': 'background-color: var(--copyright-bg);',   # 淡紫
             }
             row_bg = CAT_BG.get(r.category, '')
 
@@ -284,7 +284,7 @@ def render_artist_page(controller: Any) -> None:
             with ui.row().classes(
                 'w-full flex-nowrap items-stretch gap-0 overflow-hidden '
                 'related-item recommendation-row'
-            ).style('background: rgba(244,114,182,0.04);') as row:
+            ).style('background: var(--artist-bg);') as row:
                 controller._artist_rec_rows.append(row)
                 # tooltip
                 with ui.tooltip().props('content-class="bg-black text-white shadow-4" max-width="400px"'):
@@ -346,9 +346,9 @@ def render_group_expansion(controller: Any, group_data: list, selected_tags: lis
 
     # 行背景色按分类区分（与关联推荐一致）
     CAT_BG = {
-        'General':   'background-color: rgba(59,130,246,0.06);',
-        'Character': 'background-color: rgba(34,197,94,0.06);',
-        'Copyright': 'background-color: rgba(168,85,247,0.06);',
+        'General':   'background-color: var(--general-bg);',
+        'Character': 'background-color: var(--character-bg);',
+        'Copyright': 'background-color: var(--copyright-bg);',
     }
     CAT_LABEL = {'General': '通用', 'Character': '角色', 'Copyright': '作品'}
 

@@ -1,0 +1,6 @@
+Swagger UI distribution: swagger-ui-dist 5.32.15 (Apache-2.0).
+Source: https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-5.32.15.tgz
+Archive integrity (SHA-512, base64): TSFER+rFQlf1nzk6WvKkMaHTxAPQ3eAAxigFThnxQedSREanfZgSbJFayZVs/ULnSbNdrJOb99vLD6xpb3R3eg==
+
+These files are served locally for FastAPI Swagger UI; no runtime CDN is needed.
+LICENSE, NOTICE and swagger-ui-bundle.js.LICENSE.txt retain upstream notices.

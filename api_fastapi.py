@@ -28,9 +28,12 @@ from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 from typing import Any
 from typing import Literal
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.engine import DanbooruTagger
@@ -175,7 +178,35 @@ app = FastAPI(
         "未来未声明请求可能会受到限流等流量治理措施影响。"
     ),
     version="1.0.0",
+    docs_url=None,
 )
+
+
+app.mount(
+    "/docs-assets",
+    StaticFiles(directory=Path(__file__).resolve().parent / "webui" / "static" / "swagger-ui"),
+    name="docs-assets",
+)
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_docs(request: Request):
+    # root_path 包含 /api 挂载前缀及反向代理前缀，独立运行时为空。
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    return get_swagger_ui_html(
+        openapi_url=f"{root_path}{app.openapi_url}",
+        title=f"{app.title} - Swagger UI",
+        swagger_js_url=f"{root_path}/docs-assets/swagger-ui-bundle.js",
+        swagger_css_url=f"{root_path}/docs-assets/swagger-ui.css",
+        swagger_favicon_url="data:,",
+        oauth2_redirect_url=f"{root_path}{app.swagger_ui_oauth2_redirect_url}",
+        swagger_ui_parameters={"validatorUrl": None},
+    )
+
+
+@app.get(app.swagger_ui_oauth2_redirect_url, include_in_schema=False)
+async def swagger_oauth2_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
 
 
 def _attribution_endpoint(request: Request) -> str | None:
