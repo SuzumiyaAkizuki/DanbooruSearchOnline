@@ -2049,7 +2049,6 @@ class DanbooruSearchUI:
                 fetch=fetch,
                 apply=apply,
                 client_alive=self._client_alive,
-                report_error=lambda exc: print(f'[UI] 推荐刷新失败: {exc}', flush=True),
             )
             await consume
         finally:

@@ -26,6 +26,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from core.engine import DanbooruTagger
 from core.models import SearchRequest
+from core.runtime_diagnostics import install_mcp_diagnostics
 import core.counter as counter
 import core.telemetry as telemetry
 import re
@@ -88,6 +89,7 @@ mcp = FastMCP(
     name="danbooru-searcher",
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
+install_mcp_diagnostics(mcp._mcp_server)
 
 
 def _resolve_canonical_tags(tagger: DanbooruTagger, tags: list[str]) -> tuple[list[str], list[str], dict[str, str], dict[str, list[str]]]:

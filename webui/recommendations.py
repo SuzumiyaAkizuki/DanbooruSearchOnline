@@ -1,8 +1,23 @@
 """推荐区域共享的状态与调度规则，不包含 NiceGUI 渲染。"""
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
+from time import perf_counter
 from typing import Any
+from uuid import uuid4
+
+from core.runtime_diagnostics import exception_details
+
+
+def _report_failure(exc: Exception, request: dict, stage: str, started: float) -> None:
+    logging.getLogger(__name__).error(
+        '推荐刷新失败 event=%s generation=%s stage=%s scopes=%s '
+        'tag_count=%d elapsed_ms=%.1f exception=%s',
+        uuid4().hex[:12], request['generation'], stage,
+        ','.join(sorted(request['scopes'])), len(request['selected_tags']),
+        (perf_counter() - started) * 1000, exception_details(exc),
+    )
 
 
 def recommendation_seed_tags(controller: Any, selected_tags: list[str]) -> list[str]:
@@ -124,20 +139,27 @@ async def consume_latest_recommendation_requests(
     fetch: Callable[[dict], Awaitable[dict]],
     apply: Callable[[dict, dict], Awaitable[None]],
     client_alive: Callable[[], bool],
-    report_error: Callable[[Exception], None],
+    report_error: Callable[[Exception], None] | None = None,
 ) -> None:
     """顺序消费最新快照，计算完成后丢弃已经过期的结果。"""
     while controller._pending_recommendation_request is not None:
         await asyncio.sleep(debounce_seconds)
         request = controller._pending_recommendation_request
         controller._pending_recommendation_request = None
+        started = perf_counter()
         try:
             result = await fetch(request)
         except Exception as exc:
-            report_error(exc)
+            _report_failure(exc, request, 'fetch', started)
+            if report_error is not None:
+                report_error(exc)
             continue
         if request['generation'] != controller._recommendation_generation:
             continue
         if not client_alive():
             return
-        await apply(request, result)
+        try:
+            await apply(request, result)
+        except Exception as exc:
+            _report_failure(exc, request, 'apply', started)
+            raise
