@@ -62,10 +62,7 @@ def _resolve_torch_threads(cpu_count: Optional[int] = None) -> int:
     override = _positive_int_env('DANBOORU_TORCH_THREADS')
     if override is not None:
         return override
-    cpus = cpu_count or os.cpu_count() or 2
-    if cpus <= 2:
-        return 1
-    return max(1, min(4, cpus // 2))
+    return 3
 
 
 def _resolve_cpu_sem_limit(cpu_count: Optional[int] = None) -> int:
@@ -73,8 +70,8 @@ def _resolve_cpu_sem_limit(cpu_count: Optional[int] = None) -> int:
     override = _positive_int_env('DANBOORU_CPU_CONCURRENCY')
     if override is not None:
         return override
-    cpus = cpu_count or os.cpu_count() or 2
-    return 2 if cpus >= 8 else 1
+    # 默认允许两路搜索，配合 3 个 intra-op 线程降低计算竞争。
+    return 2
 
 
 def _resolve_recommendation_sem_limit(cpu_count: Optional[int] = None) -> int:

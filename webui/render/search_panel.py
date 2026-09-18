@@ -17,8 +17,8 @@ def build_search_panel(controller: Any) -> None:
             with ui.row().classes('items-center gap-3'):
                 ui.switch('暗色').bind_value(controller.dark_mode, 'value').props('dense color=primary')
                 ui.button(
-                    '帮助 / 关于', icon='help_outline', on_click=controller.help_dialog.open,
-                ).props('flat dense no-caps color=grey-7').classes('text-sm')
+                    '帮助 / 关于', icon='help_outline',
+                ).on('click', js_handler=controller.help_dialog.browser_action(True)).props('flat dense no-caps color=grey-7').classes('text-sm')
         ui.label(
             '基于语义匹配的标签搜索引擎，支持多维匹配与共现关联推荐。'
         ).classes('text-sm text-gray-500 -mt-1 mb-1')

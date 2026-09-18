@@ -8,6 +8,7 @@ from nicegui import ui
 from core.ui_performance import measure
 
 from webui.helpers import format_history_settings, format_history_time
+from webui.local_dialog import LocalDialog
 
 
 def build_sponsor_dialog(
@@ -19,7 +20,7 @@ def build_sponsor_dialog(
     ui_text: dict,
 ) -> None:
     """构建低干扰的赞赏弹窗。"""
-    with ui.dialog() as controller.sponsor_dialog, ui.card().classes('w-full max-w-sm'):
+    with LocalDialog() as controller.sponsor_dialog, ui.card().classes('w-full max-w-sm'):
         with ui.column().classes('w-full items-center gap-2 text-center'):
             ui.label(title).classes('text-base font-bold text-gray-800')
             ui.label(ui_text['sponsor']['body']).classes('text-sm text-gray-600 leading-relaxed')
@@ -31,7 +32,7 @@ def build_sponsor_dialog(
                 new_tab=True,
             ).classes('text-xs text-blue-500 hover:text-blue-700 hover:underline')
         with ui.row().classes('w-full justify-end'):
-            ui.button('关闭', on_click=controller.sponsor_dialog.close).props('flat color=grey-7')
+            ui.button('关闭').on('click', js_handler=controller.sponsor_dialog.browser_action(False)).props('flat color=grey-7')
 
 
 def build_help_dialog(controller: Any, *, ui_text: dict, sponsor_notice_text: str) -> None:
@@ -43,14 +44,14 @@ def build_help_dialog(controller: Any, *, ui_text: dict, sponsor_notice_text: st
         if PLATFORM == 'hf'
         else 'https://huggingface.co/spaces/SAkizuki/DanbooruSearch'
     )
-    with ui.dialog() as controller.help_dialog, ui.card().classes(
+    with LocalDialog() as controller.help_dialog, ui.card().classes(
         'w-full max-w-3xl max-h-[90vh] p-0 gap-0'
     ):
         with ui.row().classes('w-full items-center justify-between px-5 py-4 border-b border-slate-200'):
             with ui.row().classes('items-center gap-2'):
                 ui.icon('help_outline', color='primary')
                 ui.label('帮助 / 关于').classes('text-lg font-bold text-slate-800')
-            ui.button(icon='close', on_click=controller.help_dialog.close).props(
+            ui.button(icon='close').on('click', js_handler=controller.help_dialog.browser_action(False)).props(
                 'flat dense round color=grey-7'
             )
 
@@ -109,8 +110,7 @@ def build_help_dialog(controller: Any, *, ui_text: dict, sponsor_notice_text: st
                     ui.button(
                         sponsor_notice_text,
                         icon='volunteer_activism',
-                        on_click=controller.sponsor_dialog.open,
-                    ).props('flat dense no-caps color=grey-7').classes('text-xs')
+                    ).on('click', js_handler=controller.sponsor_dialog.browser_action(True)).props('flat dense no-caps color=grey-7').classes('text-xs')
 
 
 COLLECTION_PAGE_SIZE = 10

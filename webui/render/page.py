@@ -399,8 +399,8 @@ def build_release_announcement(controller: Any) -> None:
                 'X-DanbooruSearch-Site；观察期内未声明不影响使用，未来可能受到限流。'
             ).classes('release-notice-copy')
             ui.button(
-                '查看详情', on_click=controller.help_dialog.open,
-            ).props('outline dense no-caps').classes(
+                '查看详情',
+            ).on('click', js_handler=controller.help_dialog.browser_action(True)).props('outline dense no-caps').classes(
                 'release-notice-detail'
             )
             ui.button(
