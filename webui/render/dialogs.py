@@ -5,6 +5,8 @@ from typing import Any
 
 from nicegui import ui
 
+from core.ui_performance import measure
+
 from webui.helpers import format_history_settings, format_history_time
 
 
@@ -111,9 +113,52 @@ def build_help_dialog(controller: Any, *, ui_text: dict, sponsor_notice_text: st
                     ).props('flat dense no-caps color=grey-7').classes('text-xs')
 
 
+COLLECTION_PAGE_SIZE = 10
+
+
+def _collection_dialog(controller: Any, name: str):
+    """每个页面复用一个对话框，重建时只创建当前页内容。"""
+    attribute = f'_{name}_dialog'
+    dialog = getattr(controller, attribute, None)
+    if dialog is None or dialog.is_deleted:
+        # 绑定到页面根，避免从旧弹窗内重开时随旧内容一起被清理。
+        with controller.client:
+            dialog = ui.dialog()
+        setattr(controller, attribute, dialog)
+    dialog.clear()
+    return dialog
+
+
+def _collection_page(controller: Any, name: str, items: list) -> tuple[list, int, int]:
+    pages = max(1, (len(items) + COLLECTION_PAGE_SIZE - 1) // COLLECTION_PAGE_SIZE)
+    page = max(1, min(getattr(controller, f'_{name}_page', 1), pages))
+    setattr(controller, f'_{name}_page', page)
+    start = (page - 1) * COLLECTION_PAGE_SIZE
+    return items[start:start + COLLECTION_PAGE_SIZE], page, pages
+
+
+def _collection_pagination(controller: Any, name: str, page: int, pages: int, total: int, reopen) -> None:
+    def change_page(delta: int) -> None:
+        setattr(controller, f'_{name}_page', page + delta)
+        reopen(controller)
+
+    with ui.row().classes('w-full items-center justify-end gap-2'):
+        previous = ui.button(icon='chevron_left', on_click=lambda: change_page(-1)).props('flat dense')
+        ui.label(f'{page} / {pages} 页 · 共 {total} 条').classes('text-xs text-gray-500')
+        following = ui.button(icon='chevron_right', on_click=lambda: change_page(1)).props('flat dense')
+        if page == 1:
+            previous.disable()
+        if page == pages:
+            following.disable()
+
+
+@measure('history_render')
 def open_history_dialog(controller: Any) -> None:
     """显示本地搜索历史及其恢复操作。"""
-    with ui.dialog() as dialog, ui.card().classes('w-full max-w-4xl max-h-[85vh]'):
+    dialog = _collection_dialog(controller, 'history')
+    items = controller.search_history.get('items', [])
+    visible_items, page, pages = _collection_page(controller, 'history', items)
+    with dialog, ui.card().classes('w-full max-w-4xl max-h-[85vh]'):
         with ui.row().classes('w-full items-center justify-between'):
             ui.label('搜索历史').classes('text-lg font-bold')
             with ui.row().classes('gap-2'):
@@ -126,10 +171,9 @@ def open_history_dialog(controller: Any) -> None:
                 ui.button(icon='close', on_click=dialog.close).props('flat round dense')
 
         with ui.scroll_area().classes('w-full h-[65vh]'):
-            items = controller.search_history.get('items', [])
             if not items:
                 ui.label('暂无搜索历史').classes('text-sm text-gray-400 p-6')
-            for item in items:
+            for item in visible_items:
                 with ui.card().classes('w-full mb-2 p-3 border border-gray-200 shadow-none'):
                     with ui.row().classes('w-full items-start justify-between gap-3'):
                         with ui.column().classes('gap-1 flex-grow min-w-0'):
@@ -170,6 +214,7 @@ def open_history_dialog(controller: Any) -> None:
                                     value, current
                                 ),
                             ).props('flat round dense color=red-6')
+        _collection_pagination(controller, 'history', page, pages, len(items), open_history_dialog)
     dialog.open()
 
 
@@ -252,17 +297,20 @@ def open_backup_dialog(controller: Any, *, description: str) -> None:
     dialog.open()
 
 
+@measure('favorites_render')
 def open_favorites_dialog(controller: Any) -> None:
     """显示收藏列表与加载、合并、导出等操作入口。"""
-    with ui.dialog() as dialog, ui.card().classes('w-full max-w-5xl max-h-[88vh]'):
+    dialog = _collection_dialog(controller, 'favorites')
+    items = controller.favorites.get('items', [])
+    visible_items, page, pages = _collection_page(controller, 'favorites', items)
+    with dialog, ui.card().classes('w-full max-w-5xl max-h-[88vh]'):
         with ui.row().classes('w-full items-center justify-between'):
             ui.label('收藏').classes('text-lg font-bold')
             ui.button(icon='close', on_click=dialog.close).props('flat round dense')
         with ui.scroll_area().classes('w-full h-[70vh]'):
-            items = controller.favorites.get('items', [])
             if not items:
                 ui.label('暂无收藏').classes('text-sm text-gray-400 p-6')
-            for item in items:
+            for item in visible_items:
                 with ui.card().classes('w-full mb-2 p-3 border border-amber-100 shadow-none'):
                     with ui.row().classes('w-full items-start justify-between gap-3'):
                         with ui.column().classes('gap-1 flex-grow min-w-0'):
@@ -316,6 +364,7 @@ def open_favorites_dialog(controller: Any) -> None:
                                     value, current
                                 ),
                             ).props('flat round dense color=red-6')
+        _collection_pagination(controller, 'favorites', page, pages, len(items), open_favorites_dialog)
     dialog.open()
 
 

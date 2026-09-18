@@ -16,6 +16,7 @@ from datetime import timedelta, timezone
 
 from nicegui import ui
 from core import counter, telemetry
+from core.ui_performance import probe_browser
 from core.engine import DanbooruTagger
 from core.models import SearchRequest
 from core.prompt_import import (
@@ -487,6 +488,7 @@ class DanbooruSearchUI:
 
     async def _service_status_loop(self):
         """Refresh service status without creating a NiceGUI timer element."""
+        next_probe = time.monotonic() + 30.0
         try:
             while self._client_alive():
                 await asyncio.sleep(5.0)
@@ -496,6 +498,9 @@ class DanbooruSearchUI:
                     continue
                 try:
                     self._update_service_status()
+                    if time.monotonic() >= next_probe:
+                        next_probe = time.monotonic() + 30.0
+                        await probe_browser(self.client)
                 except RuntimeError:
                     # The page may be deleted between the connection check and render.
                     return

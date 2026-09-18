@@ -56,8 +56,10 @@ jobs:
           export GIT_LFS_SKIP_SMUDGE=1
           git clone https://oauth2:${MS_TOKEN}@www.modelscope.cn/studios/SAkizuki/DanbooruSearchOnline.git ms_repo
           
-          # 同步仓库代码及配置，同时保留 ModelScope 中的模型和数据文件
+          # 同步共享代码，保留 ModelScope 专用 Dockerfile、LFS 配置及模型数据
           rsync -av \
+            --exclude='/Dockerfile' \
+            --exclude='/.gitattributes' \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='ms_repo/' \

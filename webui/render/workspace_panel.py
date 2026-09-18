@@ -1,5 +1,6 @@
 """工作区工具栏和已选标签区域的基础视图。"""
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from nicegui import ui
@@ -11,6 +12,7 @@ from core.prompt_import import (
     pending_to_workspace_entry,
 )
 from core.workspace_insights import selected_tag_reason
+from core.ui_performance import measure
 from webui.helpers import format_selected_tag_label
 
 
@@ -201,77 +203,110 @@ def show_workspace_canonicalization(controller: Any, result: WorkspaceCanonicali
             ui.button('知道了', on_click=dialog.close).props('unelevated color=primary')
     dialog.open()
 
+@dataclass
+class _ChipView:
+    root: Any
+    label: Any
+    reason: Any
+    weight: Any
+    anima_hint: Any
+    signature: tuple = ()
+
+
+@dataclass
+class _SelectionView:
+    container: Any
+    empty: Any
+    groups: dict = field(default_factory=dict)
+    chips: dict[str, _ChipView] = field(default_factory=dict)
+
+
+@measure('selected_render')
 def render_selected_chips(controller: Any) -> None:
-    """按稳定 Tag Group 规则渲染；复制顺序仍使用原始选择顺序。"""
+    """复用标签节点，仅更新变化项；显示分组与复制顺序保持原有规则。"""
     if controller.selected_chips_container is None:
         return
     tags = controller._get_selected_tags()
     previous_tags = set(controller._rendered_selected_chip_tags)
-    controller.selected_chips_container.clear()
-    if not tags:
-        controller._rendered_selected_chip_tags.clear()
+    view = getattr(controller, '_selected_chips_view', None)
+    if view is None or view.container is not controller.selected_chips_container:
         with controller.selected_chips_container:
-            ui.label('暂无已选标签').classes('text-xs text-gray-400 italic p-2 self-center')
-        return
+            empty = ui.label('暂无已选标签').classes('text-xs text-gray-400 italic p-2 self-center')
+            view = _SelectionView(controller.selected_chips_container, empty)
+            for group_name in WORKSPACE_GROUP_ORDER:
+                with ui.element('div').classes('w-full px-1 py-1') as root:
+                    label = ui.label().classes('text-xs font-bold text-slate-500 mb-1')
+                    row = ui.row().classes('w-full gap-1 flex-wrap')
+                view.groups[group_name] = (root, label, row)
+        controller._selected_chips_view = view
 
     grouped: dict[str, list[str]] = {name: [] for name in WORKSPACE_GROUP_ORDER}
     for tag in tags:
         grouped[controller._workspace_group_for_tag(tag)].append(tag)
-
-    with controller.selected_chips_container:
-        step = 0.5 if controller.prompt_format == 'anima' else 0.1
-        for group_name in WORKSPACE_GROUP_ORDER:
-            group_tags = grouped[group_name]
-            if not group_tags:
-                continue
-            with ui.element('div').classes('w-full px-1 py-1'):
-                ui.label(f'{group_name} · {len(group_tags)}').classes(
-                    'text-xs font-bold text-slate-500 mb-1'
-                )
-                with ui.row().classes('w-full gap-1 flex-wrap'):
-                    for tag in group_tags:
-                        controller._render_selected_tag_chip(
-                            tag, step, animate=tag not in previous_tags,
-                        )
+    for tag in view.chips.keys() - set(tags):
+        view.chips.pop(tag).root.delete()
+    view.empty.set_visibility(not tags)
+    for group_name, group_tags in grouped.items():
+        root, label, row = view.groups[group_name]
+        root.set_visibility(bool(group_tags))
+        label.text = f'{group_name} · {len(group_tags)}'
+        for index, tag in enumerate(group_tags):
+            chip = view.chips.get(tag)
+            if chip is None:
+                with row:
+                    chip = render_selected_tag_chip(controller, tag, animate=tag not in previous_tags)
+                view.chips[tag] = chip
+            # 常规更新不移动其他节点；撤销、导入或分组改变时才调整顺序。
+            if chip.root.parent_slot is not row.default_slot or row.default_slot.children[index:index + 1] != [chip.root]:
+                chip.root.move(row, index)
+            _update_selected_chip(controller, tag, chip)
     controller._rendered_selected_chip_tags = set(tags)
 
-def render_selected_tag_chip(controller: Any, tag: str, step: float, *, animate: bool = False) -> None:
+
+def _update_selected_chip(controller: Any, tag: str, chip: _ChipView) -> None:
     w = controller.tag_weights.get(tag, 1.0)
-    extra_cls = 'boosted' if w > 1.0 else ('reduced' if w < 1.0 else '')
-    w_str = f'{w:.1f}'
     display_label = format_selected_tag_label(tag, controller._get_cn_name_for_tag(tag))
+    metadata = controller._pending_selection_meta.get(tag, {})
+    reason = selected_tag_reason(metadata.get('origin'), metadata.get('source'))
+    anima = controller.prompt_format == 'anima'
+    signature = (w, display_label, reason, anima)
+    if signature == chip.signature:
+        return
+    chip.signature = signature
+    chip.root.classes(remove='boosted reduced', add='boosted' if w > 1 else ('reduced' if w < 1 else ''))
+    chip.label.text = display_label
+    chip.reason.text = reason
+    chip.weight.text = f'{w:.1f}'
+    chip.weight.set_visibility(w != 1.0)
+    chip.anima_hint.set_visibility(anima)
+
+
+def render_selected_tag_chip(controller: Any, tag: str, step: float | None = None, *, animate: bool = False) -> _ChipView:
     motion_cls = ' motion-chip-enter' if animate else ''
-    with ui.element('div').classes(f'weight-chip{motion_cls} {extra_cls}'):
-        metadata = controller._pending_selection_meta.get(tag, {})
-        reason = selected_tag_reason(
-            metadata.get('origin'),
-            metadata.get('source'),
-        )
+    with ui.element('div').classes(f'weight-chip{motion_cls}') as root:
         with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
-            ui.label(reason).style('font-size:13px;')
+            reason = ui.label().style('font-size:13px;')
         with ui.element('button').classes('weight-btn').props(f'title="移除 {tag}"').on(
             'click', lambda t=tag: controller._remove_selected_tag(t)
         ):
             ui.html('&times;')
         with ui.element('button').classes('weight-btn').on(
-            'click', lambda t=tag, s=step: controller._adjust_weight(t, -s)
+            'click', lambda t=tag: controller._adjust_weight(t, -0.5 if controller.prompt_format == 'anima' else -0.1)
         ):
             ui.html('&minus;')
-        ui.label(display_label).style(
+        label = ui.label().style(
             'font-family:Consolas,Monaco,monospace;font-size:12px;'
             'color:var(--chip-text);max-width:240px;overflow:hidden;'
             'text-overflow:ellipsis;white-space:nowrap;'
         )
-        if w != 1.0:
-            ui.label(w_str).classes('weight-label').style(
-                'color:var(--boost-text);font-weight:bold;'
-            )
+        weight = ui.label().classes('weight-label').style('color:var(--boost-text);font-weight:bold;')
         plus_btn = ui.element('button').classes('weight-btn').on(
-            'click', lambda t=tag, s=step: controller._adjust_weight(t, +s)
+            'click', lambda t=tag: controller._adjust_weight(t, 0.5 if controller.prompt_format == 'anima' else 0.1)
         )
-        if controller.prompt_format == 'anima':
-            with plus_btn:
-                with ui.tooltip().props('content-class="bg-black text-white shadow-4"'):
-                    ui.html('Anima模型所需要的权重数值较大').style('font-size:12px;')
         with plus_btn:
+            with ui.tooltip().props('content-class="bg-black text-white shadow-4"') as anima_hint:
+                ui.html('Anima模型所需要的权重数值较大').style('font-size:12px;')
             ui.html('&plus;')
+    chip = _ChipView(root, label, reason, weight, anima_hint)
+    _update_selected_chip(controller, tag, chip)
+    return chip

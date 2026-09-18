@@ -10,6 +10,7 @@ from nicegui import app, ui
 
 from api_fastapi import app as api_app
 from core import counter, telemetry, traffic_attribution
+from core import ui_performance
 from core.engine import DanbooruTagger
 from mcp_server import mcp
 from platform_utils import get_host_port, is_cloud
@@ -51,6 +52,8 @@ register_main_page(
 if __name__ in {'__main__', '__mp_main__'}:
     host, port = get_host_port()
     app.add_middleware(NiceGUIPollingDisconnectGuard)
+    app.on_startup(ui_performance.start_monitor)
+    app.on_shutdown(ui_performance.stop_monitor)
 
     @app.on_startup
     def _warmup():

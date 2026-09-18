@@ -32,6 +32,7 @@ from safetensors import safe_open
 from sentence_transformers import SentenceTransformer
 
 from .models import SearchRequest, SearchResponse, TagResult
+from .ui_performance import measure, record as record_ui_timing
 from .tag_aliases import (
     TagAliasRecord,
     TagAliasSnapshotError,
@@ -811,19 +812,22 @@ class DanbooruTagger:
         artist_min_cooc: int = 3,
     ) -> dict[str, Any]:
         """Run a UI recommendation snapshot outside the semantic-search queue."""
+        queued_at = time.perf_counter()
         async with self._get_recommendation_sem():
-            return await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._selection_recommendations,
-                    selected_tags,
-                    show_nsfw,
-                    scopes,
-                    related_limit,
-                    artist_limit,
-                    artist_min_cooc,
-                ),
-                timeout=30.0,
-            )
+            record_ui_timing('recommendation_wait', (time.perf_counter() - queued_at) * 1000)
+            with measure('recommendation_compute'):
+                return await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._selection_recommendations,
+                        selected_tags,
+                        show_nsfw,
+                        scopes,
+                        related_limit,
+                        artist_limit,
+                        artist_min_cooc,
+                    ),
+                    timeout=30.0,
+                )
 
     @classmethod
     def get_load_snapshot(cls) -> dict[str, int]:
