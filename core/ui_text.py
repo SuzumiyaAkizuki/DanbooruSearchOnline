@@ -1,5 +1,7 @@
 from pathlib import Path
 from typing import Any
+import hashlib
+import json
 
 import yaml
 
@@ -10,6 +12,7 @@ REQUIRED_TEXT_PATHS = (
     ("sponsor", "toolchain_prompt"),
     ("help", "update_title"),
     ("help", "update_summary"),
+    ("help", "update_detail_label"),
     ("help", "update_markdown"),
     ("tutorial", "title"),
     ("tutorial", "subtitle"),
@@ -25,6 +28,13 @@ REQUIRED_TEXT_PATHS = (
     ("dialogs", "search_feedback_privacy"),
     ("dialogs", "translation_feedback_privacy"),
 )
+
+
+def announcement_version(ui_text: dict[str, Any]) -> str:
+    """Invalidate dismissal only when the announcement or its details change."""
+    fields = ("update_title", "update_summary", "update_detail_label", "update_markdown")
+    content = json.dumps([ui_text["help"][key] for key in fields], ensure_ascii=False)
+    return "content-" + hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def load_ui_text(path: Path = DEFAULT_UI_TEXT_PATH) -> dict[str, Any]:

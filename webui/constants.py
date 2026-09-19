@@ -2,7 +2,7 @@
 
 import os
 
-from core.ui_text import load_ui_text
+from core.ui_text import announcement_version, load_ui_text
 from core.workspace import (
     ARTIST_SELECTION_ORIGINS,
     FAVORITES_STORAGE_KEY,
@@ -29,7 +29,6 @@ OPTIONAL_COLS = {
 
 CONFIG_LS_KEY = 'danbooru_search_config'
 CONFIG_VERSION = 7
-ANNOUNCEMENT_VERSION = 'rest-attribution-2026-09'
 LOCAL_STORAGE_READ_CHUNK_CHARS = 200_000
 LOCAL_STORAGE_MAX_READ_CHARS = 4_000_000
 HISTORY_PRE_COMPACTION_BACKUP_KEY = f'{HISTORY_STORAGE_KEY}_pre_compaction_backup'
@@ -42,6 +41,7 @@ SPONSOR_TOOLCHAIN_URL = 'http://intro.sakizuki.site/index.html'
 SPONSOR_NOTICE_TEXT = '喜欢的话，可以请作者喝杯咖啡'
 SPONSOR_TITLE = '谢谢你愿意支持'
 UI_TEXT = load_ui_text()
+ANNOUNCEMENT_VERSION = announcement_version(UI_TEXT)
 
 
 def resolve_group_render_limit(default: int = 80) -> int:

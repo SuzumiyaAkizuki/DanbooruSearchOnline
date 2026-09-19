@@ -18,6 +18,7 @@
     $("dashboard").hidden = true; $("account").hidden = true; $("login").hidden = false;
     for (const id of ["ui-count","rest-count","mcp-count","ui-detail","rest-detail","mcp-detail","ui-avg","ui-p95","window-count","window-errors","window-status","window-range","latency-note","since","updated","username"]) $(id).textContent = "—";
     for (const id of ["endpoints","latency-chart","trend-chart"]) $(id).replaceChildren();
+    for (const id of ["history-state","history-insight","history-stats","history-chart","history-note","quality-stats","rest-insight","window-slow","sources","clients","pressure-stats"]) $(id).replaceChildren();
   }
   async function session() {
     const response = await request("/admin/api/session", {cache:"no-store", credentials:"same-origin"});
@@ -51,8 +52,9 @@
     const top = 18, plot = height - bottom - top;
     const max = Math.max(...items.map((item) => item.count || 0), 1);
     const step = (width - left - 10) / items.length;
-    const svg = svgNode("svg", {viewBox:`0 0 ${width} ${height}`, role:"img", "aria-label":trend ? "REST 每小时请求趋势" : "UI 搜索延迟分布"});
-    svg.append(svgNode("title", {}, trend ? "每小时请求数，空白时段没有可用记录" : "每个延迟区间的样本数"));
+    const chartTitle = id === "history-chart" ? "UI 区间平均延迟（毫秒）" : trend ? "REST 每小时请求趋势" : "UI 搜索延迟分布";
+    const svg = svgNode("svg", {viewBox:`0 0 ${width} ${height}`, role:"img", "aria-label":chartTitle});
+    svg.append(svgNode("title", {}, chartTitle));
     [0, .5, 1].forEach((ratio) => {
       const y = top + plot * (1 - ratio);
       svg.append(svgNode("line", {x1:left,y1:y,x2:width-10,y2:y,class:"gridline"}));
@@ -61,8 +63,17 @@
     items.forEach((item,i) => {
       const x = left + i * step, barHeight = plot * (item.count || 0) / max;
       if (item.count != null) {
-        const rect = svgNode("rect", {x:x+1,y:top+plot-barHeight,width:Math.max(1,step-2),height:barHeight,rx:1,class:trend?"trend-bar":"latency-bar"});
-        rect.append(svgNode("title", {}, `${item.label}: ${number(item.count)} 次`)); svg.append(rect);
+        if (trend && item.endpoints) {
+          let used = 0;
+          for (const endpoint of ["search","related","artists","health"]) {
+            const count = item.endpoints[endpoint] || 0, h = plot * count / max;
+            const rect = svgNode("rect", {x:x+1,y:top+plot-used-h,width:Math.max(.5,step-1),height:h,class:`endpoint-${endpoint}`});
+            rect.append(svgNode("title", {}, `${item.label} · ${endpoint}: ${number(count)} 次`));svg.append(rect);used+=h;
+          }
+        } else {
+          const rect = svgNode("rect", {x:x+1,y:top+plot-barHeight,width:Math.max(.5,step-2),height:barHeight,rx:1,class:trend?"trend-bar":"latency-bar"});
+          rect.append(svgNode("title", {}, item.tooltip || `${item.label}: ${number(item.count)} 次`)); svg.append(rect);
+        }
       } else svg.append(svgNode("line", {x1:x+step/2,y1:top+plot-3,x2:x+step/2,y2:top+plot,class:"missing"}));
       const labelCount = width < 450 ? 3 : trend ? 5 : 6;
       if (i % Math.max(1,Math.ceil(items.length / labelCount)) === 0) svg.append(svgNode("text", {x:x+2,y:height-8}, item.short || item.label));
@@ -71,11 +82,52 @@
   }
   function trend() {
     if (!snapshot) return;
-    const hours = Number($("range").value);
-    const cutoff = new Date(snapshot.generated_at).getTime() - (hours - 1) * 3600000;
-    const floor = Math.floor(cutoff / 3600000) * 3600000;
-    const items = snapshot.rest.hours.filter((item) => new Date(`${item.hour}:00+08:00`).getTime() >= floor).map((item) => ({count:item.count,label:item.hour.replace("T"," "),short:item.hour.slice(5,10) + " " + item.hour.slice(11,13)+"时"}));
+    const rest = snapshot.rest_windows[$("range").value];
+    const items = rest.hours.map((item) => ({count:item.count,endpoints:item.endpoints,label:item.hour.replace("T"," "),short:item.hour.slice(5,10) + " " + item.hour.slice(11,13)+"时"}));
     chart("trend-chart", items, true);
+  }
+  const percent = (value) => value == null ? "—" : `${value}%`;
+  function signals(id, items) {
+    const root = $(id);root.replaceChildren();
+    items.forEach(([label,value]) => {const box=document.createElement("div"),caption=document.createElement("span"),amount=document.createElement("strong");caption.textContent=label;amount.textContent=value;box.append(caption,amount);root.append(box);});
+  }
+  function ranks(id, items, total) {
+    const root=$(id);root.replaceChildren();
+    if(!items.length){root.textContent="暂无观测记录";return;}
+    items.forEach((item) => {const row=document.createElement("div"),label=document.createElement("span"),value=document.createElement("strong"),meter=document.createElement("meter");label.textContent=item.label;value.textContent=`${number(item.count)} · ${total ? (100*item.count/total).toFixed(1) : 0}%`;meter.min=0;meter.max=total || 1;meter.value=item.count;meter.setAttribute("aria-label",`${item.label} 请求占比`);row.append(label,value,meter);root.append(row);});
+  }
+  function renderHistory() {
+    const h=snapshot.history;
+    $("history-state").textContent=h.stale?"历史已过期":`${h.sample_count} 个快照`;
+    if(!h.latest){
+      $("history-stats").replaceChildren();
+      $("history-chart").replaceChildren();
+      $("history-insight").textContent=h.status==="not_configured"?"尚未配置历史快照。累计统计及 REST 实时观测仍可使用。":"历史快照暂不可用，或不足两个有效快照。";
+      $("history-note").textContent="如需 UI / MCP 近期变化，请为部署配置 ADMIN_TELEMETRY_HISTORY_PATH，指向 telemetry_history.json；更新文件后下次刷新读取。";
+      return;
+    }
+    const latest=h.latest;
+    $("history-insight").textContent=`最近区间 UI 平均延迟 ${duration(latest.ui_average_ms)}，累计平均 ${duration(snapshot.ui_latency.average_ms)}。${h.latency_ratio ? `相较上一采样区间为 ${h.latency_ratio.toFixed(2)} 倍。` : ""}${h.stale ? "历史文件已超过 36 小时未更新，不能代表当前表现。" : ""}`;
+    signals("history-stats",[["区间 UI 搜索",number(latest.ui)],["区间 REST 调用",number(latest.rest)],["区间 MCP 调用",number(latest.mcp)],["区间冷启动失败",number(latest.cold_failures)]]);
+    chart("history-chart",h.intervals.map((item)=>({count:item.ui_average_ms,label:date(item.end),short:date(item.end),tooltip:`${date(item.start)} → ${date(item.end)}（${item.hours} 小时）UI 平均延迟 ${duration(item.ui_average_ms)}`})),true);
+    $("history-note").textContent=`图表纵轴：UI 区间平均延迟（毫秒）。最近区间 ${date(latest.start)} — ${date(latest.end)}，持续 ${latest.hours} 小时；区间不等同自然日，缺少分桶的历史不能计算区间 P95。${h.skipped_intervals ? `已跳过 ${h.skipped_intervals} 个计数回退或不可比区间。` : ""}`;
+  }
+  function renderRest() {
+    if(!snapshot)return;
+    const rest=snapshot.rest_windows[$("range").value], label=$("range").selectedOptions[0].textContent;
+    document.querySelectorAll(".window-label").forEach((node)=>{node.textContent=label;});
+    $("window-count").textContent=number(rest.count);
+    $("window-errors").textContent=`${number(rest.statuses["4xx"])} / ${number(rest.statuses["5xx"])}`;
+    $("window-slow").textContent=`${number(rest.slow_count)} · ${percent(rest.slow_percent)}`;
+    $("window-status").textContent=["2xx","3xx","4xx","5xx"].map((key)=>`${key} ${number(rest.statuses[key])}`).join(" / ");
+    $("window-range").textContent=rest.first_hour?`记录 ${rest.first_hour.replace("T"," ")} — ${rest.last_hour.replace("T"," ")} · ${rest.observed_hours} / ${rest.requested_hours} 个小时有记录` : "当前窗口没有 REST 观测记录。";
+    $("rest-insight").textContent=rest.count?`${label}：${percent(rest.slow_percent)} 的已记录请求耗时超过 5 秒；HTTP 在途峰值 ${number(rest.peak_in_flight)}。4xx ${number(rest.statuses["4xx"])} 次与 5xx ${number(rest.statuses["5xx"])} 次分别统计，不将全部错误视为服务器故障。`:"当前窗口没有记录；时间空白不等于零流量。";
+    const tbody=$("endpoints");tbody.replaceChildren();
+    rest.endpoints.forEach((row)=>{const tr=document.createElement("tr");[`/api/${row.endpoint}${row.endpoint==="health"?"（健康检查）":""}`,number(row.count),duration(row.average_ms),p95(row),percent(row.slow_percent),number(row.client_errors),number(row.server_errors)].forEach((value)=>{const td=document.createElement("td");td.textContent=value;tr.append(td);});tbody.append(tr);});
+    if(!rest.endpoints.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=7;td.textContent="暂无接口观测数据";tr.append(td);tbody.append(tr);}
+    ranks("sources",rest.sources,rest.count);ranks("clients",rest.clients,rest.count);
+    signals("pressure-stats",[["HTTP 在途峰值",rest.peak_in_flight == null?"—":number(rest.peak_in_flight)],["分组分钟请求峰值",rest.peak_per_minute == null?"—":number(rest.peak_per_minute)],["有记录的小时",`${rest.observed_hours} / ${rest.requested_hours}`]]);
+    trend();
   }
   function render(data) {
     snapshot = data;
@@ -90,20 +142,11 @@
     $("mcp-detail").textContent = `标签搜索 ${number(c.mcp_search_tags)} · 相关标签 ${number(c.mcp_get_related_tags)}`;
     $("ui-avg").textContent = duration(data.ui_latency.average_ms);
     $("ui-p95").textContent = p95(data.ui_latency);
-    $("latency-note").textContent = `${number(data.ui_latency.count)} 个延迟样本。分桶分别计数，P95 为区间估算；超过末档时显示 > 120 s。`;
+    $("latency-note").textContent = `${number(data.ui_latency.count)} 个延迟样本。${data.ui_latency.distribution_available ? "分桶分别计数，P95 为区间估算；超过末档时显示 > 120 s。" : "当前数据未提供完整分桶，不能还原分布或估算 P95。"}`;
     chart("latency-chart", data.ui_latency.buckets);
-    const rest = data.rest;
-    $("window-count").textContent = number(rest.count);
-    $("window-errors").textContent = rest.error_percent == null ? "—" : `${rest.error_percent}%`;
-    $("window-status").textContent = ["2xx","3xx","4xx","5xx"].map((key) => `${key} ${number(rest.statuses[key])}`).join(" / ");
-    $("window-range").textContent = rest.first_hour ? `记录覆盖 ${rest.first_hour.replace("T"," ")} — ${rest.last_hour.replace("T"," ")}（北京时间）` : "目前尚无 REST 观测记录。";
-    const tbody = $("endpoints"); tbody.replaceChildren();
-    rest.endpoints.forEach((row) => {
-      const tr = document.createElement("tr");
-      [`/api/${row.endpoint}${row.endpoint === "health" ? "（健康检查）" : ""}`,number(row.count),duration(row.average_ms),p95(row),number(row.errors)].forEach((value) => {const td=document.createElement("td"); td.textContent=value; tr.append(td);}); tbody.append(tr);
-    });
-    if (!rest.endpoints.length) {const tr=document.createElement("tr"),td=document.createElement("td"); td.colSpan=5;td.textContent="暂无接口观测数据";tr.append(td);tbody.append(tr);}
-    trend();
+    const q=data.quality;
+    signals("quality-stats",[["发生选词的搜索会话",percent(q.selection_percent)],["复制操作 / 搜索",percent(q.copy_events_per_search)],["零结果率",percent(q.zero_percent)],["60 秒内重复搜索",percent(q.repeat_percent)],["冷启动成功 / 尝试",`${number(q.cold_successes)} / ${number(q.cold_attempts)}`],["冷启动失败",number(q.cold_failures)]]);
+    renderHistory();renderRest();
   }
   async function refresh() {
     if (loading || document.hidden) return;
@@ -119,7 +162,7 @@
     finally {loading=false;$("refresh").disabled=false;}
   }
   $("refresh").addEventListener("click", refresh);
-  $("range").addEventListener("change", trend);
+  $("range").addEventListener("change", renderRest);
   $("logout").addEventListener("click", async () => {
     $("logout").disabled=true;
     try {
@@ -146,6 +189,6 @@
   document.addEventListener("visibilitychange", () => {if(!document.hidden) refresh();});
   setInterval(refresh, 30000);
   let resizeTimer;
-  window.addEventListener("resize", () => {clearTimeout(resizeTimer);resizeTimer=setTimeout(() => {if(snapshot && !keysPage) {chart("latency-chart",snapshot.ui_latency.buckets);trend();}},100);});
+  window.addEventListener("resize", () => {clearTimeout(resizeTimer);resizeTimer=setTimeout(() => {if(snapshot && !keysPage) {chart("latency-chart",snapshot.ui_latency.buckets);renderHistory();trend();}},100);});
   refresh();
 })();

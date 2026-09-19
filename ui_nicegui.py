@@ -7,6 +7,7 @@ import traceback
 
 from fastapi.responses import PlainTextResponse
 from nicegui import app, ui
+from nicegui.client import Client
 
 from api_fastapi import app as api_app
 from core import counter, telemetry, traffic_attribution
@@ -54,6 +55,14 @@ if __name__ in {'__main__', '__mp_main__'}:
     host, port = get_host_port()
     app.include_router(create_admin_router())
     app.add_middleware(NiceGUIPollingDisconnectGuard)
+
+    def ui_resource_counts():
+        return {
+            'ui_clients': len(Client.instances),
+            'ui_elements': sum(len(client.elements) for client in Client.instances.values()),
+        }
+
+    ui_performance.set_ui_snapshot_provider(ui_resource_counts)
     app.on_startup(ui_performance.start_monitor)
     app.on_shutdown(ui_performance.stop_monitor)
 

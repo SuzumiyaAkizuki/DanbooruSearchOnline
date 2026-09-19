@@ -742,7 +742,7 @@ def get_snapshot() -> dict[str, Any]:
 
 
 def get_admin_snapshot() -> dict[str, Any]:
-    """Copy only overview fields on the event loop; no I/O or source identities.
+    """Copy existing safe aggregate fields on the event loop; no I/O or new tracking.
 
     The detached snapshot can be aggregated in a worker without racing mutable
     request counters. Pending, sub-threshold records remain excluded.
@@ -750,7 +750,10 @@ def get_admin_snapshot() -> dict[str, Any]:
     return {"records": [
         {"day": key[0], "hour": key[1], "endpoint": key[5],
          "status_class": key[6], "latency_bucket": key[8],
-         "count": metric["count"], "sum_ms": metric["sum_ms"]}
+         "count": metric["count"], "sum_ms": metric["sum_ms"],
+         "source_kind": key[2], "source_name": key[3], "source_site": key[4],
+         "client_family": key[7], "peak_in_flight": metric.get("peak_in_flight", 0),
+         "peak_per_minute": metric.get("peak_per_minute", 0)}
         for key, metric in _memory_records.items()
     ]}
 

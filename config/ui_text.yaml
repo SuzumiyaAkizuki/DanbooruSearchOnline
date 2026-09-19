@@ -5,44 +5,41 @@ sponsor:
     如果你想继续折腾，也可以看看基于这个小工具的更多工具链
 
 help:
-  update_title: 最近更新：REST API 来源声明
+  update_title: 即将上线：API Key 与调用限额
+  update_detail_label: 查看详情
   update_summary: >-
-    近期 REST API 调用量明显增长。观察期内未声明来源不影响使用；未来未声明请求可能受到限流等流量治理措施影响。
+    API 即将启用 Key 申请与限流：每把 Key 默认每天 3,000 点，无 Key 调用共享每天 15,000 点试用池。网页搜索和MCP继续无需登录使用。将于10月初生效。
   update_markdown: |-
-    ### REST API 来源声明
+    ### API Key 与调用限额即将上线
 
-    为便于容量评估、服务优化和识别公开集成，建议 REST API 接入方主动声明客户端名称与公开服务地址：
+    为保障大家的搜索体验，我们将为 API 调用引入 API Key 和使用限额。**目前申请入口尚未开放，以下额度与限流政策尚未生效；申请入口会另行公告。** 网页上的普通标签搜索继续无需登录，也无需申请 API Key。
+    调用MCP接口也暂时无需申请Key。
 
-    ```http
-    X-DanbooruSearch-Client: example-service/1.0
-    X-DanbooruSearch-Site: https://example.com
-    ```
+    **生效时间？**
+    
+    将于2026年10月01日 00:00（北京时间）左右正式生效。
 
-    完整的搜索请求示例：
+    **如何申请？**
 
-    ```bash
-    curl --request POST \
-      --url 'https://sakizuki-danboorusearch.hf.space/api/search' \
-      --header 'Content-Type: application/json' \
-      --header 'X-DanbooruSearch-Client: example-service/1.0' \
-      --header 'X-DanbooruSearch-Site: https://example.com' \
-      --data '{
-        "query": "白色水手服的女孩",
-        "top_k": 5,
-        "limit": 80,
-        "popularity_weight": 0.15,
-        "show_nsfw": false,
-        "use_segmentation": true,
-        "target_layers": ["英文", "中文扩展词", "释义", "中文核心词", "artist"],
-        "target_categories": ["General", "Character", "Copyright"],
-        "group_mode": "off",
-        "max_per_group": 2
-      }'
-    ```
+    - 申请入口开放后，使用 Hugging Face 账号登录，填写用途和预计每日用量即可提交。ModelScope因平台资源受限，暂无法提供 Key 申请；请使用 Hugging Face 账号申请。
+    - 第一把 Key 申请不超过默认 **3,000 点/日** 时可自动批准；申请第二把及后续 Key，或首把 Key 需要超过默认额度时，请填写申请原因，等待人工审核。
+    - 无统一收费计划，申请 Key 仅用于区分调用者、统计使用量和保护服务容量。
 
-    - 两个请求头在当前观察期内均为可选项；缺失、无效或无法确认时，**不影响 API 正常响应**。
-    - 观察期结束后，未声明请求 **未来可能** 被纳入限流等流量治理措施；具体规则如需实施，将另行公布。
-    - 归因仅记录小时级、服务级聚合信息，不保存 IP、查询内容、请求体、Cookie、Authorization、完整 User-Agent 或完整 Referer。
+    **调用如何计量？**
+
+    | 调用内容 | 每次消耗 |
+    | --- | --- |
+    | 标签搜索（/search） | 3 点 |
+    | 关联推荐（/related） | 2 点 |
+    | 画师推荐（/artists） | 1 点 |
+    | 健康检查（/health） | 0 点 |
+
+    - **有 Key：**每把 Key 默认每天 3,000 点，相当于 1,000 次纯标签搜索；混合调用按上表累加。每把 Key 默认每分钟 60 点，最多同时处理 1 个业务请求。同一账号的不同 Key 各自独立计算日额度、分钟额度和并发上限。
+    - **无 Key：**所有调用者共享每天 **15,000 点**的试用池，同时共享每分钟 30 点、最多 1 个业务请求的并发限制；公共池耗尽后，无 Key 调用需等待重置，建议长期集成申请自己的 Key。
+    - 每日额度在**北京时间 00:00**重置，剩余额度不结转。超出额度、短时速率或并发限制时，请稍后重试；上线后这类请求将返回 429。
+    - 不同 Key 的额度独立，但仍受服务整体容量保护，持有 Key 不保证随时能以最高速率调用。健康检查虽不扣点，也请避免频繁轮询。
+
+    即日起，API 响应将提前附带政策提醒。
 
 tutorial:
   title: 使用教程

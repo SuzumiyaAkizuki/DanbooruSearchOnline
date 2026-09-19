@@ -27,11 +27,15 @@ FastAPI 适配层（可选）。
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 from typing import Any
 from typing import Literal
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -48,6 +52,16 @@ import core.traffic_attribution as traffic_attribution
 LayerName = Literal['英文', '中文扩展词', '释义', '中文核心词', 'artist']
 CategoryName = Literal['General', 'Artist', 'Copyright', 'Character', 'Meta']
 GroupMode = Literal['off', 'expand', 'diverse']
+
+API_KEY_NOTICE = (
+    "即将上线 API Key 与限流政策，当前尚未生效，申请入口及生效时间将另行公告。"
+    "上线后每把 Key 默认 3000 点/日、60 点/分钟、并发 1，各 Key 独立；"
+    "无 Key 调用共享 15000 点/日、30 点/分钟、并发 1 的试用池。"
+    "search/related/artists/health 每次分别消耗 3/2/1/0 点，每日北京时间 00:00 重置。"
+    "入口开放后使用 Hugging Face 账号登录申请；首把且不超默认日额度可自动批准，"
+    "第二把及后续 Key、首把超默认额度或后续超默认额度增额需说明原因并人工审核。"
+    "超限请求届时将返回 429，各 Key 仍受服务整体容量保护。网页搜索无需申请 Key。"
+)
 
 
 class SearchIn(BaseModel):
@@ -116,6 +130,7 @@ class RelatedTagOut(BaseModel):
 
 
 class SearchOut(BaseModel):
+    api_key_notice: str = Field(default=API_KEY_NOTICE, description="尚未生效的 API Key 与限流政策预告")
     tags_all: str
     tags_sfw: str
     results: list[TagOut]
@@ -158,12 +173,13 @@ async def _correct_tags(tagger: DanbooruTagger, tags: list[str]) -> tuple[list[s
 
 def _with_corrections(results: list[dict[str, Any]], corrections: dict[str, str]) -> dict[str, Any]:
     if not corrections:
-        return {"results": results}
+        return {"results": results, "api_key_notice": API_KEY_NOTICE}
     correction_notes = [f"{bad} → {good}" for bad, good in corrections.items()]
     return {
         "correction_note": "标签拼写错误，已经纠错: " + ", ".join(correction_notes),
         "corrections": corrections,
         "results": results,
+        "api_key_notice": API_KEY_NOTICE,
     }
 
 
@@ -180,6 +196,22 @@ app = FastAPI(
     version="1.0.0",
     docs_url=None,
 )
+
+
+async def _policy_notice_error(request: Request, exc):
+    # Preserve FastAPI's error status, detail and headers; only append public copy.
+    handler = request_validation_exception_handler if isinstance(exc, RequestValidationError) else http_exception_handler
+    response = await handler(request, exc)
+    if response.body:
+        payload = json.loads(response.body)
+        payload["api_key_notice"] = API_KEY_NOTICE
+        response.body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
+        response.headers["content-length"] = str(len(response.body))
+    return response
+
+
+app.add_exception_handler(StarletteHTTPException, _policy_notice_error)
+app.add_exception_handler(RequestValidationError, _policy_notice_error)
 
 
 app.mount(
@@ -318,6 +350,7 @@ async def related(body: RelatedIn) -> dict[str, Any]:
         return {
             "error": "所有传入的标签均不存在于标签表中",
             "invalid_tags": invalid_tags,
+            "api_key_notice": API_KEY_NOTICE,
         }
     results = await tagger.get_related_async(
         corrected_tags,
@@ -357,13 +390,14 @@ async def artists(body: ArtistIn) -> dict[str, Any]:
     traffic_attribution.note_safe_parameters(limit=body.limit, min_cooc=body.min_cooc)
     tagger = await DanbooruTagger.get_instance()
     if not body.tags:
-        return {"error": "tags 列表不能为空"}
+        return {"error": "tags 列表不能为空", "api_key_notice": API_KEY_NOTICE}
 
     corrected_tags, invalid_tags, corrections = await _correct_tags(tagger, body.tags)
     if not corrected_tags:
         return {
             "error": "所有传入的标签均不存在于标签表中",
             "invalid_tags": invalid_tags,
+            "api_key_notice": API_KEY_NOTICE,
         }
 
     results = await tagger.search_artists_by_tags_async(
@@ -391,4 +425,4 @@ async def artists(body: ArtistIn) -> dict[str, Any]:
 @app.get("/health")
 async def health():
     tagger = await DanbooruTagger.get_instance()
-    return {"status": "ok", "loaded": tagger.is_loaded}
+    return {"status": "ok", "loaded": tagger.is_loaded, "api_key_notice": API_KEY_NOTICE}

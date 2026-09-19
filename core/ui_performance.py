@@ -7,6 +7,7 @@ import logging
 import math
 import os
 from collections import deque
+from collections.abc import Callable
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -21,6 +22,7 @@ METRICS = frozenset({
     'selected_render', 'history_render', 'favorites_render',
     'browser_roundtrip', 'event_loop_lag',
     'recommendation_wait', 'recommendation_compute',
+    'related_render', 'artist_render', 'group_render', 'group_page_render',
 })
 _samples: dict[str, dict] = {}
 _probe_failures = 0
@@ -34,6 +36,23 @@ _gc_lock = RLock()
 _gc_started: dict[int, float] = {}
 _gc_samples: dict[int, dict] = {}
 _runtime_started: tuple[float, float] | None = None
+_ui_snapshot_provider: Callable[[], dict] | None = None
+
+
+def set_ui_snapshot_provider(provider: Callable[[], dict]) -> None:
+    """UI 入口注册计数函数；采样模块不导入 UI 或保留页面对象。"""
+    global _ui_snapshot_provider
+    _ui_snapshot_provider = provider
+
+
+def _read_rss_bytes() -> int | None:
+    """Linux 当前驻留内存；不可用时省略，不能用峰值冒充当前值。"""
+    try:
+        with open('/proc/self/statm', encoding='ascii') as source:
+            pages = int(source.read(256).split()[1])
+        return pages * os.sysconf('SC_PAGE_SIZE')
+    except (OSError, ValueError, IndexError, AttributeError):
+        return None
 
 
 def _gc_callback(phase: str, info: dict) -> None:
@@ -51,11 +70,14 @@ def _gc_callback(phase: str, info: dict) -> None:
                 duration = max(0.0, now - started) * 1000
                 sample = _gc_samples.setdefault(generation, {
                     'count': 0, 'sum_ms': 0.0, 'max_ms': 0.0, 'over_200ms': 0,
+                    'collected': 0, 'uncollectable': 0,
                 })
                 sample['count'] += 1
                 sample['sum_ms'] += duration
                 sample['max_ms'] = max(sample['max_ms'], duration)
                 sample['over_200ms'] += duration > 200
+                sample['collected'] += info.get('collected', 0)
+                sample['uncollectable'] += info.get('uncollectable', 0)
 
 
 def _summarize(sample: dict) -> dict:
@@ -77,13 +99,26 @@ def _take_runtime() -> dict | None:
     _runtime_started = (now, cpu)
     with _gc_lock:
         samples, _gc_samples = _gc_samples, {}
-    return {
+    runtime = {
         # 100% 表示消耗一个逻辑核；8 核满载可接近 800%，不是整机占用率。
         'process_cpu_percent': round(100 * used_cpu / wall, 1) if wall else 0.0,
         'wall_ms': round(wall * 1000, 1),
         'logical_cpus': os.cpu_count() or 1,
-        'gc': {str(gen): _summarize(sample) for gen, sample in sorted(samples.items())},
+        'gc': {str(gen): _summarize(sample) | {
+            'collected': sample['collected'], 'uncollectable': sample['uncollectable'],
+        } for gen, sample in sorted(samples.items())},
     }
+    rss = _read_rss_bytes()
+    if rss is not None:
+        runtime['rss_bytes'] = rss
+    if _ui_snapshot_provider is not None:
+        try:
+            values = _ui_snapshot_provider()
+            runtime.update({key: values[key] for key in ('ui_clients', 'ui_elements')
+                            if type(values.get(key)) is int and values[key] >= 0})
+        except Exception:
+            pass  # 页面计数不可用不影响其余采样。
+    return runtime
 
 
 def record(name: str, duration_ms: float) -> None:
@@ -199,7 +234,18 @@ def _parse_runtime(runtime: dict) -> dict:
             if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
                 raise ValueError('invalid GC duration')
         clean_gc[generation] = {key: sample[key] for key in ('count', 'avg_ms', 'max_ms', 'over_200ms')}
-    return {key: runtime[key] for key in ('process_cpu_percent', 'wall_ms', 'logical_cpus')} | {'gc': clean_gc}
+        for key in ('collected', 'uncollectable'):
+            if key in sample:
+                if type(sample[key]) is not int or sample[key] < 0:
+                    raise ValueError('invalid GC object counts')
+                clean_gc[generation][key] = sample[key]
+    result = {key: runtime[key] for key in ('process_cpu_percent', 'wall_ms', 'logical_cpus')} | {'gc': clean_gc}
+    for key in ('rss_bytes', 'ui_clients', 'ui_elements'):
+        if key in runtime:
+            if type(runtime[key]) is not int or runtime[key] < 0:
+                raise ValueError('invalid resource counts')
+            result[key] = runtime[key]
+    return result
 
 
 def _write_snapshot(snapshot: dict) -> None:

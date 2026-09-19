@@ -96,6 +96,8 @@ from webui.render.recommendations import (
     render_artist_page,
     render_artist_recommendations,
     render_group_expansion,
+    render_group_page,
+    clear_group_expansion,
     render_related_list,
     render_related_page,
 )
@@ -547,7 +549,7 @@ class DanbooruSearchUI:
         confirm_delete_all_personal_data(self, storage_keys)
 
     def _build_release_announcement(self):
-        build_release_announcement(self)
+        build_release_announcement(self, ui_text=UI_TEXT)
 
     def _dismiss_release_announcement(self):
         self.dismissed_announcement_version = _ANNOUNCEMENT_VERSION
@@ -1485,7 +1487,7 @@ class DanbooruSearchUI:
         self._render_artist_rec([], {})
         # 清空 Group 同类扩展
         if self.group_expansion_container is not None:
-            self.group_expansion_container.clear()
+            clear_group_expansion(self)
             with self.group_expansion_container:
                 ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
         self._save_staged_tags()
@@ -1946,7 +1948,7 @@ class DanbooruSearchUI:
             ui.notify('已触发同类标签更新', type='info', timeout=1500)
         else:
             if self.group_expansion_container is not None:
-                self.group_expansion_container.clear()
+                clear_group_expansion(self)
                 with self.group_expansion_container:
                     ui.label('请先搜索并勾选标签…').classes('text-sm text-gray-400 italic p-4')
             ui.notify('暂未选中标签', type='info', timeout=1500)
@@ -2036,7 +2038,7 @@ class DanbooruSearchUI:
                             result['groups'], selected_tags, show_nsfw,
                         )
                     elif self.group_expansion_container is not None:
-                        self.group_expansion_container.clear()
+                        clear_group_expansion(self)
                         with self.group_expansion_container:
                             ui.label('请先搜索并勾选标签…').classes(
                                 'text-sm text-gray-400 italic p-4'
@@ -2144,7 +2146,13 @@ class DanbooruSearchUI:
         selected_tags: list[str],
         show_nsfw: bool,
     ):
+        view = getattr(self, '_group_views', {}).get(group_name)
+        generation = self._recommendation_generation
         await self._capture_group_scroll_positions(anchor_bottom=True)
+        if (not self._client_alive() or generation != self._recommendation_generation
+                or view is None or self._group_views.get(group_name) is not view):
+            return
+        total = len(view.info['tags'])
         current = self._group_render_limits.get(group_name, GROUP_RENDER_TAG_LIMIT)
         self._group_render_limits[group_name] = _next_group_render_limit(
             current,
@@ -2152,7 +2160,8 @@ class DanbooruSearchUI:
             GROUP_RENDER_TAG_LIMIT,
         )
         self._group_expanded_names.add(group_name)
-        self._render_group_expansion(group_data, selected_tags, show_nsfw)
+        render_group_page(self, group_name)
+        self._restore_group_scroll_positions()
 
     # ── 表格列动态更新 ──────────────────────────────────────────────────
 

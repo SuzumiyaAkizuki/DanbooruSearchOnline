@@ -385,7 +385,7 @@ def render_service_status(controller: Any, status: dict) -> None:
             ui.label(' · '.join(parts)).classes('font-medium')
 
 
-def build_release_announcement(controller: Any) -> None:
+def build_release_announcement(controller: Any, *, ui_text: dict) -> None:
     controller.announcement_banner = ui.element('div').classes(
         'w-full release-notice section-surface px-3 py-2'
     )
@@ -395,11 +395,10 @@ def build_release_announcement(controller: Any) -> None:
                 'release-notice-icon'
             )
             ui.label(
-                '近期 REST API 调用量明显增长。建议接入方声明 X-DanbooruSearch-Client 与 '
-                'X-DanbooruSearch-Site；观察期内未声明不影响使用，未来可能受到限流。'
+                ui_text['help']['update_summary']
             ).classes('release-notice-copy')
             ui.button(
-                '查看详情',
+                ui_text['help']['update_detail_label'],
             ).on('click', js_handler=controller.help_dialog.browser_action(True)).props('outline dense no-caps').classes(
                 'release-notice-detail'
             )

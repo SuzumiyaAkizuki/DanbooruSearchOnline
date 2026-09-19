@@ -1,6 +1,9 @@
 """推荐区域的 NiceGUI 容器与分页控件渲染。"""
 
 from typing import Any
+from types import SimpleNamespace
+
+from core.ui_performance import measure
 
 from nicegui import ui
 
@@ -16,18 +19,25 @@ from core.workspace_insights import (
     tag_group_candidate_reason,
 )
 from webui.helpers import (
-    group_names_key,
     group_scroll_dom_id,
     limit_group_render_tags,
-    should_group_start_expanded,
 )
 from webui.recommendations import page_count, page_items
 
 
+@measure('related_render')
 def render_related_list(controller: Any, related: list, show_nsfw: bool) -> None:
     """保存关联推荐快照，构建分页控件并渲染第一页。"""
     if controller.related_list_container is None or controller.related_pagination is None:
         return
+    results = [item for item in related if not (item.nsfw == '1' and not show_nsfw)]
+    signature = tuple((r.tag, r.cn_name, r.category, r.nsfw, r.cooc_count,
+                       r.cooc_score, tuple(r.sources), controller._lookup_tag_wiki(r.tag)) for r in results)
+    if (getattr(controller, '_related_signature', None) == signature
+            and controller.related_list_container.default_slot.children):
+        _sync_checks(controller, controller._related_checkboxes)
+        return
+    controller._related_signature = None
     controller.related_list_container.clear()
     controller.related_pagination.clear()
     controller._related_checkboxes.clear()
@@ -35,10 +45,7 @@ def render_related_list(controller: Any, related: list, show_nsfw: bool) -> None
     controller._related_page_label = None
     controller._related_prev_button = None
     controller._related_next_button = None
-    controller._related_results = [
-        item for item in related
-        if not (item.nsfw == '1' and not show_nsfw)
-    ]
+    controller._related_results = results
     controller._related_show_nsfw = show_nsfw
     controller._related_page_count = page_count(
         len(controller._related_results), RELATED_REC_PAGE_SIZE
@@ -49,6 +56,7 @@ def render_related_list(controller: Any, related: list, show_nsfw: bool) -> None
         controller._replay_motion(
             'danbooru-related-recommendations', 'motion-recommendation-enter-right'
         )
+        controller._related_signature = signature
         return
 
     if controller._related_page_count > 1:
@@ -71,8 +79,10 @@ def render_related_list(controller: Any, related: list, show_nsfw: bool) -> None
                 ).props('flat dense round color=grey-7')
 
     controller._set_related_page(1)
+    controller._related_signature = signature
 
 
+@measure('artist_render')
 def render_artist_recommendations(
     controller: Any,
     artist_results: list,
@@ -82,6 +92,15 @@ def render_artist_recommendations(
     """保存画师推荐快照，构建分页控件并渲染第一页。"""
     if controller.artist_rec_list is None or controller.artist_rec_pagination is None:
         return
+    signature = (tuple((r.artist, r.score, r.cooc_count, r.post_count, tuple(r.sources), r.hit_count)
+                       for r in artist_results[:ARTIST_REC_LIMIT]),
+                 tuple((r.artist, tuple((top_tags or {}).get(r.artist, [])[:10]))
+                       for r in artist_results[:ARTIST_REC_LIMIT]), show_nsfw)
+    if (getattr(controller, '_artist_signature', None) == signature
+            and controller.artist_rec_list.default_slot.children):
+        _sync_checks(controller, controller._artist_rec_checkboxes)
+        return
+    controller._artist_signature = None
     controller.artist_rec_list.clear()
     controller.artist_rec_pagination.clear()
     controller._artist_rec_checkboxes.clear()
@@ -109,6 +128,7 @@ def render_artist_recommendations(
         controller._replay_motion(
             'danbooru-artist-recommendations', 'motion-recommendation-enter-right'
         )
+        controller._artist_signature = signature
         return
 
     if controller._artist_rec_page_count > 1:
@@ -131,6 +151,7 @@ def render_artist_recommendations(
                 ).props('flat dense round color=grey-7')
 
     controller._set_artist_rec_page(1)
+    controller._artist_signature = signature
 
 
 def render_related_page(controller: Any) -> None:
@@ -200,7 +221,7 @@ def render_related_page(controller: Any) -> None:
                 ):
                     cb = ui.checkbox(
                         '', value=is_selected,
-                        on_change=lambda e, t=tag: controller._on_related_checkbox_change(t, e.value)
+                        on_change=lambda e, t=tag: _checkbox_changed(controller, '_on_related_checkbox_change', t, e.value)
                     ).props('dense').classes('flex-none')
                     controller._related_checkboxes[tag] = cb
 
@@ -296,7 +317,7 @@ def render_artist_page(controller: Any) -> None:
                 ):
                     cb = ui.checkbox(
                         '', value=is_selected,
-                        on_change=lambda e, t=artist: controller._on_artist_rec_checkbox_change(t, e.value)
+                        on_change=lambda e, t=artist: _checkbox_changed(controller, '_on_artist_rec_checkbox_change', t, e.value)
                     ).props('dense')
                     controller._artist_rec_checkboxes[artist] = cb
 
@@ -324,140 +345,219 @@ def render_artist_page(controller: Any) -> None:
                         f'text-sm font-bold text-{score_color}-600 whitespace-nowrap'
                     )
 
-def render_group_expansion(controller: Any, group_data: list, selected_tags: list[str], show_nsfw: bool) -> None:
-    """渲染 Group 同类扩展区域。"""
-    if controller.group_expansion_container is None:
-        return
+def _checkbox_changed(controller, method, tag, value):
+    if not getattr(controller, '_syncing_recommendation_checks', False):
+        getattr(controller, method)(tag, value)
+
+
+def _sync_checks(controller, checks):
+    previous = getattr(controller, '_syncing_recommendation_checks', False)
+    controller._syncing_recommendation_checks = True
+    try:
+        selected = set(controller._get_selected_tags())
+        for tag, checkbox in checks.items():
+            if not checkbox.is_deleted and checkbox.value != (tag in selected):
+                checkbox.set_value(tag in selected)
+    finally:
+        controller._syncing_recommendation_checks = previous
+
+
+def _group_reason(info):
+    name = info.get('group_cn_name', info['group'].replace('tag_group:', ''))
+    return tag_group_candidate_reason(name, list(info.get('sources') or []))
+
+
+def _group_changed(controller, name, event):
+    controller._on_group_expansion_change(name, event)
+    view = getattr(controller, '_group_views', {}).get(name)
+    if view is not None and name in controller._group_expanded_names:
+        render_group_page(controller, name)
+
+
+def clear_group_expansion(controller):
     controller.group_expansion_container.clear()
+    controller._group_views = {}
     controller._group_checkboxes.clear()
     controller._group_candidate_sources.clear()
-    group_key = group_names_key(group_data)
-    if group_key != controller._group_render_key:
-        controller._group_render_key = group_key
-        controller._group_render_limits.clear()
-        controller._group_expanded_names.clear()
-        controller._group_scroll_positions.clear()
+    controller._group_render_limits.clear()
+    controller._group_expanded_names.clear()
+    controller._group_scroll_positions.clear()
 
-    if not group_data:
-        with controller.group_expansion_container:
-            ui.label('已选标签无分组信息').classes('text-sm text-gray-400 italic p-2')
-        controller._replay_motion('danbooru-group-expansion', 'motion-refresh-enter')
+
+@measure('group_render')
+def render_group_expansion(controller: Any, group_data: list, selected_tags: list[str], show_nsfw: bool) -> None:
+    root = controller.group_expansion_container
+    if root is None:
         return
-
-    # 行背景色按分类区分（与关联推荐一致）
-    CAT_BG = {
-        'General':   'background-color: var(--general-bg);',
-        'Character': 'background-color: var(--character-bg);',
-        'Copyright': 'background-color: var(--copyright-bg);',
-    }
-    CAT_LABEL = {'General': '通用', 'Character': '角色', 'Copyright': '作品'}
-
-    selected_now = set(controller._get_selected_tags())
-
-    with controller.group_expansion_container:
-        for group_info in group_data:
-            group_name = group_info['group']
-            group_cn = group_info.get('group_cn_name', group_name.replace('tag_group:', ''))
-            group_sources = list(group_info.get('sources') or [])
-            group_reason = tag_group_candidate_reason(group_cn, group_sources)
-            group_source_detail = group_cn
-            if group_sources:
-                group_source_detail += f"；触发标签：{'、'.join(group_sources[:3])}"
-            tags = group_info['tags']
-            visible_limit = controller._group_render_limits.get(group_name, GROUP_RENDER_TAG_LIMIT)
-            visible_tags, hidden_count = limit_group_render_tags(tags, visible_limit)
-            scroll_id = group_scroll_dom_id(group_name)
-
-            expansion = ui.expansion(
-                f'{group_cn} ({len(tags)} 个标签)',
-                icon='label',
-                value=should_group_start_expanded(group_name, controller._group_expanded_names),
-            ).classes('w-full').props('dense')
-            expansion.on(
-                'update:model-value',
-                lambda e, g=group_name: controller._on_group_expansion_change(g, e),
-            )
-            with expansion:
-                with ui.element('div').props(
-                    f'id="{scroll_id}" data-danbooru-group-scroll="1"'
-                ).classes('w-full grid grid-cols-2 gap-1 p-1').style('max-height: 600px; overflow-y: auto;'):
-                    for t in visible_tags:
-                        tag = t['tag']
-                        controller._group_candidate_sources.setdefault(tag, group_source_detail)
-                        cn_first = t['cn_name'].split(',')[0].strip() if t['cn_name'] else ''
-                        cn_full = t.get('cn_name', '')
-                        cat = t['category']
-                        wiki_text = str(t.get('wiki', ''))
-                        row_bg = CAT_BG.get(cat, '')
-                        is_selected = tag in selected_now
-
-                        cat_label = CAT_LABEL.get(cat, '')
-                        tooltip_html = ''
-                        if wiki_text:
-                            prefix = f'<span style="opacity:0.7;margin-right:4px;">[{cat_label}]</span>' if cat_label else ''
-                            tooltip_html += f'<div style="margin-bottom:6px;">{prefix}{wiki_text}</div>'
-                        if cn_full:
-                            tooltip_html += f'<div style="opacity:0.85;">{cn_full}</div>'
-
-                        with ui.row().classes(
-                            'w-full min-w-0 flex-nowrap items-center gap-1.5 px-2 py-1.5 '
-                            'rounded overflow-hidden related-item'
-                        ).style(row_bg):
-                            if tooltip_html:
-                                with ui.tooltip().props('content-class="bg-black text-white shadow-4" max-width="500px"'):
-                                    ui.html(tooltip_html).style('font-size:14px;line-height:1.5;max-width:480px;')
-
-                            # 复选框
-                            cb = ui.checkbox(
-                                '', value=is_selected,
-                                on_change=lambda e, t=tag: controller._on_group_checkbox_change(t, e.value),
-                            ).props('dense').classes('flex-none')
-                            controller._group_checkboxes[tag] = cb
-
-                            # 标签名 + 中文名（与关联推荐对齐方式一致）
-                            with ui.column().classes('flex-1 gap-0 min-w-0 overflow-hidden'):
-                                link = ui.link(
-                                    tag,
-                                    f'https://danbooru.donmai.us/wiki_pages/{tag}',
-                                    new_tab=True,
-                                ).classes(
-                                    'tag-link w-full min-w-0 text-primary font-bold text-xs truncate'
-                                )
-                                if cn_first:
-                                    ui.label(cn_first).classes(
-                                        'w-full text-xs text-gray-500 truncate'
-                                    )
-                                ui.label(group_reason).classes(
-                                    'w-full text-xs text-slate-500 truncate'
-                                )
-
-                            # 热度
-                            count = t['post_count']
-                            if count > 0:
-                                if count >= 10000:
-                                    count_str = f'{count/1000:.0f}k'
-                                elif count >= 1000:
-                                    count_str = f'{count/1000:.1f}k'
-                                else:
-                                    count_str = str(count)
-                                ui.label(count_str).classes(
-                                    'flex-none ml-auto self-center text-sm font-bold '
-                                    'text-grey-600 whitespace-nowrap'
-                                )
-                    if hidden_count > 0:
-                        async def _load_more(
-                            g=group_name,
-                            total=len(tags),
-                            gd=group_data,
-                            st=list(selected_tags),
-                            sn=show_nsfw,
-                        ):
-                            await controller._load_more_group_tags(g, total, gd, st, sn)
-
-                        ui.button(
-                            f'加载更多（剩余 {hidden_count} 个）',
-                            icon='expand_more',
-                            on_click=_load_more,
-                        ).props('dense flat color=primary').classes('col-span-2 text-xs')
+    views = getattr(controller, '_group_views', {})
+    controller._group_views = views
+    names = {info['group'] for info in group_data}
+    for name in list(views):
+        if name not in names or views[name].root.is_deleted:
+            if not views[name].root.is_deleted:
+                views[name].root.delete()
+            del views[name]
+            controller._group_render_limits.pop(name, None)
+            controller._group_expanded_names.discard(name)
+    if not views:
+        root.clear()
+    if not group_data:
+        with root:
+            ui.label('已选标签无分组信息').classes('text-sm text-gray-400 italic p-2')
+    controller._group_checkboxes.clear()
+    controller._group_candidate_sources.clear()
+    for index, info in enumerate(group_data):
+        name = info['group']
+        view = views.get(name)
+        if view is None:
+            with root:
+                expansion = ui.expansion('', icon='label', value=False).classes('w-full').props('dense')
+                expansion.on('update:model-value', lambda e, g=name: _group_changed(controller, g, e))
+            view = SimpleNamespace(root=expansion, body=None, rows={}, more=None, info=info,
+                                   selected_tags=list(selected_tags), show_nsfw=show_nsfw)
+            views[name] = view
+        view.info, view.selected_tags, view.show_nsfw = info, list(selected_tags), show_nsfw
+        label = f"{info.get('group_cn_name', name.replace('tag_group:', ''))} ({len(info['tags'])} 个标签)"
+        if view.root.text != label:
+            view.root.set_text(label)
+        if root.default_slot.children[index] is not view.root:
+            view.root.move(root, index)
+        if view.body is not None or name in controller._group_expanded_names:
+            render_group_page(controller, name)
+        source = info.get('group_cn_name', name.replace('tag_group:', ''))
+        sources = list(info.get('sources') or [])
+        if sources:
+            source += f"；触发标签：{'、'.join(sources[:3])}"
+        for tag in view.rows:
+            controller._group_candidate_sources.setdefault(tag, source)
+        for tag, (_, checkbox, _) in view.rows.items():
+            controller._group_checkboxes[tag] = checkbox
     controller._restore_group_scroll_positions()
-    controller._replay_motion('danbooru-group-expansion', 'motion-refresh-enter')
+
+
+@measure('group_page_render')
+def render_group_page(controller, name):
+    view = getattr(controller, '_group_views', {}).get(name)
+    if view is None or view.root.is_deleted:
+        return
+    if view.body is None:
+        with view.root:
+            view.body = ui.element('div').props(
+                f'id="{group_scroll_dom_id(name)}" data-danbooru-group-scroll="1"'
+            ).classes('w-full grid grid-cols-2 gap-1 p-1').style('max-height: 600px; overflow-y: auto;')
+    limit = controller._group_render_limits.get(name, GROUP_RENDER_TAG_LIMIT)
+    tags, hidden = limit_group_render_tags(view.info['tags'], limit)
+    reason = _group_reason(view.info)
+    desired = {t['tag'] for t in tags}
+    for tag in list(view.rows):
+        if tag not in desired:
+            row, checkbox, _ = view.rows.pop(tag)
+            row.delete()
+            if controller._group_checkboxes.get(tag) is checkbox:
+                controller._group_checkboxes.pop(tag, None)
+    for index, tag_info in enumerate(tags):
+        tag = tag_info['tag']
+        signature = (tag_info['cn_name'], tag_info['category'], tag_info['post_count'],
+                     str(tag_info.get('wiki', '')), reason)
+        old = view.rows.get(tag)
+        if old is None or old[2] != signature:
+            if old is not None:
+                old[0].delete()
+            with view.body:
+                row, checkbox = _create_group_row(controller, tag_info, reason)
+            view.rows[tag] = (row, checkbox, signature)
+        row, checkbox, _ = view.rows[tag]
+        if view.body.default_slot.children[index] is not row:
+            row.move(view.body, index)
+        controller._group_checkboxes[tag] = checkbox
+        source = view.info.get('group_cn_name', name.replace('tag_group:', ''))
+        sources = list(view.info.get('sources') or [])
+        if sources:
+            source += f"；触发标签：{'、'.join(sources[:3])}"
+        controller._group_candidate_sources.setdefault(tag, source)
+    _sync_checks(controller, {tag: item[1] for tag, item in view.rows.items()})
+    if hidden:
+        if view.more is None:
+            async def load_more():
+                await controller._load_more_group_tags(name, len(view.info['tags']),
+                    [view.info], view.selected_tags, view.show_nsfw)
+            with view.body:
+                view.more = ui.button('', icon='expand_more', on_click=load_more).props(
+                    'dense flat color=primary').classes('col-span-2 text-xs')
+        text = f'加载更多（剩余 {hidden} 个）'
+        if view.more.text != text:
+            view.more.set_text(text)
+        if view.body.default_slot.children[-1] is not view.more:
+            view.more.move(view.body)
+    elif view.more is not None:
+        view.more.delete()
+        view.more = None
+
+
+def _create_group_row(controller, t, group_reason):
+    CAT_BG = {'General': 'background-color: var(--general-bg);',
+              'Character': 'background-color: var(--character-bg);',
+              'Copyright': 'background-color: var(--copyright-bg);'}
+    CAT_LABEL = {'General': '通用', 'Character': '角色', 'Copyright': '作品'}
+    selected_now = set(controller._get_selected_tags())
+    tag = t['tag']
+    cn_first = t['cn_name'].split(',')[0].strip() if t['cn_name'] else ''
+    cn_full = t.get('cn_name', '')
+    cat = t['category']
+    wiki_text = str(t.get('wiki', ''))
+    row_bg = CAT_BG.get(cat, '')
+    is_selected = tag in selected_now
+
+    cat_label = CAT_LABEL.get(cat, '')
+    tooltip_html = ''
+    if wiki_text:
+        prefix = f'<span style="opacity:0.7;margin-right:4px;">[{cat_label}]</span>' if cat_label else ''
+        tooltip_html += f'<div style="margin-bottom:6px;">{prefix}{wiki_text}</div>'
+    if cn_full:
+        tooltip_html += f'<div style="opacity:0.85;">{cn_full}</div>'
+
+    with ui.row().classes(
+        'w-full min-w-0 flex-nowrap items-center gap-1.5 px-2 py-1.5 '
+        'rounded overflow-hidden related-item'
+    ).style(row_bg) as row:
+        if tooltip_html:
+            with ui.tooltip().props('content-class="bg-black text-white shadow-4" max-width="500px"'):
+                ui.html(tooltip_html).style('font-size:14px;line-height:1.5;max-width:480px;')
+
+        # 复选框
+        cb = ui.checkbox(
+            '', value=is_selected,
+            on_change=lambda e, t=tag: _checkbox_changed(controller, '_on_group_checkbox_change', t, e.value),
+        ).props('dense').classes('flex-none')
+
+        # 标签名 + 中文名（与关联推荐对齐方式一致）
+        with ui.column().classes('flex-1 gap-0 min-w-0 overflow-hidden'):
+            link = ui.link(
+                tag,
+                f'https://danbooru.donmai.us/wiki_pages/{tag}',
+                new_tab=True,
+            ).classes(
+                'tag-link w-full min-w-0 text-primary font-bold text-xs truncate'
+            )
+            if cn_first:
+                ui.label(cn_first).classes(
+                    'w-full text-xs text-gray-500 truncate'
+                )
+            ui.label(group_reason).classes(
+                'w-full text-xs text-slate-500 truncate'
+            )
+
+        # 热度
+        count = t['post_count']
+        if count > 0:
+            if count >= 10000:
+                count_str = f'{count/1000:.0f}k'
+            elif count >= 1000:
+                count_str = f'{count/1000:.1f}k'
+            else:
+                count_str = str(count)
+            ui.label(count_str).classes(
+                'flex-none ml-auto self-center text-sm font-bold '
+                'text-grey-600 whitespace-nowrap'
+            )
+    return row, cb
