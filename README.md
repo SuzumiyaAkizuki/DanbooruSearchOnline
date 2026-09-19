@@ -5,6 +5,7 @@ colorFrom: red
 colorTo: indigo
 sdk: docker
 app_port: 7860
+hf_oauth: true
 pinned: false
 license: gpl-3.0
 short_description: 基于语义匹配的 Danbooru 标签搜索引擎，支持多维匹配、智能分词与共现关联推荐。

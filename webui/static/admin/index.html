@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>管理后台 · DanbooruSearch</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/admin/assets/admin.css">
+  <script src="/admin/assets/admin.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">跳到主要内容</a>
+<aside class="sidebar">
+  <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true">D<span>·</span></span><span>DanbooruSearch<small>管理后台</small></span></a>
+  <nav aria-label="后台导航">
+    <a href="/admin" data-nav="overview"><span aria-hidden="true">▥</span> 运行概览</a>
+    <a href="/admin/api-keys" data-nav="keys"><span aria-hidden="true">⌘</span> API Key <small>预留</small></a>
+  </nav>
+  <div class="sidebar-bottom"><span class="badge">技术验证版</span><p>HF 管理员专用</p><a href="/">← 返回标签搜索</a></div>
+</aside>
+<main id="main">
+  <header class="topbar"><span>SAkizuki / DanbooruSearch</span><div id="account" hidden><span id="username"></span><button id="logout" class="text-button">退出后台</button></div></header>
+  <div id="status" class="notice" role="status" aria-live="polite" hidden></div>
+  <section id="login" class="login-panel">
+    <span class="eyebrow">访问验证</span><h1>登录管理后台</h1>
+    <p>使用 Hugging Face 账号验证身份。仅指定管理员可查看运行数据和管理页面。</p>
+    <a id="login-link" class="button" hidden target="_blank" rel="noopener noreferrer">使用 Hugging Face 登录 ↗</a>
+    <p id="login-message" class="muted">正在检查登录状态…</p>
+    <div class="login-note"><strong>标签搜索无需登录</strong><p>如果你想查找标签，可以直接返回公开搜索页面。</p><a href="/">前往标签搜索 →</a></div>
+  </section>
+  <div id="dashboard" hidden>
+    <section id="overview">
+      <div class="heading"><div><span class="eyebrow">服务运行</span><h1>运行概览</h1><p>按访问渠道查看用量与响应表现。</p></div><button id="refresh">刷新数据</button></div>
+      <div class="meta"><span id="updated">读取数据中…</span><span>每 30 秒自动刷新 · 北京时间</span></div>
+      <section class="panel"><div class="panel-heading"><h2>调用渠道</h2><span id="since" class="muted">累计统计</span></div>
+        <div class="channels">
+          <article class="channel"><span class="channel-tag">UI</span><h3>网页搜索</h3><strong class="big-number" id="ui-count">—</strong><span class="muted">次搜索</span><p id="ui-detail">—</p></article>
+          <article class="channel"><span class="channel-tag">REST</span><h3>API 调用</h3><strong class="big-number" id="rest-count">—</strong><span class="muted">次业务调用</span><p id="rest-detail">—</p></article>
+          <article class="channel"><span class="channel-tag">MCP</span><h3>工具调用</h3><strong class="big-number" id="mcp-count">—</strong><span class="muted">次工具调用</span><p id="mcp-detail">—</p></article>
+        </div>
+      </section>
+      <div class="metrics-grid">
+        <section class="panel"><div class="panel-heading"><h2>网页搜索延迟</h2><span class="muted">累计样本</span></div>
+          <div class="latency-numbers"><div><span class="muted">平均延迟</span><strong id="ui-avg">—</strong></div><div><span class="muted">P95 所在区间上界</span><strong id="ui-p95">—</strong></div></div>
+          <div id="latency-chart" class="chart" aria-label="网页搜索延迟分布"></div><p class="footnote" id="latency-note"></p>
+        </section>
+        <section class="panel"><div class="panel-heading"><h2>REST 观测窗口</h2><span class="badge">近 14 天</span></div>
+          <dl class="window-stats"><div><dt>已记录请求</dt><dd id="window-count">—</dd></div><div><dt>4xx / 5xx 占比</dt><dd id="window-errors">—</dd></div><div><dt>状态码分布</dt><dd id="window-status">—</dd></div></dl>
+          <p class="footnote" id="window-range"></p><p class="footnote">包含健康检查。按现有归因规则聚合，少量未达阈值的来源暂不展示；不等于全站累计调用量。</p>
+        </section>
+      </div>
+      <section class="panel"><div class="panel-heading"><div><h2>REST 请求趋势</h2><p class="muted">每小时已记录请求数</p></div><label class="range-label">时间范围 <select id="range"><option value="24">近 24 小时</option><option value="168" selected>近 7 天</option><option value="336">近 14 天</option></select></label></div>
+        <div id="trend-chart" class="chart trend"></div><p class="footnote">空白时段表示没有可用记录，不自动视为零请求。首尾小时可能不完整。</p>
+      </section>
+      <section class="panel"><div class="panel-heading"><h2>REST 接口表现</h2><span class="muted">近 14 天 · 完整观测窗口</span></div>
+        <div class="table-scroll"><table><thead><tr><th scope="col">接口</th><th scope="col">请求数</th><th scope="col">平均延迟</th><th scope="col">P95 区间上界</th><th scope="col">4xx / 5xx</th></tr></thead><tbody id="endpoints"></tbody></table></div>
+        <p class="footnote">延迟是现有观测链路的耗时，P95 由延迟分桶估算。MCP 尚无对应延迟数据，因此不展示推测值。</p>
+      </section>
+    </section>
+    <section id="keys" hidden>
+      <div class="heading"><div><span class="eyebrow">接入管理</span><h1>API Key</h1><p>申请、授权与操作记录的预留入口。</p></div><span class="badge">尚未启用</span></div>
+      <div class="notice neutral">当前版本用于验证后台登录和遥测展示。API Key 签发、审批及额度管理将在后续阶段接入。</div>
+      <div class="tabs" role="tablist" aria-label="API Key 管理"><button role="tab" aria-selected="true" aria-controls="key-panel" id="tab-applications" data-key-tab="applications">待审核申请</button><button role="tab" aria-selected="false" aria-controls="key-panel" id="tab-grants" data-key-tab="grants" tabindex="-1">授权与 Key</button><button role="tab" aria-selected="false" aria-controls="key-panel" id="tab-audit" data-key-tab="audit" tabindex="-1">操作记录</button></div>
+      <section class="panel" id="key-panel" role="tabpanel" aria-labelledby="tab-applications"><div class="empty"><span class="empty-symbol" aria-hidden="true">⌘</span><h2 id="key-title">申请审核尚未启用</h2><p id="key-copy">后续在这里查看账号、服务名称、用途和预计用量，并批准或拒绝申请。</p><p class="footnote">尚未连接授权数据库，当前不生成或保存 API Key。</p></div></section>
+    </section>
+    <footer>运行数据来自当前服务的内存快照，OSS 按原有机制定期同步。<span>普通用户继续匿名使用标签搜索。</span></footer>
+  </div>
+</main>
+</body>
+</html>

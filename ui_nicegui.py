@@ -17,6 +17,7 @@ from platform_utils import get_host_port, is_cloud
 from webui import controller as _controller
 from webui.connection_guard import NiceGUIPollingDisconnectGuard
 from webui.routes import register_main_page
+from webui.admin import create_admin_router
 
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -51,6 +52,7 @@ register_main_page(
 
 if __name__ in {'__main__', '__mp_main__'}:
     host, port = get_host_port()
+    app.include_router(create_admin_router())
     app.add_middleware(NiceGUIPollingDisconnectGuard)
     app.on_startup(ui_performance.start_monitor)
     app.on_shutdown(ui_performance.stop_monitor)

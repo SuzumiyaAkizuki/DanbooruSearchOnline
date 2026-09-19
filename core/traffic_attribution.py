@@ -741,6 +741,20 @@ def get_snapshot() -> dict[str, Any]:
     return json.loads(_serialize(_enabled_at or _utc_now_iso(), _memory_records).decode("utf-8"))
 
 
+def get_admin_snapshot() -> dict[str, Any]:
+    """Copy only overview fields on the event loop; no I/O or source identities.
+
+    The detached snapshot can be aggregated in a worker without racing mutable
+    request counters. Pending, sub-threshold records remain excluded.
+    """
+    return {"records": [
+        {"day": key[0], "hour": key[1], "endpoint": key[5],
+         "status_class": key[6], "latency_bucket": key[8],
+         "count": metric["count"], "sum_ms": metric["sum_ms"]}
+        for key, metric in _memory_records.items()
+    ]}
+
+
 async def force_sync() -> None:
     _flush_pending(all_sources=True)
     _prune_expired_records()
