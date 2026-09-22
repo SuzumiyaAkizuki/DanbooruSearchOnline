@@ -34,7 +34,7 @@
       <div class="heading"><div><span class="eyebrow">服务运行</span><h1>运行概览</h1><p>按访问渠道查看用量与响应表现。</p></div><button id="refresh">刷新数据</button></div>
       <div class="meta"><span id="updated">读取数据中…</span><span>每 30 秒自动刷新 · 北京时间</span></div>
       <section class="panel history-panel">
-        <div class="panel-heading"><div><h2>近期变化</h2><p class="muted">相邻累计快照的增量，避免累计平均值掩盖近期变化</p></div><span id="history-state" class="badge">历史快照</span></div>
+        <div class="panel-heading"><div><h2>近期 UI 性能</h2><p class="muted">现有性能采样 · 当前进程窗口 · 延迟单位为毫秒</p></div><span id="history-state" class="badge">性能采样</span></div>
         <div id="history-insight" class="notice neutral"></div>
         <div id="history-stats" class="signal-grid"></div>
         <div id="history-chart" class="chart trend"></div>
@@ -76,7 +76,7 @@
       <div class="tabs" role="tablist" aria-label="API Key 管理"><button role="tab" aria-selected="true" aria-controls="key-panel" id="tab-applications" data-key-tab="applications">待审核申请</button><button role="tab" aria-selected="false" aria-controls="key-panel" id="tab-grants" data-key-tab="grants" tabindex="-1">授权与 Key</button><button role="tab" aria-selected="false" aria-controls="key-panel" id="tab-audit" data-key-tab="audit" tabindex="-1">操作记录</button></div>
       <section class="panel" id="key-panel" role="tabpanel" aria-labelledby="tab-applications"><div class="empty"><span class="empty-symbol" aria-hidden="true">⌘</span><h2 id="key-title">申请审核尚未启用</h2><p id="key-copy">后续在这里查看账号、服务名称、用途和预计用量，并批准或拒绝申请。</p><p class="footnote">尚未连接授权数据库，当前不生成或保存 API Key。</p></div></section>
     </section>
-    <footer>累计与 REST 数据来自服务内存快照；近期变化读取配置的历史文件，按各自时间范围展示。<span>普通用户继续匿名使用标签搜索。</span></footer>
+    <footer>累计与 REST 数据来自服务内存快照；UI 性能来自当前进程的采样窗口，按各自时间范围展示。<span>普通用户继续匿名使用标签搜索。</span></footer>
   </div>
 </main>
 </body>

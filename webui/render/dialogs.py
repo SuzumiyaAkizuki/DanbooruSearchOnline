@@ -409,7 +409,7 @@ def open_prompt_import_dialog(controller: Any, *, description: str) -> None:
         prompt_input = ui.textarea(
             label='粘贴 Prompt',
             placeholder='1girl, (white_serafuku:1.2), {rain}, @artist_name',
-        ).props('outlined autogrow maxlength=20000').classes('w-full min-h-48')
+        ).props('outlined stack-label autogrow maxlength=20000').classes('w-full min-h-48')
         import_button = None
 
         async def submit_import() -> None:
@@ -567,7 +567,7 @@ def open_search_feedback_dialog(
         detail_input = ui.textarea(
             label='具体问题（可选）',
             placeholder='例如：结果偏题、缺少某个关键标签、召回了不相关角色/作品...',
-        ).props('outlined autogrow maxlength=500 counter').classes('w-full')
+        ).props('outlined stack-label autogrow maxlength=500 counter').classes('w-full')
 
         async def submit_feedback() -> None:
             submit_button.disable()
@@ -615,11 +615,11 @@ def open_translation_feedback_dialog(
         suggested_input = ui.input(
             label='建议中文名（可选）',
             placeholder='如果有更合适的译名，可以填在这里',
-        ).props('outlined maxlength=120 counter').classes('w-full')
+        ).props('outlined stack-label maxlength=120 counter').classes('w-full')
         detail_input = ui.textarea(
             label='问题说明（可选）',
             placeholder='例如：含义不准确、作品/角色名误译、中文名缺失...',
-        ).props('outlined autogrow maxlength=500 counter').classes('w-full')
+        ).props('outlined stack-label autogrow maxlength=500 counter').classes('w-full')
 
         async def submit_feedback() -> None:
             submit_button.disable()

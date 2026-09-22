@@ -149,7 +149,7 @@ def create_admin_router(config: AdminConfig | None = None, *, auth: AdminAuth | 
             return json({"error": "unauthorized"}, 401)
         if not same_origin(request):
             return json({"error": "forbidden"}, 403)
-        # At most one read per 30 seconds across tabs. No OSS fetch/sync on refresh.
+        # At most one aggregate per 30 seconds; read existing in-memory snapshots only.
         async with snapshot_lock:
             if time.monotonic() - cache.get("at", -float("inf")) >= 30:
                 try:

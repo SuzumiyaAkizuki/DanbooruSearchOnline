@@ -41,6 +41,7 @@ EVENT_NAMES = frozenset({
     "mcp_get_artist_profile",
     "mcp_get_anima_format",
     "mcp_get_newbie_format",
+    "mcp_get_qwen_image_2_1_format",
     "feedback_search_bad_case",
     "feedback_translation_error",
     "engine_cold_start_attempt",

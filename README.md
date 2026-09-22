@@ -471,7 +471,7 @@ npm install -g mcp-remote
 }
 ```
 
-保存后重启 Claude Desktop，工具列表中出现 `search_tags`、`get_related_tags`、`get_artist_recommendations`、`get_anima_format` 和 `get_newbie_format` 即为成功。
+保存后重启 Claude Desktop，工具列表中出现 `search_tags`、`get_related_tags`、`get_artist_recommendations`、`get_anima_format`、`get_newbie_format` 和 `get_qwen_image_2_1_format` 即为成功。
 
 > 注意：不要使用 `"url"` 字段直接填写地址，Claude Desktop 不支持该格式，会提示配置无效。也不推荐通过 `npx mcp-remote` 调用，首次执行时 `npx` 需要临时下载包，npm 缓存损坏时会导致启动失败。全局安装可规避此问题。
 
@@ -545,6 +545,10 @@ npm install -g mcp-remote
 **`get_newbie_format`** — 获取 NewBie XML 提示词格式规范
 
 当用户需要输出 NewBie 模型 XML 提示词时调用。返回 XML 结构、字段职责、标签处理规则、多人角色分组和 caption 写作要求。
+
+**`get_qwen_image_2_1_format`** — 获取 Qwen-Image-2.1 提示词格式规范
+
+参数 `mode` 必须是 `"T2I"` 或 `"I2I"`，分别返回对应的文生图或图生图提示词格式文本；其他输入会返回错误提示。
 
 #### 调用示例
 

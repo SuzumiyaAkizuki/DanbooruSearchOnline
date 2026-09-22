@@ -38,10 +38,12 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.engine import DanbooruTagger
 from core.models import SearchRequest, SearchResponse
+from core.prompt_formats import PROMPT_FORMATS
 import core.counter as counter
 import core.telemetry as telemetry
 import core.traffic_attribution as traffic_attribution
@@ -299,6 +301,24 @@ async def observe_rest_attribution(request: Request, call_next):
 
 
 # ── 端点 ──
+
+@app.get("/get_anima_format", response_class=PlainTextResponse)
+async def get_anima_format() -> str:
+    """返回完整 Anima Hybrid 提示词格式规范，与同名 MCP 工具一致。"""
+    return PROMPT_FORMATS["anima"]
+
+
+@app.get("/get_newbie_format", response_class=PlainTextResponse)
+async def get_newbie_format() -> str:
+    """返回完整 NewBie XML 提示词格式规范，与同名 MCP 工具一致。"""
+    return PROMPT_FORMATS["newbie"]
+
+
+@app.get("/get_qwen_image_2_1_format", response_class=PlainTextResponse)
+async def get_qwen_image_2_1_format(mode: Literal["T2I", "I2I"]) -> str:
+    """返回 Qwen-Image-2.1 规范；必填 mode：T2I 文生图，I2I 图生图。"""
+    return PROMPT_FORMATS[{"T2I": "qwen_t2i", "I2I": "qwen_i2i"}[mode]]
+
 
 @app.post("/search", response_model=SearchOut)
 async def search(body: SearchIn) -> SearchOut:

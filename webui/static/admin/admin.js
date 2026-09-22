@@ -52,7 +52,7 @@
     const top = 18, plot = height - bottom - top;
     const max = Math.max(...items.map((item) => item.count || 0), 1);
     const step = (width - left - 10) / items.length;
-    const chartTitle = id === "history-chart" ? "UI 区间平均延迟（毫秒）" : trend ? "REST 每小时请求趋势" : "UI 搜索延迟分布";
+    const chartTitle = id === "history-chart" ? "事件循环平均延迟（毫秒）" : trend ? "REST 每小时请求趋势" : "UI 搜索延迟分布";
     const svg = svgNode("svg", {viewBox:`0 0 ${width} ${height}`, role:"img", "aria-label":chartTitle});
     svg.append(svgNode("title", {}, chartTitle));
     [0, .5, 1].forEach((ratio) => {
@@ -97,20 +97,19 @@
     items.forEach((item) => {const row=document.createElement("div"),label=document.createElement("span"),value=document.createElement("strong"),meter=document.createElement("meter");label.textContent=item.label;value.textContent=`${number(item.count)} · ${total ? (100*item.count/total).toFixed(1) : 0}%`;meter.min=0;meter.max=total || 1;meter.value=item.count;meter.setAttribute("aria-label",`${item.label} 请求占比`);row.append(label,value,meter);root.append(row);});
   }
   function renderHistory() {
-    const h=snapshot.history;
-    $("history-state").textContent=h.stale?"历史已过期":`${h.sample_count} 个快照`;
+    const h=snapshot.ui_performance;
+    $("history-state").textContent=h.stale?"采样已过期":`${h.window_count} 个性能窗口`;
+    $("history-stats").replaceChildren();
+    $("history-chart").replaceChildren();
+    $("history-note").textContent="仅显示当前进程最近最多 180 个性能采样窗口，重启后重新积累；不是 UI 搜索耗时，也不代表历史搜索量。无需配置或上传额外文件。";
     if(!h.latest){
-      $("history-stats").replaceChildren();
-      $("history-chart").replaceChildren();
-      $("history-insight").textContent=h.status==="not_configured"?"尚未配置历史快照。累计统计及 REST 实时观测仍可使用。":"历史快照暂不可用，或不足两个有效快照。";
-      $("history-note").textContent="如需 UI / MCP 近期变化，请为部署配置 ADMIN_TELEMETRY_HISTORY_PATH，指向 telemetry_history.json；更新文件后下次刷新读取。";
+      $("history-insight").textContent="当前进程尚无 UI 性能采样，产生采样后自动显示。累计统计及 REST 观测仍可使用。";
       return;
     }
-    const latest=h.latest;
-    $("history-insight").textContent=`最近区间 UI 平均延迟 ${duration(latest.ui_average_ms)}，累计平均 ${duration(snapshot.ui_latency.average_ms)}。${h.latency_ratio ? `相较上一采样区间为 ${h.latency_ratio.toFixed(2)} 倍。` : ""}${h.stale ? "历史文件已超过 36 小时未更新，不能代表当前表现。" : ""}`;
-    signals("history-stats",[["区间 UI 搜索",number(latest.ui)],["区间 REST 调用",number(latest.rest)],["区间 MCP 调用",number(latest.mcp)],["区间冷启动失败",number(latest.cold_failures)]]);
-    chart("history-chart",h.intervals.map((item)=>({count:item.ui_average_ms,label:date(item.end),short:date(item.end),tooltip:`${date(item.start)} → ${date(item.end)}（${item.hours} 小时）UI 平均延迟 ${duration(item.ui_average_ms)}`})),true);
-    $("history-note").textContent=`图表纵轴：UI 区间平均延迟（毫秒）。最近区间 ${date(latest.start)} — ${date(latest.end)}，持续 ${latest.hours} 小时；区间不等同自然日，缺少分桶的历史不能计算区间 P95。${h.skipped_intervals ? `已跳过 ${h.skipped_intervals} 个计数回退或不可比区间。` : ""}`;
+    const latest=h.latest, metrics=latest.metrics || {};
+    $("history-insight").textContent=`最近采样 ${date(latest.recorded_at)}。${h.stale ? "已超过 5 分钟未更新，请勿当作当前状态。" : "显示事件循环及界面响应的实际观测。"}`;
+    signals("history-stats",[["事件循环平均延迟",duration(metrics.event_loop_lag?.avg_ms)],["浏览器往返平均耗时",duration(metrics.browser_roundtrip?.avg_ms)],["推荐等待平均耗时",duration(metrics.recommendation_wait?.avg_ms)],["推荐计算平均耗时",duration(metrics.recommendation_compute?.avg_ms)]]);
+    chart("history-chart",h.lag_trend.map((item)=>({count:item.average_ms,label:date(item.at),short:date(item.at),tooltip:`${date(item.at)} 事件循环平均延迟 ${duration(item.average_ms)}`})),true);
   }
   function renderRest() {
     if(!snapshot)return;

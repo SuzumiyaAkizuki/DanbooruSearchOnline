@@ -2,17 +2,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import math
-import os
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 LIMITS = (100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 120000)
 CST = timezone(timedelta(hours=8))
-
-
 def timing_summary(raw: dict) -> dict:
     count = int(raw.get("count", 0))
     buckets = raw.get("buckets", {})
@@ -89,75 +84,29 @@ def summarize_window(rows: list[dict], now: datetime, hours: int) -> dict:
     }
 
 
-def summarize_history(snapshots: list[dict], now: datetime) -> dict:
-    """Intervals between cumulative samples, never mislabeled as calendar days."""
-    parsed = {}
-    for snapshot in snapshots:
+def summarize_ui_performance(snapshot: dict, now: datetime) -> dict:
+    """Present existing process windows; never infer search history from totals."""
+    windows = []
+    for item in snapshot.get("windows", []):
         try:
-            at = datetime.fromisoformat(snapshot["updated_at"])
+            at = datetime.fromisoformat(item["recorded_at"])
             if at.tzinfo is None or at > now:
                 continue
-            parsed[at] = snapshot
         except (KeyError, TypeError, ValueError):
             continue
-    points = sorted(parsed.items())[-120:]
-    intervals, skipped = [], 0
-    for (start, before), (end, after) in zip(points, points[1:]):
-        elapsed = (end - start).total_seconds() / 3600
-        counters = after.get("counters", {})
-        previous = before.get("counters", {})
-        delta = {key: int(value) - int(previous[key]) for key, value in counters.items() if key in previous}
-        if any(value < 0 for value in delta.values()) or "ui_search" not in delta:
-            skipped += 1
-            continue
-        old = before.get("timings_ms", {}).get("ui_search_latency", {})
-        new = after.get("timings_ms", {}).get("ui_search_latency", {})
-        count, duration = new.get("count", 0) - old.get("count", 0), new.get("sum_ms", 0) - old.get("sum_ms", 0)
-        intervals.append({"start": start.isoformat(), "end": end.isoformat(), "hours": round(elapsed, 2),
-                          "ui": delta["ui_search"], "rest": sum(v for k, v in delta.items() if k.startswith("rest_")),
-                          "mcp": sum(v for k, v in delta.items() if k.startswith("mcp_")),
-                          "ui_average_ms": round(duration / count, 2) if count > 0 and duration >= 0 else None,
-                          "cold_failures": delta.get("engine_cold_start_failure", 0)})
-    latest = intervals[-1] if intervals else None
-    previous = intervals[-2] if len(intervals) > 1 else None
-    ratio = None
-    if latest and previous and latest["ui_average_ms"] is not None and previous["ui_average_ms"]:
-        ratio = round(latest["ui_average_ms"] / previous["ui_average_ms"], 2)
-    return {"intervals": intervals[-30:], "latest": latest, "latency_ratio": ratio,
-            "sample_count": len(points), "skipped_intervals": skipped,
-            "last_sample": points[-1][0].isoformat() if points else None,
-            "stale": bool(points and (now - points[-1][0]).total_seconds() > 36 * 3600)}
-
-
-def load_history() -> tuple[list[dict], str]:
-    """Optional local input; never assume the developer's tempsave exists on HF."""
-    filename = os.environ.get("ADMIN_TELEMETRY_HISTORY_PATH", "")
-    if not filename:
-        return [], "not_configured"
-    try:
-        with Path(filename).open("rb") as stream:
-            raw = stream.read(5_000_001)
-        if len(raw) > 5_000_000:
-            return [], "unavailable"
-        data = json.loads(raw)
-        snapshots = data["snapshots"]
-        if data.get("schema_version") != 1 or not isinstance(snapshots, list) or len(snapshots) > 2000:
-            return [], "unavailable"
-        # Validate the numerical fields used by the presentation without exposing file paths.
-        for item in snapshots:
-            datetime.fromisoformat(item["updated_at"])
-            if any(not isinstance(v, int) or v < 0 for v in item["counters"].values()):
-                raise ValueError()
-            for value in item.get("timings_ms", {}).values():
-                if any(not isinstance(value.get(k), (int, float)) or not math.isfinite(value[k]) or value[k] < 0 for k in ("count", "sum_ms")):
-                    raise ValueError()
-        return snapshots, "loaded"
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        return [], "unavailable"
+        windows.append((at, item))
+    windows.sort(key=lambda pair: pair[0])
+    selected = [item for _, item in windows[-180:]]
+    latest = selected[-1] if selected else None
+    return {"window_count": len(selected), "latest": latest,
+            "stale": bool(windows and (now - windows[-1][0]).total_seconds() > 300),
+            "lag_trend": [{"at": item["recorded_at"],
+                           "average_ms": item.get("metrics", {}).get("event_loop_lag", {}).get("avg_ms")}
+                          for item in selected]}
 
 
 def build_dashboard(telemetry: dict, attribution: dict, now: datetime | None = None,
-                    history: list[dict] | None = None, history_status: str = "not_configured") -> dict:
+                    ui_performance: dict | None = None) -> dict:
     now = (now or datetime.now(CST)).astimezone(CST)
     earliest = now.date() - timedelta(days=13)
     rows = [row for row in attribution.get("records", [])
@@ -192,7 +141,7 @@ def build_dashboard(telemetry: dict, attribution: dict, now: datetime | None = N
         "telemetry_since": telemetry.get("enabled_at"),
         "counters": telemetry.get("counters", {}),
         "ui_latency": timing_summary(telemetry.get("timings_ms", {}).get("ui_search_latency", {})),
-        "history": {**summarize_history(history or [], now), "status": history_status},
+        "ui_performance": summarize_ui_performance(ui_performance or {}, now),
         "quality": {"selection_percent": round(100 * counters.get("ui_search_with_selection_session", 0) / ui_search, 2) if ui_search else None,
                     "copy_events_per_search": round(100 * (counters.get("ui_copy_all", 0) + counters.get("ui_copy_selected", 0)) / ui_search, 2) if ui_search else None,
                     "zero_percent": round(100 * counters.get("ui_zero_result", 0) / ui_search, 3) if ui_search else None,
@@ -211,10 +160,9 @@ def build_dashboard(telemetry: dict, attribution: dict, now: datetime | None = N
 
 async def read_dashboard() -> dict:
     # Imports are lazy: the standalone test portal never loads the search engine.
-    from core import telemetry, traffic_attribution
+    from core import telemetry, traffic_attribution, ui_performance
     telemetry_snapshot = telemetry.get_snapshot()
     attribution_snapshot = traffic_attribution.get_admin_snapshot()
-    def aggregate():
-        history, status = load_history()
-        return build_dashboard(telemetry_snapshot, attribution_snapshot, history=history, history_status=status)
-    return await asyncio.to_thread(aggregate)
+    performance_snapshot = ui_performance.get_snapshot()
+    return await asyncio.to_thread(build_dashboard, telemetry_snapshot, attribution_snapshot,
+                                   ui_performance=performance_snapshot)
