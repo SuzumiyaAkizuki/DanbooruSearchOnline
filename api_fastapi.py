@@ -37,6 +37,7 @@ from fastapi.exception_handlers import http_exception_handler, request_validatio
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
+from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -44,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.engine import DanbooruTagger
 from core.models import SearchRequest, SearchResponse
 from core.prompt_formats import PROMPT_FORMATS
+from core.api_keys import governed, engine_call, get_key_service
 import core.counter as counter
 import core.telemetry as telemetry
 import core.traffic_attribution as traffic_attribution
@@ -60,10 +62,18 @@ API_KEY_NOTICE = (
     "上线后每把 Key 默认 3000 点/日、60 点/分钟、并发 1，各 Key 独立；"
     "无 Key 调用共享 15000 点/日、30 点/分钟、并发 1 的试用池。"
     "search/related/artists/health 每次分别消耗 3/2/1/0 点，每日北京时间 00:00 重置。"
-    "入口开放后使用 Hugging Face 账号登录申请；首把且不超默认日额度可自动批准，"
+    "入口开放后使用 Hugging Face 账号登录申请；仅个人业务首把且不超默认日额度可自动批准，所有公开业务须人工审核；"
     "第二把及后续 Key、首把超默认额度或后续超默认额度增额需说明原因并人工审核。"
     "超限请求届时将返回 429，各 Key 仍受服务整体容量保护。网页搜索无需申请 Key。"
 )
+if get_key_service().config.mode == "public":
+    API_KEY_NOTICE = (
+        "API Key 与 REST 限流政策已启用。使用 Hugging Face 账号访问 /developer/apply 申请；"
+        "仅个人首把且不超过 3000 点/日可自动批准，个人上限 6000 点/日；所有公开业务、第二把及增额须人工审核。"
+        "每把 Key 独立计额，60 点/分钟、并发 1；无 Key 共享 15000 点/日、30 点/分钟、并发 1。"
+        "search/related/artists/health 每次 3/2/1/0 点，北京时间零点重置。"
+        "个人调用须匹配 Client，公开调用须匹配 Client 与 Site；无效 Key 不回退匿名。网页搜索及 MCP 保持原有方式。"
+    )
 
 
 class SearchIn(BaseModel):
@@ -132,7 +142,7 @@ class RelatedTagOut(BaseModel):
 
 
 class SearchOut(BaseModel):
-    api_key_notice: str = Field(default=API_KEY_NOTICE, description="尚未生效的 API Key 与限流政策预告")
+    api_key_notice: str = Field(default=API_KEY_NOTICE, description="当前 API Key 与限流政策说明")
     tags_all: str
     tags_sfw: str
     results: list[TagOut]
@@ -189,12 +199,8 @@ def _with_corrections(results: list[dict[str, Any]], corrections: dict[str, str]
 # lifespan / 预热由 ui_nicegui.py 的 @app.on_startup 统一管理，此处不重复。
 app = FastAPI(
     title="Danbooru Tag Searcher API",
-    description=(
-        "通过 /api/docs 查看完整接口文档。公开服务接入时，建议通过可选请求头 "
-        "X-DanbooruSearch-Client 声明客户端名称，并通过 "
-        "X-DanbooruSearch-Site 声明公开服务地址。当前观察期内，未声明不会影响正常使用；"
-        "未来未声明请求可能会受到限流等流量治理措施影响。"
-    ),
+    description=API_KEY_NOTICE + "\n\n申请与管理：[开发者页面](/developer/apply)。"
+        "凭证使用 Authorization: Bearer <API_KEY>；登记头为 X-DanbooruSearch-Client 和 X-DanbooruSearch-Site。",
     version="1.0.0",
     docs_url=None,
 )
@@ -321,7 +327,8 @@ async def get_qwen_image_2_1_format(mode: Literal["T2I", "I2I"]) -> str:
 
 
 @app.post("/search", response_model=SearchOut)
-async def search(body: SearchIn) -> SearchOut:
+@governed("search")
+async def search(body: SearchIn, http_request: Request = None) -> SearchOut:
     await telemetry.increment("rest_search")
     traffic_attribution.note_safe_parameters(
         limit=body.limit,
@@ -336,7 +343,7 @@ async def search(body: SearchIn) -> SearchOut:
 
     # 并发安全的异步 search（信号量串行化 + 线程池执行）
     try:
-        response: SearchResponse = await tagger.search_async(request)
+        response: SearchResponse = await engine_call(tagger, "search", request)
     except asyncio.TimeoutError:
         raise HTTPException(status_code=503, detail="搜索超时（120s），请简化查询或稍后重试")
 
@@ -353,7 +360,8 @@ async def search(body: SearchIn) -> SearchOut:
 
 
 @app.post("/related")
-async def related(body: RelatedIn) -> dict[str, Any]:
+@governed("related")
+async def related(body: RelatedIn, http_request: Request = None) -> dict[str, Any]:
     """
     给定已选标签列表，返回基于共现表的关联推荐。
 
@@ -372,7 +380,7 @@ async def related(body: RelatedIn) -> dict[str, Any]:
             "invalid_tags": invalid_tags,
             "api_key_notice": API_KEY_NOTICE,
         }
-    results = await tagger.get_related_async(
+    results = await engine_call(tagger, "get_related",
         corrected_tags,
         set(corrected_tags),
         body.limit,
@@ -398,7 +406,8 @@ async def related(body: RelatedIn) -> dict[str, Any]:
 
 
 @app.post("/artists")
-async def artists(body: ArtistIn) -> dict[str, Any]:
+@governed("artists")
+async def artists(body: ArtistIn, http_request: Request = None) -> dict[str, Any]:
     """
     给定标签列表，推荐擅长绘制这些标签的画师（基于 NPMI 共现数据）。
 
@@ -420,7 +429,7 @@ async def artists(body: ArtistIn) -> dict[str, Any]:
             "api_key_notice": API_KEY_NOTICE,
         }
 
-    results = await tagger.search_artists_by_tags_async(
+    results = await engine_call(tagger, "search_artists_by_tags",
         corrected_tags, limit=body.limit, min_cooc=body.min_cooc,
     )
     artist_names = [result.artist for result in results]
@@ -446,3 +455,26 @@ async def artists(body: ArtistIn) -> dict[str, Any]:
 async def health():
     tagger = await DanbooruTagger.get_instance()
     return {"status": "ok", "loaded": tagger.is_loaded, "api_key_notice": API_KEY_NOTICE}
+
+
+def key_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})["APIKey"] = {
+        "type": "http", "scheme": "bearer", "description": "本站签发的 API Key；不是 Hugging Face Token。无 Key 试用请完全不发送 Authorization。"
+    }
+    for endpoint in ("search", "related", "artists"):
+        operation = schema["paths"]["/" + endpoint]["post"]
+        operation["security"] = [{}, {"APIKey": []}]
+        operation.setdefault("parameters", []).extend([
+            {"name": "X-DanbooruSearch-Client", "in": "header", "required": False,
+             "schema": {"type": "string"}, "description": "持 Key 调用时须与登记 Client 精确匹配。"},
+            {"name": "X-DanbooruSearch-Site", "in": "header", "required": False,
+             "schema": {"type": "string"}, "description": "公开业务持 Key 调用时须与登记 HTTPS Site 精确匹配。"},
+        ])
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = key_openapi

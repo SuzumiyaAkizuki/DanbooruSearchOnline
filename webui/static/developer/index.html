@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Key · DanbooruSearch</title><link rel="stylesheet" href="/developer/assets/portal.css"><script src="/developer/assets/portal.js" defer></script></head>
+<body><main><header><a href="/">DanbooruSearch</a><nav><a href="/developer/apply">申请 Key</a><a href="/developer/keys">我的 Key</a><a id="admin-link" href="/admin" hidden>遥测后台</a></nav><button id="logout" hidden>退出</button></header>
+<div class="heading"><span class="eyebrow">DEVELOPER ACCESS</span><h1 id="title">API 接入</h1><p>网页搜索无需申请 Key。这里管理供程序调用的 REST API 凭证。</p></div>
+<p id="message" role="status" aria-live="polite"></p><section id="login" class="panel"><h2>使用 Hugging Face 账号登录</h2><p>测试期间仅向受邀账号开放。请在新标签页完成登录，再回到这里刷新。</p><a id="login-link" target="_blank" rel="noopener">登录 Hugging Face</a><button id="refresh-login">已登录，刷新</button></section>
+<div id="content" hidden><div class="toolbar"><span id="identity"></span><button id="refresh">刷新</button></div>
+<section id="rules" class="panel"><h2>额度与接入方式</h2><p>个人业务默认每 Key 3,000 点/日，人工审核最高 6,000 点；公开业务全部人工审核，10,000 点为参考申请额度。仅个人首把且不超过 3,000 点可自动批准。第二把、增额及业务资料变更需说明原因并审核。</p><p>每把 Key 独立计算日额度、每分钟 60 点、并发 1；所有 Key 无限期。search / related / artists 分别消耗 3 / 2 / 1 点，health 不计点。每天北京时间 00:00 重置，不结转。</p><p>无 Key 共享 15,000 点/日、30 点/分钟、并发 1。全受治理 REST 同时最多 2 个业务请求，search 最多 1 个、推荐合计最多 1 个，每分钟 120 点。网页和 MCP 不使用这些额度。</p><p>在服务器安全保存 Key。个人业务发送 Bearer Key 与登记的 Client；公开业务还须发送登记的 Site，按原样精确匹配。Key 不应放在公开网页或代码中。</p><pre>Authorization: Bearer &lt;API_KEY&gt;
+X-DanbooruSearch-Client: &lt;登记的 Client&gt;
+X-DanbooruSearch-Site: &lt;公开业务登记的 HTTPS Site&gt;</pre><p>明确执行失败或超时退还日点数，短时令牌不退；轮换不重置用量，旧 Key 立即失效。429 请按 Retry-After 退避，401 检查凭证，403 核对登记头，503 稍后重试。</p></section>
+<section id="apply-section" class="panel"><h2 id="apply-title">申请独立额度</h2><form id="apply-form">
+<div class="fields"><label>使用类型<select name="kind" id="kind"><option value="personal">个人业务 · 仅本人使用</option><option value="public">公开业务 · 向其他人提供服务</option></select></label>
+<label>Client 名称<input name="client" required maxlength="80" placeholder="my-tag-tool" pattern="[ -~]{1,80}"></label>
+<label>公开服务 HTTPS 地址<input name="site" id="site" maxlength="500" placeholder="https://example.com"></label>
+<label>申请每日点数<input name="daily" id="daily" type="number" min="1" max="10000000" value="3000" required></label></div>
+<p id="estimate" class="muted"></p><label>用途说明<textarea name="purpose" maxlength="1000" required placeholder="说明如何使用，不要填写密码、Token 或敏感信息"></textarea></label>
+<label>申请原因（公开业务、第二把、超默认额度或资料变更必填）<textarea name="reason" maxlength="1000"></textarea></label>
+<details><summary>申请前请阅读：使用须知、公开接入规则与隐私说明</summary><p>AI 辅助结果可能有误；结果可能包含 NSFW 内容；仅支持中/英双语，更推荐中文；标签范围为特征、角色、作品且频数 ≥100。</p><p>本服务 API / MCP 可免费接入个人、私有或公开服务。项目数据库、前后端代码可用于二次开发；项目采用 GPL-3.0，基于项目代码开发的衍生作品也须遵守 GPL-3.0。</p><p>公开在线服务使用本项目 API、MCP 或公开 Bucket 的任意数据库文件时，请在服务主页添加项目主站友情链接：</p><pre>URL: https://huggingface.co/spaces/SAkizuki/DanbooruSearch
+简介: 基于语义匹配的 Danbooru 标签搜索引擎，支持多维匹配与共现关联推荐。
+作者: 凉宫秋月（https://github.com/SuzumiyaAkizuki）
+LOGO: https://akizukipic.oss-cn-beijing.aliyuncs.com/img/file%20%281%29.svg</pre><p>公开 Bucket：<a href="https://huggingface.co/buckets/SAkizuki/DanbooruSearchEmbedding" target="_blank" rel="noopener">DanbooruSearchEmbedding</a>。希望主页互链时，将服务 URL、简介、作者、LOGO 发至 misakaacer@gmail.com。</p><p>我们保存必要的 HF 稳定身份、用户名、申请资料、须知确认、授权、日用量和安全操作记录；Key 只保存摘要。新认证库不保存查询词、标签、IP、设备指纹或 HF Token。第三方基础设施可能保留连接日志。日用量建议留存 30 天、审计 90 天；尚未完成的退款记录继续保留。可立即吊销 Key，删除登记数据请联系 misakaacer@gmail.com；这不删除浏览器中的历史或收藏。</p></details>
+<label class="check"><input type="checkbox" name="accepted" required>我已阅读并同意使用须知、接入规则和隐私说明，确认如实申报业务类型。</label><button type="submit" class="primary">提交申请</button><button id="cancel-edit" type="button" hidden>取消资料变更</button></form></section>
+<section id="admin-tools" class="panel" hidden><h2>审核与管理</h2><div class="toolbar"><input id="filter-search" placeholder="账号或 Client"><select id="filter-state"><option value="">全部申请</option><option value="pending">待审核</option><option value="approved">已批准</option><option value="rejected">已拒绝</option></select><select id="filter-grant"><option value="">全部授权</option><option value="active">有效</option><option value="paused">暂停</option><option value="closed">关闭</option></select><button id="filter">筛选</button><button id="retry-refunds">重试已知退款</button></div><p id="pool"></p></section>
+<section class="panel"><h2>申请记录</h2><div id="applications" class="cards"></div></section>
+<section class="panel"><h2>授权与 Key</h2><p id="reset" class="muted"></p><div id="grants" class="cards"></div></section>
+<section id="audit-section" class="panel" hidden><h2>操作记录</h2><div id="audit" class="cards"></div></section>
+<div class="toolbar"><button id="previous">上一页</button><span id="page"></span><button id="next">下一页</button></div>
+</div><dialog id="secret-dialog"><h2>Key 仅展示一次</h2><p>请立即保存到安全位置。关闭后无法找回；如未保存，请轮换。</p><textarea id="secret" readonly aria-label="新 API Key"></textarea><button id="copy-secret">复制</button><button id="close-secret">我已保存，关闭</button></dialog>
+<footer>遇到问题请提供时间、申请编号和脱敏前缀，不发送完整 Key。联系：misakaacer@gmail.com</footer></main></body></html>

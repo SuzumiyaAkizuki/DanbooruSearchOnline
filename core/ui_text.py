@@ -64,4 +64,12 @@ def load_ui_text(path: Path = DEFAULT_UI_TEXT_PATH) -> dict[str, Any]:
             raise RuntimeError(f"UI 文案配置链接缺少名称: documentation.links[{index}] ({path})")
         if not isinstance(link.get("url"), str) or not link["url"].strip():
             raise RuntimeError(f"UI 文案配置链接缺少地址: documentation.links[{index}] ({path})")
+    # Preview keeps the existing public announcement. Explicit public activation
+    # selects configurable live copy and naturally changes announcement_version().
+    from core.api_keys import get_key_service
+    if get_key_service().config.mode == "public" and isinstance(content.get("api_key_public"), dict):
+        for key in ("update_title", "update_summary", "update_detail_label", "update_markdown"):
+            value = content["api_key_public"].get(key)
+            if isinstance(value, str) and value.strip():
+                content["help"][key] = value
     return content

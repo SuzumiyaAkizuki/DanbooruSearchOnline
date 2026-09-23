@@ -19,6 +19,7 @@ from webui import controller as _controller
 from webui.connection_guard import NiceGUIPollingDisconnectGuard
 from webui.routes import register_main_page
 from webui.admin import create_admin_router
+from webui.developer import create_developer_router
 
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -54,6 +55,7 @@ register_main_page(
 if __name__ in {'__main__', '__mp_main__'}:
     host, port = get_host_port()
     app.include_router(create_admin_router())
+    app.include_router(create_developer_router())
     app.add_middleware(NiceGUIPollingDisconnectGuard)
 
     def ui_resource_counts():

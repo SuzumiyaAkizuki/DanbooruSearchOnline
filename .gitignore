@@ -21,3 +21,4 @@ docs/
 .*/
 /AGENTS.md
 tests/
+/migrations/001_api_keys.sql

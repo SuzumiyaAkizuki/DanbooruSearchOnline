@@ -69,6 +69,11 @@ def create_admin_router(config: AdminConfig | None = None, *, auth: AdminAuth | 
     @router.get("/")
     @router.get("/api-keys")
     async def page(request: Request):
+        if request.url.path.rstrip("/") == "/admin/api-keys":
+            from core.api_keys import get_key_service
+            if get_key_service().config.mode != "off":
+                from webui.developer import key_page
+                return key_page()
         # Public shell contains no metrics, identity, secrets or hidden admin data.
         return HTMLResponse(asset("index.html"), headers=SECURITY_HEADERS)
 
@@ -161,4 +166,6 @@ def create_admin_router(config: AdminConfig | None = None, *, auth: AdminAuth | 
                 cache.update(data=data, at=time.monotonic())
         return json(cache["data"])
 
+    from webui.developer import install_admin_key_routes
+    install_admin_key_routes(router, session, same_origin)
     return router

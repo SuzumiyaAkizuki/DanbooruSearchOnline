@@ -38,8 +38,8 @@ class AdminCallbackLogFilter(logging.Filter):
         if isinstance(record.args, tuple) and len(record.args) == 5:
             args = list(record.args)
             target = str(args[2])
-            if target.split("?", 1)[0] == "/admin/callback":
-                args[2] = "/admin/callback"
+            if target.split("?", 1)[0] in {"/admin/callback", "/developer/callback"}:
+                args[2] = target.split("?", 1)[0]
                 record.args = tuple(args)
         return True
 
@@ -181,6 +181,7 @@ class HFIdentityProvider:
 
 
 class AdminAuth:
+    max_sessions = 32
     def __init__(self, config: AdminConfig, provider=None, clock: Callable = time.monotonic):
         self.config = config
         self.provider = provider or HFIdentityProvider(config)
@@ -221,9 +222,9 @@ class AdminAuth:
 
     def issue(self, identity: dict) -> str:
         self.prune()
-        if identity.get("issuer") != HF_ISSUER or identity.get("sub") != self.config.admin_sub:
+        if not self.allowed(identity.get("issuer"), identity.get("sub")):
             raise PermissionError()
-        if len(self.sessions) >= 32:
+        if len(self.sessions) >= self.max_sessions:
             raise LoginRejected()
         token = secrets.token_urlsafe(32)
         self.sessions[token] = AdminSession(
@@ -235,6 +236,9 @@ class AdminAuth:
     def get_session(self, token: str) -> AdminSession | None:
         self.prune()
         session = self.sessions.get(token)
-        if session and session.issuer == HF_ISSUER and session.sub == self.config.admin_sub:
+        if session and self.allowed(session.issuer, session.sub):
             return session
         return None
+
+    def allowed(self, issuer, sub):
+        return issuer == HF_ISSUER and sub == self.config.admin_sub
