@@ -89,7 +89,7 @@ def build_help_dialog(controller: Any, *, ui_text: dict, sponsor_notice_text: st
                                 link_url = alternate_url if link['url'] == '{alternate_url}' else link['url']
                                 ui.link(link['label'], link_url, new_tab=True).classes('help-link')
                             from core.api_keys import get_key_service
-                            if get_key_service().config.mode == 'public':
+                            if PLATFORM != 'hf' or get_key_service().config.mode == 'public':
                                 ui.link('申请 / 管理 API Key', '/developer/apply', new_tab=True).classes('help-link')
                         ui.markdown(ui_text['documentation']['copyright_markdown']).classes(
                             'help-content'

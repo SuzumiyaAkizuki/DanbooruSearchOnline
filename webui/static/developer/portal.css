@@ -23,7 +23,7 @@
 :is(.developer-shell,#key-workspace) [id$="message"]:not(:empty){background:var(--blue-soft);border:1px solid var(--line);border-radius:6px;padding:12px;margin:16px 0}
 :is(.developer-shell,#key-workspace) dialog{max-width:680px;width:90%;border:1px solid var(--line);border-radius:10px;padding:28px;color:var(--ink)}
 :is(.developer-shell,#key-workspace) dialog::backdrop{background:#172d4266}
-:is(.developer-shell,#key-workspace) [id$="secret"]{min-height:120px;font-family:monospace}
+:is(.developer-shell,#key-workspace) textarea[id$="secret"]{min-height:76px;font-family:Consolas,monospace}
 :is(.developer-shell,#key-workspace) :is(input,textarea,summary):focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 #key-workspace .heading{display:block}
 .key-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:24px 0 16px;padding-bottom:10px;flex-wrap:wrap}
@@ -36,3 +36,21 @@
 :is(.developer-shell,#key-workspace) .fields :is(input,select){height:44px}
 :is(.developer-shell,#key-workspace) input:disabled{background:var(--page);color:var(--muted);cursor:not-allowed;opacity:1}
 :is(.developer-shell,#key-workspace) .required-marker{color:#c62828;margin-left:3px}
+
+:is(.developer-shell,#key-workspace) fieldset{border:0;padding:0;margin:0;min-width:0}
+:is(.developer-shell,#key-workspace) fieldset:disabled :is(input,select,textarea,button){background:var(--page);color:var(--muted);cursor:not-allowed}
+:is(.developer-shell,#key-workspace) .markdown-copy{min-width:0;overflow-x:auto}
+:is(.developer-shell,#key-workspace) .markdown-copy table{width:100%;border-collapse:collapse;margin:16px 0;white-space:normal}
+:is(.developer-shell,#key-workspace) .markdown-copy :is(th,td){border:1px solid var(--line);padding:10px 12px;text-align:left;white-space:normal;overflow-wrap:anywhere}
+:is(.developer-shell,#key-workspace) .markdown-copy th{background:var(--page);font-weight:600}
+
+:is(.developer-shell,#key-workspace) dialog{max-width:800px;max-height:88vh;overflow-y:auto}
+:is(.developer-shell,#key-workspace) dialog button{min-height:38px;padding:8px 14px;font-size:14px;font-weight:600;line-height:1.4;white-space:nowrap}
+:is(.developer-shell,#key-workspace) .secret-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px;flex-wrap:wrap}
+:is(.developer-shell,#key-workspace) .secret-actions .primary:hover{background:#174f86;color:white}
+:is(.developer-shell,#key-workspace) .curl-examples{border-top:1px solid var(--line);padding-top:18px;margin-top:16px}
+:is(.developer-shell,#key-workspace) .example-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px}
+:is(.developer-shell,#key-workspace) .example-heading h4{margin:0;font-size:14px}
+:is(.developer-shell,#key-workspace) .curl-example pre{margin:10px 0 0;max-height:230px;overflow:auto}
+:is(.developer-shell,#key-workspace) [id$="secret-feedback"]{min-height:20px;margin:8px 0 0;font-size:13px}
+@media(max-width:650px){:is(.developer-shell,#key-workspace) dialog{padding:20px}:is(.developer-shell,#key-workspace) .secret-actions button{flex:1}}

@@ -31,20 +31,22 @@ def response(data, status=200):
     return JSONResponse(data, status_code=status, headers=HEADERS)
 
 
-def render_key_page():
+def render_key_page(read_only=False):
     template = (ASSETS / "index.html").read_text(encoding="utf-8")
     copy = load_ui_text()["developer"]
-    markdown = MarkdownIt("commonmark", {"html": False})
-    replacements = {}
+    markdown = MarkdownIt("commonmark", {"html": False}).enable("table")
+    replacements = {"read_only": "true" if read_only else "false",
+                    "form_disabled": "disabled" if read_only else "",
+                    "readonly_hidden": "" if read_only else "hidden"}
     for name in ("rules", "terms"):
         replacements[name + "_title"] = escape(copy[name + "_title"])
         replacements[name + "_body"] = markdown.render(copy[name + "_markdown"])
-    return re.sub(r"\{\{(rules_title|rules_body|terms_title|terms_body)\}\}",
+    return re.sub(r"\{\{(rules_title|rules_body|terms_title|terms_body|read_only|form_disabled|readonly_hidden)\}\}",
                   lambda match: replacements[match[1]], template)
 
 
-def key_page():
-    return HTMLResponse(render_key_page(), headers=HEADERS)
+def key_page(read_only=False):
+    return HTMLResponse(render_key_page(read_only), headers=HEADERS)
 
 
 def embedded_key_panel():
@@ -52,7 +54,7 @@ def embedded_key_panel():
     body = html.split("<main>", 1)[1].split("</main>", 1)[0]
     body = re.sub(r"<header\b[^>]*>.*?</header>|<footer\b[^>]*>.*?</footer>", "", body, flags=re.S)
     body = re.sub(r'id="([^"]+)"', lambda m: 'id="key-' + m[1] + '"', body)
-    body = re.sub(r'aria-controls="([^"]+)"', lambda m: 'aria-controls="key-' + m[1] + '"', body)
+    body = re.sub(r'(aria-controls|aria-labelledby)="([^"]+)"', lambda m: m[1] + '="key-' + m[2] + '"', body)
     return '<div id="key-workspace">' + body + '</div>'
 
 
@@ -143,9 +145,7 @@ def create_developer_router(service=None, config=None, auth=None):
     @router.get("/apply")
     @router.get("/keys")
     async def page():
-        if service.config.mode == "off":
-            return response({"error": "not_open"}, 404)
-        return key_page()
+        return key_page(read_only=service.config.mode == "off")
 
     @router.get("/assets/{name}")
     async def asset(name: str):

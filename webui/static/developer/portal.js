@@ -34,6 +34,21 @@
       else link.removeAttribute("aria-current");
     });
   }
+  // Read-only deployments do not authenticate or send portal API requests.
+  if(!admin && document.body.dataset.readOnly==="true") {
+    $("login").hidden=true;$("content").hidden=false;
+    $("identity").parentElement.hidden=true;
+    $("apply-title").textContent="申请表预览（请前往 Hugging Face 提交）";
+    $("apply-form").addEventListener("submit",event=>event.preventDefault());
+    $("title").textContent="开发者中心";
+    $("view-description").textContent="查看 API 额度、接入方式与使用须知。";
+    for(const id of ["applications-section","grants-section","audit-section","pagination"]) $(id).hidden=true;
+    document.querySelectorAll('nav a[href^="/developer/"]').forEach(link=>{
+      link.href="https://sakizuki-danboorusearch.hf.space"+link.getAttribute("href");
+      link.target="_blank";link.rel="noopener";
+    });
+    return;
+  }
   let csrf = null, terms = "", page = 0, submission = crypto.randomUUID(), target = null, expiry;
   const errors = {pending_application_exists:"已有待审核申请，请等待审核。", purpose_required:"本次申请需要人工审核，请填写用途说明。", review_reason_required:"请填写审核说明。", stale_version_refresh_required:"记录已变更，请刷新后重试。", key_service_unconfigured:"服务尚未配置完成，请联系维护者。", key_service_unavailable:"额度服务暂不可用，请稍后重试。", already_claimed_use_rotate:"已领取；若未保存，请轮换 Key。", invalid_application_fields:"请检查申请字段、Client 格式及 HTTPS 地址。", login_required:"登录已过期，请重新登录。"};
   function message(text) { $("message").textContent = text; }
@@ -43,7 +58,8 @@
     if (!r.ok) { if (r.status===401) clear(); throw new Error(errors[result.error] || result.error || result.detail || "操作失败，请刷新后重试。"); }
     return result;
   }
-  function clearSecret(){ $("secret").value=""; if($("secret-dialog").open) $("secret-dialog").close(); }
+  function wipeSecret(){ $("secret").value="";$("curl-windows").textContent="";$("curl-posix").textContent="";$("secret-feedback").textContent=""; }
+  function clearSecret(){ wipeSecret(); if($("secret-dialog").open) $("secret-dialog").close(); }
   function clear(){generation++;identity={};names={};autoEligible=false;estimate();csrf=null;clearTimeout(expiry);clearSecret();$("content").hidden=true;if($("logout"))$("logout").hidden=true;$("login").hidden=false;for(const id of ["applications","grants","audit"]) $(id).replaceChildren();}
   function button(root,text,action){const b=document.createElement("button");b.textContent=text;b.onclick=async()=>{b.disabled=true;try{await action();}catch(e){message(e.message);}finally{b.disabled=false;}};root.append(b);}
   function line(root,text){const p=document.createElement("p");p.textContent=text;root.append(p);}
@@ -53,7 +69,11 @@
   async function grantAction(g,action){
     if(!confirm(action==="revoke"?"永久吊销这把逻辑 Key？旧凭证无法恢复。":action==="rotate"?"生成新 Key 并立即撤销旧 Key？额度不会重置。":"领取 Key？完整值只展示一次。"))return;
     const result=await request(`/developer/api/grants/${g.id}/${action}`,{version:g.version});
-    if(result.key){$("secret").value=result.key;$("secret-dialog").showModal();}
+    if(result.key){
+      const examples=KeyPortalView.searchExamples(result.key,g);
+      $("secret").value=result.key;$("curl-windows").textContent=examples.windows;$("curl-posix").textContent=examples.posix;
+      $("secret-feedback").textContent="";$("secret-dialog").showModal();
+    }
     await load();
   }
   function edit(g){showView(true);history.pushState(null,"","/developer/apply");target=g.id;submission=crypto.randomUUID();const form=$("apply-form");for(const key of ["kind","client","site","daily"])form.elements[key].value=g[key];$("apply-title").textContent="申请增额 / 变更业务资料（人工审核）";$("cancel-edit").hidden=false;$("apply-section").scrollIntoView();estimate();}
@@ -137,7 +157,14 @@
   if($("logout"))$("logout").onclick=async()=>{try{await request(admin?"/admin/logout":"/developer/logout",{});clear();message("已退出。");}catch(e){message(e.message);}};
   $("previous").onclick=()=>{page=Math.max(0,page-1);load().catch(e=>message(e.message));};$("next").onclick=()=>{page++;load().catch(e=>message(e.message));};
   $("filter").onclick=()=>{page=0;load().catch(e=>message(e.message));};$("retry-refunds").onclick=()=>adminAction({action:"retry_refunds"}).catch(e=>message(e.message));
-  $("close-secret").onclick=clearSecret;$("secret-dialog").addEventListener("close",()=>{$("secret").value="";});$("copy-secret").onclick=()=>navigator.clipboard.writeText($("secret").value).catch(()=>message("自动复制不可用，请手动复制。"));
+  $("close-secret").onclick=clearSecret;$("secret-dialog").addEventListener("close",wipeSecret);
+  async function copyValue(value,label){
+    try{await navigator.clipboard.writeText(value);if($("secret-dialog").open)$("secret-feedback").textContent=label+"已复制。";}
+    catch{if($("secret-dialog").open)$("secret-feedback").textContent="自动复制不可用，请选中内容手动复制。";}
+  }
+  $("copy-secret").onclick=()=>copyValue($("secret").value,"Key");
+  $("copy-windows").onclick=()=>copyValue($("curl-windows").textContent,"PowerShell 命令");
+  $("copy-posix").onclick=()=>copyValue($("curl-posix").textContent,"Bash / Zsh 命令");
   window.addEventListener("pagehide",clear);window.addEventListener("pageshow",e=>{if(e.persisted)session().catch(err=>message(err.message));});
   if($("admin-link"))$("admin-link").hidden=!admin;$("admin-tools").hidden=!admin;$("audit-section").hidden=!admin;$("apply-section").hidden=admin;$("rules").hidden=admin;$("title").textContent=admin?"API Key 审核与管理":"API 接入";
   showView();

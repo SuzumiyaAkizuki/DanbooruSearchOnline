@@ -29,7 +29,25 @@
       time:Number.isNaN(time.getTime()) ? "时间未知" : time.toLocaleString("zh-CN",{timeZone:"Asia/Shanghai",hour12:false})+"（北京时间）",
       description:notes[row.action] || "授权设置已更新。",changes,reason:row.reason || ""};
   }
-  const api={sections,audit};
+  function searchExamples(key, grant) {
+    const headers=["Content-Type: application/json", "Authorization: Bearer "+key,
+      "X-DanbooruSearch-Client: "+grant.client];
+    if(grant.kind==="public") headers.push("X-DanbooruSearch-Site: "+grant.site);
+    const args=["--silent","--show-error","--include",
+      "https://sakizuki-danboorusearch.hf.space/api/search",
+      ...headers.flatMap(header=>["--header",header]),"--data-binary","@-"];
+    // ASCII JSON travels through PowerShell pipelines independently of console encoding.
+    const body=JSON.stringify({query:"白色水手服",limit:5}).replace(/[^\x00-\x7f]/g,
+      char=>"\\u"+char.charCodeAt(0).toString(16).padStart(4,"0"));
+    const ps=value=>"'"+value.replace(/'/g,"''")+"'";
+    const sh=value=>"'"+value.replace(/'/g,"'\"'\"'")+"'";
+    return {
+      windows:["& {", "  $PSNativeCommandArgumentPassing = 'Standard'", "  $curlArgs = @(",
+        ...args.map(value=>"    "+ps(value)), "  )", "  "+ps(body)+" | curl.exe @curlArgs", "}"].join("\n"),
+      posix:"printf '%s' "+sh(body)+" | curl \\\n  "+args.map(sh).join(" \\\n  ")
+    };
+  }
+  const api={sections,audit,searchExamples};
   if(typeof module!=="undefined" && module.exports) module.exports=api;
   else root.KeyPortalView=api;
 })(globalThis);
