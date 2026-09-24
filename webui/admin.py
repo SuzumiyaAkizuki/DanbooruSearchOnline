@@ -69,13 +69,13 @@ def create_admin_router(config: AdminConfig | None = None, *, auth: AdminAuth | 
     @router.get("/")
     @router.get("/api-keys")
     async def page(request: Request):
-        if request.url.path.rstrip("/") == "/admin/api-keys":
-            from core.api_keys import get_key_service
-            if get_key_service().config.mode != "off":
-                from webui.developer import key_page
-                return key_page()
-        # Public shell contains no metrics, identity, secrets or hidden admin data.
-        return HTMLResponse(asset("index.html"), headers=SECURITY_HEADERS)
+        # Both tabs use the same shell; no separate developer-style admin page.
+        from core.api_keys import get_key_service
+        html = asset("index.html")
+        if get_key_service().config.mode != "off":
+            from webui.developer import embedded_key_panel
+            html = html.replace('<!-- KEY_WORKSPACE -->', embedded_key_panel())
+        return HTMLResponse(html, headers=SECURITY_HEADERS)
 
     @router.get("/assets/{name}")
     async def static_asset(name: str):

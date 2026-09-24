@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json as json_module
 import secrets
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
@@ -30,8 +31,17 @@ def key_page():
     return HTMLResponse((ASSETS / "index.html").read_text(encoding="utf-8"), headers=HEADERS)
 
 
+def embedded_key_panel():
+    html = (ASSETS / "index.html").read_text(encoding="utf-8")
+    body = html.split("<main>", 1)[1].split("</main>", 1)[0]
+    body = re.sub(r"<header\b[^>]*>.*?</header>|<footer\b[^>]*>.*?</footer>", "", body, flags=re.S)
+    body = re.sub(r'id="([^"]+)"', lambda m: 'id="key-' + m[1] + '"', body)
+    body = re.sub(r'aria-controls="([^"]+)"', lambda m: 'aria-controls="key-' + m[1] + '"', body)
+    return '<div id="key-workspace">' + body + '</div>'
+
+
 def static(name):
-    types = {"portal.js": "text/javascript", "portal.css": "text/css"}
+    types = {"portal.js": "text/javascript", "portal_view.js": "text/javascript", "portal.css": "text/css"}
     if name not in types:
         return response({"error": "not_found"}, 404)
     return Response((ASSETS / name).read_text(encoding="utf-8"), media_type=types[name], headers=HEADERS)

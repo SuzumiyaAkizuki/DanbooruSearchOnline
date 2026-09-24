@@ -1,1 +1,31 @@
-:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#24374b;background:#f4f7fa;font-size:15px;line-height:1.7}*{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:auto;padding:24px}header,nav,.toolbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap}header{border-bottom:1px solid #d8e2ec;padding-bottom:20px}header>a{font-weight:700}nav{flex:1}a{color:#176790}h1{font-size:36px;letter-spacing:-1px;margin:8px 0}h2{font-size:20px;margin:0 0 16px}h3{margin:0 0 8px}.heading{padding:34px 0 18px}.eyebrow{font-size:12px;letter-spacing:2px;color:#537b93}.panel{background:white;border:1px solid #d8e2ec;border-radius:12px;padding:26px;margin:18px 0}.fields{display:grid;grid-template-columns:1fr 1fr;gap:20px}label{display:block;margin:12px 0;color:#3a5266}input,textarea,select,button{font:inherit}input,textarea,select{width:100%;padding:9px 12px;border:1px solid #b8cbd9;border-radius:6px;background:white;color:inherit}textarea{min-height:90px;resize:vertical}.check{display:flex;gap:10px;align-items:start}.check input{width:auto;margin-top:8px}button,#login-link{border:1px solid #aac2d1;background:#edf5fa;color:#175d83;border-radius:6px;padding:8px 14px;cursor:pointer;text-decoration:none}button:hover{background:#dcebf5}button:disabled{opacity:.5;cursor:wait}.primary{background:#176790;color:white}.muted,footer{color:#647c8e;font-size:13px}.toolbar input{width:230px}.toolbar select{width:150px}.cards{display:grid;gap:14px}.card{border-top:1px solid #e3eaf0;padding:16px 0;overflow-wrap:anywhere}.card p{margin:6px 0;white-space:pre-wrap}.card button{margin:6px 8px 0 0}pre{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f6fa;padding:14px;border-radius:6px}details{background:#f5f8fb;padding:16px;border-radius:6px;margin:18px 0}summary{cursor:pointer}#message:not(:empty){background:#fff6e2;border:1px solid #eccb84;border-radius:6px;padding:12px}dialog{max-width:680px;width:90%;border:1px solid #b8cbd9;border-radius:12px;padding:28px}dialog::backdrop{background:#172d4266}#secret{min-height:120px;font-family:monospace}footer{margin:36px 0}[hidden]{display:none!important}@media(max-width:650px){main{padding:16px}.panel{padding:18px}.fields{grid-template-columns:1fr}h1{font-size:28px}nav{gap:10px}}
+/* Shared portal details; all selectors are scoped to protect the telemetry page. */
+:is(.developer-shell,#key-workspace) .panel{margin:18px 0}
+:is(.developer-shell,#key-workspace) .toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0}
+:is(.developer-shell,#key-workspace) .fields{display:grid;grid-template-columns:1fr 1fr;gap:16px 24px}
+:is(.developer-shell,#key-workspace) label{display:block;margin:12px 0;color:var(--ink)}
+:is(.developer-shell,#key-workspace) input,:is(.developer-shell,#key-workspace) textarea,:is(.developer-shell,#key-workspace) select{font:inherit;width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:white;color:var(--ink)}
+:is(.developer-shell,#key-workspace) textarea{min-height:90px;resize:vertical}
+:is(.developer-shell,#key-workspace) .check{display:flex;gap:10px;align-items:start}
+:is(.developer-shell,#key-workspace) .check input{width:auto;margin-top:8px}
+:is(.developer-shell,#key-workspace) .toolbar input{width:230px;max-width:100%}
+:is(.developer-shell,#key-workspace) .toolbar select{width:150px;max-width:100%}
+:is(.developer-shell,#key-workspace) .primary{background:var(--blue);color:white}
+:is(.developer-shell,#key-workspace) .cards{display:grid;gap:14px}
+:is(.developer-shell,#key-workspace) .card{border-top:1px solid var(--line);padding:18px 0;overflow-wrap:anywhere}
+:is(.developer-shell,#key-workspace) .card:first-child{border-top:0}
+:is(.developer-shell,#key-workspace) .card h3{font-weight:650;margin:0 0 8px}
+:is(.developer-shell,#key-workspace) .card p{margin:6px 0;white-space:pre-wrap}
+:is(.developer-shell,#key-workspace) .card button{margin:6px 8px 0 0}
+:is(.developer-shell,#key-workspace) pre{font:13px/1.7 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--page);padding:14px;border-radius:6px}
+:is(.developer-shell,#key-workspace) details{margin:16px 0}
+:is(.developer-shell,#key-workspace) summary{cursor:pointer;font-weight:600;color:var(--blue)}
+:is(.developer-shell,#key-workspace) details p{margin:12px 0}
+:is(.developer-shell,#key-workspace) [id$="message"]:not(:empty){background:var(--blue-soft);border:1px solid var(--line);border-radius:6px;padding:12px;margin:16px 0}
+:is(.developer-shell,#key-workspace) dialog{max-width:680px;width:90%;border:1px solid var(--line);border-radius:10px;padding:28px;color:var(--ink)}
+:is(.developer-shell,#key-workspace) dialog::backdrop{background:#172d4266}
+:is(.developer-shell,#key-workspace) [id$="secret"]{min-height:120px;font-family:monospace}
+:is(.developer-shell,#key-workspace) :is(input,textarea,summary):focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+#key-workspace .heading{display:block}
+.key-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:24px 0 16px;padding-bottom:10px;flex-wrap:wrap}
+.key-tabs [aria-selected="true"]{color:var(--blue);border-color:var(--blue);background:var(--blue-soft)}
+@media(max-width:650px){:is(.developer-shell,#key-workspace) .fields{grid-template-columns:1fr}:is(.developer-shell,#key-workspace) .toolbar{gap:8px}}

@@ -7,13 +7,14 @@
   const p95 = (v) => v.p95_ms == null ? "—" : `${v.p95_overflow ? ">" : "≤"} ${duration(v.p95_ms)}`;
   const date = (v) => v ? new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false}).format(new Date(v)) : "—";
   let csrf = null, snapshot = null, expiry = null, loading = false;
-  const keysPage = location.pathname.replace(/\/$/, "") === "/admin/api-keys";
+  let keysPage = location.pathname.replace(/\/$/, "") === "/admin/api-keys";
   document.querySelector(`[data-nav="${keysPage ? "keys" : "overview"}"]`).setAttribute("aria-current", "page");
   $("overview").hidden = keysPage;
   $("keys").hidden = !keysPage;
 
   function notice(text) { $("status").textContent = text; $("status").hidden = !text; }
   function clearPrivateView() {
+    window.keyPortal?.clear();
     csrf = null; snapshot = null; clearTimeout(expiry);
     $("dashboard").hidden = true; $("account").hidden = true; $("login").hidden = false;
     for (const id of ["ui-count","rest-count","mcp-count","ui-detail","rest-detail","mcp-detail","ui-avg","ui-p95","window-count","window-errors","window-status","window-range","latency-note","since","updated","username"]) $(id).textContent = "—";
@@ -150,15 +151,17 @@
   async function refresh() {
     if (loading || document.hidden) return;
     loading = true; $("refresh").disabled = true;
+    const viewAtStart=keysPage;
     try {
       if (!await session()) return;
-      if (keysPage) return;
+      if(viewAtStart!==keysPage)return;
+      if (keysPage) {await window.keyPortal?.refresh();return;}
       const response = await request("/admin/api/overview", {cache:"no-store",credentials:"same-origin"});
       if (response.status === 401 || response.status === 403) {clearPrivateView();notice("后台登录已失效，请重新登录。");await session();return;}
       if (!response.ok) throw new Error("metrics");
       render(await response.json()); notice("");
     } catch (_) {notice(snapshot ? "刷新失败，当前保留上一次快照。请稍后重试，并注意快照时间。" : "暂时无法读取后台状态，请稍后刷新。标签搜索可从左侧入口访问。");}
-    finally {loading=false;$("refresh").disabled=false;}
+    finally {loading=false;$("refresh").disabled=false;if(viewAtStart!==keysPage)refresh();}
   }
   $("refresh").addEventListener("click", refresh);
   $("range").addEventListener("change", renderRest);
@@ -171,15 +174,20 @@
     } catch (_) {notice("退出未完成，请重试。当前登录状态尚未确认失效。");}
     finally {$("logout").disabled=false;}
   });
-  const keyTabs = {applications:["申请审核尚未启用","后续在这里查看账号、服务名称、用途和预计用量，并批准或拒绝申请。"],grants:["授权与 Key 管理尚未启用","后续在这里查看脱敏 Key、授权范围、用量和有效期，并暂停、恢复或吊销授权。"],audit:["操作记录尚未启用","后续在这里查看审批、授权调整与吊销记录。当前没有启用授权操作审计。"]};
-  const tabs = [...document.querySelectorAll("[data-key-tab]")];
-  tabs.forEach((button, i) => {
-    button.addEventListener("click", () => {
-      tabs.forEach((tab) => {tab.setAttribute("aria-selected", String(tab===button));tab.tabIndex=tab===button?0:-1;});
-      const [title,copy]=keyTabs[button.dataset.keyTab];$("key-title").textContent=title;$("key-copy").textContent=copy;$("key-panel").setAttribute("aria-labelledby",button.id);
+  function selectView() {
+    keysPage = location.pathname.replace(/\/$/, "") === "/admin/api-keys";
+    document.querySelectorAll("[data-nav]").forEach(link => {
+      if(link.dataset.nav === (keysPage ? "keys" : "overview")) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
     });
-    button.addEventListener("keydown", (event) => {if (["ArrowLeft","ArrowRight","Home","End"].includes(event.key)) {event.preventDefault();const next=event.key==="Home"?0:event.key==="End"?tabs.length-1:(i+(event.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length;tabs[next].click();tabs[next].focus();}});
-  });
+    $("overview").hidden = keysPage; $("keys").hidden = !keysPage;
+    refresh();
+  }
+  document.querySelectorAll("[data-nav]").forEach(link => link.addEventListener("click", event => {
+    if(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();history.pushState(null, "", link.getAttribute("href"));selectView();
+  }));
+  window.addEventListener("popstate", selectView);
   const messages={forbidden:"HF 身份验证成功，但该账号没有后台管理员权限。请使用指定管理员账号登录。",login_failed:"登录验证未完成或已过期，请重新发起登录。",busy:"登录请求较多，请几分钟后重试。",unconfigured:"后台 OAuth 尚未配置，暂时不能登录。",logged_out:"已退出后台。"};
   const message=messages[new URLSearchParams(location.search).get("notice")];if(message) notice(message);
   // Avoid displaying previous private DOM when restoring a browser history entry.

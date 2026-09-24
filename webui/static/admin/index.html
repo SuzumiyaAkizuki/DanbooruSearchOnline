@@ -7,6 +7,9 @@
   <title>管理后台 · DanbooruSearch</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/admin/assets/admin.css">
+  <link rel="stylesheet" href="/developer/assets/portal.css">
+  <script src="/developer/assets/portal_view.js" defer></script>
+  <script src="/developer/assets/portal.js" defer></script>
   <script src="/admin/assets/admin.js" defer></script>
 </head>
 <body>
@@ -15,7 +18,7 @@
   <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true">D<span>·</span></span><span>DanbooruSearch<small>管理后台</small></span></a>
   <nav aria-label="后台导航">
     <a href="/admin" data-nav="overview"><span aria-hidden="true">▥</span> 运行概览</a>
-    <a href="/admin/api-keys" data-nav="keys"><span aria-hidden="true">⌘</span> API Key <small>预留</small></a>
+    <a href="/admin/api-keys" data-nav="keys"><span aria-hidden="true">⌘</span> API Key</a>
   </nav>
   <div class="sidebar-bottom"><span class="badge">技术验证版</span><p>HF 管理员专用</p><a href="/">← 返回标签搜索</a></div>
 </aside>
@@ -71,10 +74,8 @@
       <section class="panel"><div class="panel-heading"><h2>观测压力</h2><span class="muted window-label"></span></div><div id="pressure-stats" class="signal-grid"></div><p class="footnote">HTTP 在途峰值包含等待，不是同时运行的模型任务数。分钟峰值取来源 / 客户端 / 接口分组的最大值，不是全站 RPM；各组峰值不能相加。</p></section>
     </section>
     <section id="keys" hidden>
-      <div class="heading"><div><span class="eyebrow">接入管理</span><h1>API Key</h1><p>申请、授权与操作记录的预留入口。</p></div><span class="badge">尚未启用</span></div>
-      <div class="notice neutral">当前版本用于验证后台登录和遥测展示。API Key 签发、审批及额度管理将在后续阶段接入。</div>
-      <div class="tabs" role="tablist" aria-label="API Key 管理"><button role="tab" aria-selected="true" aria-controls="key-panel" id="tab-applications" data-key-tab="applications">待审核申请</button><button role="tab" aria-selected="false" aria-controls="key-panel" id="tab-grants" data-key-tab="grants" tabindex="-1">授权与 Key</button><button role="tab" aria-selected="false" aria-controls="key-panel" id="tab-audit" data-key-tab="audit" tabindex="-1">操作记录</button></div>
-      <section class="panel" id="key-panel" role="tabpanel" aria-labelledby="tab-applications"><div class="empty"><span class="empty-symbol" aria-hidden="true">⌘</span><h2 id="key-title">申请审核尚未启用</h2><p id="key-copy">后续在这里查看账号、服务名称、用途和预计用量，并批准或拒绝申请。</p><p class="footnote">尚未连接授权数据库，当前不生成或保存 API Key。</p></div></section>
+      <!-- KEY_WORKSPACE -->
+      <div id="key-disabled" class="panel"><h1>API Key</h1><p>API Key 功能当前关闭，请由维护者配置开放模式。</p></div>
     </section>
     <footer>累计与 REST 数据来自服务内存快照；UI 性能来自当前进程的采样窗口，按各自时间范围展示。<span>普通用户继续匿名使用标签搜索。</span></footer>
   </div>
