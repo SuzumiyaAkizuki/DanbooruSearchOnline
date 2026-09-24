@@ -184,3 +184,73 @@ dialogs:
     提交后会记录当前查询、搜索设置、应用版本和提交时间；不会上传账号信息、浏览器指纹、搜索历史或收藏等任何个人信息。
   translation_feedback_privacy: >-
     提交后会记录当前查询、该词条、当前翻译、搜索设置、应用版本和提交时间；不会上传账号信息、浏览器指纹、搜索历史或收藏等任何个人信息。
+
+# 开发者中心两处折叠说明；支持 Markdown，修改后刷新页面生效。仅修改文案，不改变实际限额。
+developer:
+  rules_title: 额度与接入说明
+  rules_markdown: |
+    ## 额度计算方式
+
+    | 调用内容 | 每次消耗 |
+    | --- | --- |
+    | 标签搜索（/search） | 3 点 |
+    | 关联推荐（/related） | 2 点 |
+    | 画师推荐（/artists） | 1 点 |
+    | 健康检查（/health） | 0 点 |
+    | Anima 提示词规范（/get_anima_format） | 0 点 |
+    | NewBie 提示词规范（/get_newbie_format） | 0 点 |
+    | Qwen 提示词规范（/get_qwen_image_2_1_format，T2I / I2I） | 0 点 |
+
+    混合调用按上表累加。同一账号的不同 Key 各自独立计算日额度、分钟额度和并发上限。
+
+    个人业务的 Key 的调用量默认为3000点/日，最多为6000点/日，请按需申报。公开服务的 Key 调用量默认为10000点/日。每把 Key 默认每分钟 60 点，最多同时处理 1 个业务请求。
+
+    每个 Hugging Face 的首个Key，如果满足「是个人业务的Key，且调用量不超过3000点/日」的条件，无需审批。其他情况下需要人工审核。请留意后台的人工审核结果。
+
+    ## 调用方式
+    
+    请在请求前附加以下请求头，其中个人业务无需附加 `X-DanbooruSearch-Site`。Key，Client 和 Site 必须和申请时一致，否则会导致鉴权失败。
+    ```text
+    Authorization: Bearer <API_KEY>
+    X-DanbooruSearch-Client: <登记的 Client>
+    X-DanbooruSearch-Site: <公开业务登记的 HTTPS Site>
+    ```
+    
+    鉴权失败时，系统将会报错，不会默认调用公用试用池额度。如需使用试用池，请完全删除请求头的这三条信息。
+
+
+  terms_title: 申请前请阅读：使用须知、公开接入规则与隐私说明
+  terms_markdown: |
+   **内容警告**
+
+   **AI 辅助**：基于语义匹配，结果未必绝对准确 (Results may contain errors)
+    
+   **内容警告**：查找结果可能包含 NSFW 内容 (May include NSFW content)
+    
+   **检索限制**：仅支持中/英双语查找，更推荐中文 (CN/EN only, CN is preferred)
+    
+   **标签范围**：仅显示特征、角色与作品标签，且频数须 ≥ 100 (General, Character & Copyright only, Freq ≥ 100)
+
+   **接口使用与版权声明**
+
+    您可以免费将本服务提供的 API 或 MCP 接口接入个人、私有或公开服务。
+
+    本项目的数据库、前端及后端代码均可用于二次开发。项目采用 **GPL-3.0** 开源协议，基于本项目代码开发的衍生作品也须遵守 GPL-3.0 协议。
+
+    如果您的公开在线服务使用了以下任一资源，请在服务主页添加指向本项目主站的友情链接：
+
+    - [公开 Bucket](https://huggingface.co/buckets/SAkizuki/DanbooruSearchEmbedding) 中的任意数据库文件；
+    - 本项目提供的 API 或 MCP 接口。
+
+    友情链接信息如下：
+
+    ```text
+    URL: https://huggingface.co/spaces/SAkizuki/DanbooruSearch
+    简介: 基于语义匹配的 Danbooru 标签搜索引擎，支持多维匹配与共现关联推荐。
+    作者: 凉宫秋月（https://github.com/SuzumiyaAkizuki）
+    LOGO: https://akizukipic.oss-cn-beijing.aliyuncs.com/img/file%20%281%29.svg
+    ```
+
+    作为回馈，我也可以在本项目主页展示您的公开服务。若有需要，请参照上述格式整理您服务的 **URL、简介、作者和 LOGO**，并发送至：`misakaacer@gmail.com`。
+
+    我们保存必要的 HF 稳定身份、用户名、申请资料、须知确认、授权、日用量和安全操作记录；Key 只保存摘要。新认证库不保存查询词、标签、IP、设备指纹或 HF Token。第三方基础设施可能保留连接日志。日用量建议留存 30 天、审计 90 天；尚未完成的退款记录继续保留。可立即吊销 Key，删除登记数据请联系 misakaacer@gmail.com；这不删除浏览器中的历史或收藏。

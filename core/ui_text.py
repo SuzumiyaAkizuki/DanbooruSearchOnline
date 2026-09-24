@@ -8,6 +8,10 @@ import yaml
 
 DEFAULT_UI_TEXT_PATH = Path(__file__).resolve().parents[1] / "config" / "ui_text.yaml"
 REQUIRED_TEXT_PATHS = (
+    ("developer", "rules_title"),
+    ("developer", "rules_markdown"),
+    ("developer", "terms_title"),
+    ("developer", "terms_markdown"),
     ("sponsor", "body"),
     ("sponsor", "toolchain_prompt"),
     ("help", "update_title"),

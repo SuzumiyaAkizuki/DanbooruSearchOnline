@@ -4,6 +4,7 @@ from __future__ import annotations
 import json as json_module
 import secrets
 import re
+from html import escape
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
@@ -11,6 +12,9 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
+from markdown_it import MarkdownIt
+
+from core.ui_text import load_ui_text
 
 from core.admin_auth import AdminAuth, AdminConfig, HF_ISSUER, LoginRejected, FLOW_TTL, SESSION_TTL, install_callback_log_filter
 from core.api_keys import ApplicationIn, TERMS_VERSION, get_key_service
@@ -27,12 +31,24 @@ def response(data, status=200):
     return JSONResponse(data, status_code=status, headers=HEADERS)
 
 
+def render_key_page():
+    template = (ASSETS / "index.html").read_text(encoding="utf-8")
+    copy = load_ui_text()["developer"]
+    markdown = MarkdownIt("commonmark", {"html": False})
+    replacements = {}
+    for name in ("rules", "terms"):
+        replacements[name + "_title"] = escape(copy[name + "_title"])
+        replacements[name + "_body"] = markdown.render(copy[name + "_markdown"])
+    return re.sub(r"\{\{(rules_title|rules_body|terms_title|terms_body)\}\}",
+                  lambda match: replacements[match[1]], template)
+
+
 def key_page():
-    return HTMLResponse((ASSETS / "index.html").read_text(encoding="utf-8"), headers=HEADERS)
+    return HTMLResponse(render_key_page(), headers=HEADERS)
 
 
 def embedded_key_panel():
-    html = (ASSETS / "index.html").read_text(encoding="utf-8")
+    html = render_key_page()
     body = html.split("<main>", 1)[1].split("</main>", 1)[0]
     body = re.sub(r"<header\b[^>]*>.*?</header>|<footer\b[^>]*>.*?</footer>", "", body, flags=re.S)
     body = re.sub(r'id="([^"]+)"', lambda m: 'id="key-' + m[1] + '"', body)

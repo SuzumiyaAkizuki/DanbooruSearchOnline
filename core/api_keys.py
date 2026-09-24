@@ -97,7 +97,7 @@ class ApplicationIn(BaseModel):
     kind: str
     client: str
     site: str = ""
-    purpose: str = Field(min_length=1, max_length=1000)
+    purpose: str = Field("", max_length=1000)
     daily: int = Field(3000, ge=1, le=10000000, strict=True)
     reason: str = Field("", max_length=1000)
     terms: str
@@ -137,14 +137,14 @@ class ApplicationIn(BaseModel):
         return value
 
     def payload(self):
-        if not self.accepted or self.terms != TERMS_VERSION or not self.purpose.strip():
-            raise HTTPException(422, "请阅读并同意当前版本须知，填写用途")
+        if not self.accepted or self.terms != TERMS_VERSION:
+            raise HTTPException(422, "请阅读并同意当前版本须知")
         if self.kind == "public" and not self.site:
             raise HTTPException(422, "公开业务须登记 HTTPS Site")
         if self.kind == "personal" and self.daily > 6000:
             raise HTTPException(422, "个人业务最高 6000 点/日")
-        if (self.kind == "public" or self.daily > 3000 or self.grant_id) and not self.reason.strip():
-            raise HTTPException(422, "请填写申请原因")
+        if (self.kind == "public" or self.daily > 3000 or self.grant_id) and not self.purpose.strip():
+            raise HTTPException(422, "需要人工审核，请填写用途说明")
         data = self.model_dump(mode="json")
         if self.kind == "personal":
             data["site"] = ""

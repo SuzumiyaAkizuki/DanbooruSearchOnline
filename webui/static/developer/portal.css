@@ -29,3 +29,10 @@
 .key-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:24px 0 16px;padding-bottom:10px;flex-wrap:wrap}
 .key-tabs [aria-selected="true"]{color:var(--blue);border-color:var(--blue);background:var(--blue-soft)}
 @media(max-width:650px){:is(.developer-shell,#key-workspace) .fields{grid-template-columns:1fr}:is(.developer-shell,#key-workspace) .toolbar{gap:8px}}
+
+/* Keep form controls aligned despite the admin toolbar's select margin. */
+:is(.developer-shell,#key-workspace) .fields>label{min-width:0;margin:0}
+:is(.developer-shell,#key-workspace) form :is(input:not([type="checkbox"]),select,textarea){display:block;box-sizing:border-box;margin:4px 0 0}
+:is(.developer-shell,#key-workspace) .fields :is(input,select){height:44px}
+:is(.developer-shell,#key-workspace) input:disabled{background:var(--page);color:var(--muted);cursor:not-allowed;opacity:1}
+:is(.developer-shell,#key-workspace) .required-marker{color:#c62828;margin-left:3px}

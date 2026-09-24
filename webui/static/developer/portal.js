@@ -4,7 +4,7 @@
   const admin = Boolean(embedded);
   if (!embedded && location.pathname.startsWith("/admin")) return;
   const $ = id => document.getElementById((embedded ? "key-" : "") + id);
-  let identity = {}, names = {};
+  let identity = {}, names = {}, autoEligible = false;
   let generation = 0, loadSequence = 0, adminTab = "applications";
   function selectAdminTab(tab) {
     adminTab=tab;
@@ -35,7 +35,7 @@
     });
   }
   let csrf = null, terms = "", page = 0, submission = crypto.randomUUID(), target = null, expiry;
-  const errors = {pending_application_exists:"已有待审核申请，请等待审核。", review_reason_required:"请补充申请原因；第二把 Key 必须人工审核。", stale_version_refresh_required:"记录已变更，请刷新后重试。", key_service_unconfigured:"服务尚未配置完成，请联系维护者。", key_service_unavailable:"额度服务暂不可用，请稍后重试。", already_claimed_use_rotate:"已领取；若未保存，请轮换 Key。", invalid_application_fields:"请检查申请字段、Client 格式及 HTTPS 地址。", login_required:"登录已过期，请重新登录。"};
+  const errors = {pending_application_exists:"已有待审核申请，请等待审核。", purpose_required:"本次申请需要人工审核，请填写用途说明。", review_reason_required:"请填写审核说明。", stale_version_refresh_required:"记录已变更，请刷新后重试。", key_service_unconfigured:"服务尚未配置完成，请联系维护者。", key_service_unavailable:"额度服务暂不可用，请稍后重试。", already_claimed_use_rotate:"已领取；若未保存，请轮换 Key。", invalid_application_fields:"请检查申请字段、Client 格式及 HTTPS 地址。", login_required:"登录已过期，请重新登录。"};
   function message(text) { $("message").textContent = text; }
   async function request(path, data) {
     const r = await fetch(path, {method:data === undefined?"GET":"POST", cache:"no-store", credentials:"same-origin", headers:data === undefined?{}:{"Content-Type":"application/json","X-CSRF-Token":csrf || ""}, body:data === undefined?undefined:JSON.stringify(data)});
@@ -44,7 +44,7 @@
     return result;
   }
   function clearSecret(){ $("secret").value=""; if($("secret-dialog").open) $("secret-dialog").close(); }
-  function clear(){generation++;identity={};names={};csrf=null;clearTimeout(expiry);clearSecret();$("content").hidden=true;if($("logout"))$("logout").hidden=true;$("login").hidden=false;for(const id of ["applications","grants","audit"]) $(id).replaceChildren();}
+  function clear(){generation++;identity={};names={};autoEligible=false;estimate();csrf=null;clearTimeout(expiry);clearSecret();$("content").hidden=true;if($("logout"))$("logout").hidden=true;$("login").hidden=false;for(const id of ["applications","grants","audit"]) $(id).replaceChildren();}
   function button(root,text,action){const b=document.createElement("button");b.textContent=text;b.onclick=async()=>{b.disabled=true;try{await action();}catch(e){message(e.message);}finally{b.disabled=false;}};root.append(b);}
   function line(root,text){const p=document.createElement("p");p.textContent=text;root.append(p);}
   function card(root,title){const c=document.createElement("article");c.className="card";const h=document.createElement("h3");h.textContent=title;c.append(h);root.append(c);return c;}
@@ -56,19 +56,20 @@
     if(result.key){$("secret").value=result.key;$("secret-dialog").showModal();}
     await load();
   }
-  function edit(g){showView(true);history.pushState(null,"","/developer/apply");target=g.id;submission=crypto.randomUUID();const form=$("apply-form");for(const key of ["kind","client","site","daily"])form.elements[key].value=g[key];$("apply-title").textContent="申请增额 / 变更业务资料（人工审核）";$("cancel-edit").hidden=false;form.elements.reason.required=true;$("apply-section").scrollIntoView();estimate();}
+  function edit(g){showView(true);history.pushState(null,"","/developer/apply");target=g.id;submission=crypto.randomUUID();const form=$("apply-form");for(const key of ["kind","client","site","daily"])form.elements[key].value=g[key];$("apply-title").textContent="申请增额 / 变更业务资料（人工审核）";$("cancel-edit").hidden=false;$("apply-section").scrollIntoView();estimate();}
   async function load(){
     const epoch=generation, sequence=++loadSequence;
     const query=new URLSearchParams({page});if(admin){query.set("search",$("filter-search").value);query.set("state",$("filter-state").value);query.set("grant_state",$("filter-grant").value);}
     const data=await request((admin?"/admin/api/key-data":"/developer/api/data")+"?"+query);
     if(epoch!==generation || sequence!==loadSequence)return;
+    autoEligible=data.auto_approval_eligible===true;estimate();
     $("page").textContent=`第 ${page+1} 页 · 每类最多 25 条`;$("previous").disabled=page===0;
     $("reset").textContent="下次日额度重置："+new Date(data.reset_at).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})+"（北京时间）";
     $("applications").replaceChildren();$("grants").replaceChildren();
     for(const a of data.applications){
       const c=card($("applications"),`${a.client} · ${states[a.state]}`);
       line(c,`${a.kind==="personal"?"个人":"公开"}业务 · 申请 ${a.daily} 点/日${a.target_grant?" · 变更已有授权":""}`);
-      line(c,`账号：${a.username} · 申请编号：${a.id}`);if(a.site)line(c,"Site："+a.site);line(c,"用途："+a.purpose);if(a.reason)line(c,"申请原因："+a.reason);if(a.review_reason)line(c,"审核说明："+a.review_reason);
+      line(c,`账号：${a.username} · 申请编号：${a.id}`);if(a.site)line(c,"Site："+a.site);if(a.purpose)line(c,"用途："+a.purpose);if(a.reason)line(c,"申请原因："+a.reason);if(a.review_reason)line(c,"审核说明："+a.review_reason);
       if(admin && a.state==="pending")for(const decision of ["approve","reject"])button(c,decision==="approve"?"批准":"拒绝",async()=>{
         const reason=prompt("填写用户可见审核说明");if(!reason)return;
         const daily=decision==="approve"?Number(prompt("核定每日点数（个人最高 6000）",a.daily)):a.daily;
@@ -121,10 +122,17 @@
     expiry=setTimeout(()=>{clear();message("登录已过期，请重新登录。");},data.expires_in*1000);
     await load();message(data.mode==="preview"?"当前仅为受邀测试。正式开放由维护者手动开启。":"");
   }
-  function estimate(){const daily=Number($("daily").value);$("estimate").textContent=`约相当于每天 ${Math.floor(daily/3)} 次纯搜索，或 ${Math.floor(daily/2)} 次纯关联，或 ${daily} 次纯画师推荐。`;$ ("site").required=$("kind").value==="public";}
+  function estimate(){
+    const daily=Number($("daily").value), personal=$("kind").value==="personal";
+    $("estimate").textContent=`约相当于每天 ${Math.floor(daily/3)} 次纯搜索，或 ${Math.floor(daily/2)} 次纯关联，或 ${daily} 次纯画师推荐。`;
+    $("site").disabled=personal;$("site").required=!personal;$("site-required").hidden=personal;
+    const automatic=autoEligible && personal && Number.isInteger(daily) && daily>0 && daily<=3000 && !target;
+    const purpose=$("apply-form").elements.purpose;
+    $("purpose-field").hidden=automatic;purpose.required=!automatic;purpose.disabled=automatic;
+  }
   $("kind").onchange=()=>{$("daily").value=$("kind").value==="public"?10000:3000;estimate();};$("daily").oninput=estimate;
-  $("apply-form").onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,b=form.querySelector('[type="submit"]');b.disabled=true;try{const raw=Object.fromEntries(new FormData(form));await request("/developer/api/apply",{...raw,daily:Number(raw.daily),accepted:raw.accepted==="on",terms,submission_id:submission,grant_id:target});submission=crypto.randomUUID();message("申请已提交，请查看审批结果。");await load();}catch(error){message(error.message);}finally{b.disabled=false;}};
-  $("cancel-edit").onclick=()=>{target=null;submission=crypto.randomUUID();$("apply-form").reset();$("apply-form").elements.reason.required=false;$("apply-title").textContent="申请独立额度";$("cancel-edit").hidden=true;estimate();};
+  $("apply-form").onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,b=form.querySelector('[type="submit"]');b.disabled=true;try{const raw=Object.fromEntries(new FormData(form));await request("/developer/api/apply",{...raw,site:raw.site||"",purpose:raw.purpose||"",daily:Number(raw.daily),accepted:raw.accepted==="on",terms,submission_id:submission,grant_id:target});submission=crypto.randomUUID();message("申请已提交，请查看审批结果。");await load();}catch(error){if(error.message===errors.purpose_required){autoEligible=false;estimate();}message(error.message);}finally{b.disabled=false;}};
+  $("cancel-edit").onclick=()=>{target=null;submission=crypto.randomUUID();$("apply-form").reset();$("apply-title").textContent="申请独立额度";$("cancel-edit").hidden=true;estimate();};
   for(const id of ["refresh-login","refresh"])$(id).onclick=()=>session().catch(e=>message(e.message));
   if($("logout"))$("logout").onclick=async()=>{try{await request(admin?"/admin/logout":"/developer/logout",{});clear();message("已退出。");}catch(e){message(e.message);}};
   $("previous").onclick=()=>{page=Math.max(0,page-1);load().catch(e=>message(e.message));};$("next").onclick=()=>{page++;load().catch(e=>message(e.message));};
