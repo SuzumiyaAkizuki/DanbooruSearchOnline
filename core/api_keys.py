@@ -333,7 +333,7 @@ class KeyService:
         release = self.limiter.acquire(subject, endpoint)
         request_id = str(uuid.uuid4())
         try:
-            await self.rpc.call("ds_key_meter", action="debit", request_id=request_id,
+            debit = await self.rpc.call("ds_key_meter", action="debit", request_id=request_id,
                 subject=subject, key_id=key_id, digest=digest, endpoint=endpoint,
                 client=headers.get("x-danboorusearch-client", ""), site=headers.get("x-danboorusearch-site", ""),
                 anonymous_daily=self.config.anonymous_daily)
@@ -350,6 +350,18 @@ class KeyService:
                 result = await business()
                 if isinstance(result, dict) and "error" in result:
                     await self.refund(request_id)  # semantic input rejection, before computation
+                else:
+                    remaining = debit.get("remaining")
+                    if type(remaining) is int and remaining >= 0:
+                        pool = "当前 Key" if key_id else ("测试公共池" if preview_anonymous else "公共试用池")
+                        mode = "API Key 受邀测试" if self.config.mode == "preview" else "API Key 限流已启用"
+                        notice = (f"{mode}。本次消耗 {COSTS[endpoint]} 点，{pool}今日剩余 {remaining} 点。"
+                                  "余额为本次扣额后的快照，每日北京时间 00:00 重置；"
+                                  "其他请求可能继续消耗额度，分钟额度与并发限制仍适用。")
+                        if isinstance(result, dict) and "api_key_notice" in result:
+                            result = {**result, "api_key_notice": notice}
+                        elif isinstance(result, BaseModel) and hasattr(result, "api_key_notice"):
+                            result = result.model_copy(update={"api_key_notice": notice})
                 return result
             except BaseException:
                 await self.refund(request_id)
