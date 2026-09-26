@@ -30,7 +30,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from typing import Literal
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
@@ -42,8 +42,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.engine import DanbooruTagger
-from core.models import SearchRequest, SearchResponse
+from core.engine import DanbooruTagger, run_in_slot
+from core.models import MAX_INPUT_TAGS, MAX_INPUT_TAG_LENGTH, SearchRequest, SearchResponse
 from core.prompt_formats import PROMPT_FORMATS
 from core.api_keys import governed, engine_call, get_key_service
 import core.counter as counter
@@ -127,7 +127,7 @@ class TagOut(BaseModel):
 
 
 class RelatedIn(BaseModel):
-    tags: list[str]
+    tags: list[Annotated[str, Field(max_length=MAX_INPUT_TAG_LENGTH)]] = Field(max_length=MAX_INPUT_TAGS)
     limit: int = Field(50, ge=1, le=200)
     show_nsfw: bool = True
     target_categories: list[CategoryName] | None = None
@@ -150,7 +150,7 @@ class SearchOut(BaseModel):
 
 
 class ArtistIn(BaseModel):
-    tags: list[str]
+    tags: list[Annotated[str, Field(max_length=MAX_INPUT_TAG_LENGTH)]] = Field(max_length=MAX_INPUT_TAGS)
     limit: int = Field(30, ge=1, le=100)
     min_cooc: int = Field(3, ge=1, le=100)
     show_nsfw: bool = True
@@ -166,21 +166,26 @@ class ArtistOut(BaseModel):
 
 async def _correct_tags(tagger: DanbooruTagger, tags: list[str]) -> tuple[list[str], list[str], dict[str, str]]:
     """Resolve input tags through the deterministic canonical-tag resolver."""
-    corrected_tags: list[str] = []
-    invalid_tags: list[str] = []
-    corrections: dict[str, str] = {}
+    def resolve_batch():
+        corrected_tags: list[str] = []
+        invalid_tags: list[str] = []
+        corrections: dict[str, str] = {}
 
-    for raw_tag in tags:
-        resolved = tagger.resolve_tag_name(raw_tag)
-        canonical = resolved.get("tag")
-        if canonical:
-            corrected_tags.append(canonical)
-            if canonical != raw_tag:
-                corrections[raw_tag] = canonical
-        else:
-            invalid_tags.append(raw_tag)
+        for raw_tag in tags:
+            resolved = tagger.resolve_tag_name(raw_tag)
+            canonical = resolved.get("tag")
+            if canonical:
+                corrected_tags.append(canonical)
+                if canonical != raw_tag:
+                    corrections[raw_tag] = canonical
+            else:
+                invalid_tags.append(raw_tag)
 
-    return corrected_tags, invalid_tags, corrections
+        return corrected_tags, invalid_tags, corrections
+
+    return await run_in_slot(
+        DanbooruTagger._get_recommendation_sem(), lambda: asyncio.to_thread(resolve_batch),
+    )
 
 
 def _with_corrections(results: list[dict[str, Any]], corrections: dict[str, str]) -> dict[str, Any]:
@@ -208,6 +213,16 @@ app = FastAPI(
 
 async def _policy_notice_error(request: Request, exc):
     # Preserve FastAPI's error status, detail and headers; only append public copy.
+    if isinstance(exc, RequestValidationError):
+        traffic_attribution.note_request_error(
+            status_code=422,
+            validation_types=(item.get("type") for item in exc.errors()),
+        )
+    else:
+        traffic_attribution.note_request_error(
+            status_code=exc.status_code,
+            detail=exc.detail,
+        )
     handler = request_validation_exception_handler if isinstance(exc, RequestValidationError) else http_exception_handler
     response = await handler(request, exc)
     if response.body:
@@ -354,7 +369,10 @@ async def search(body: SearchIn, http_request: Request = None) -> SearchOut:
     return SearchOut(
         tags_all=response.tags_all,
         tags_sfw=response.tags_sfw,
-        results=[TagOut(**vars(result)) for result in response.results],
+        results=[
+            TagOut(**vars(result)) for result in response.results
+            if body.show_nsfw or result.nsfw != '1'
+        ],
         keywords=response.keywords,
     )
 

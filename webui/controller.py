@@ -286,6 +286,7 @@ class DanbooruSearchUI:
     _current_artist_rec_tags = StateField('current_artist_rec_tags')
     _artist_result_tags = StateField('artist_result_tags')
     _last_recommendation_seed_tags = StateField('last_recommendation_seed_tags')
+    _last_recommendation_show_nsfw = StateField('last_recommendation_show_nsfw')
     _pending_recommendation_request = StateField('pending_recommendation_request')
     _recommendation_generation = StateField('recommendation_generation')
     _storage_states = StateField('storage_states')
@@ -426,6 +427,7 @@ class DanbooruSearchUI:
         self._current_artist_rec_tags: set[str] = set()
         self._artist_result_tags: set[str] = set()
         self._last_recommendation_seed_tags: list[str] = []
+        self._last_recommendation_show_nsfw = None
 
         # 高级选项中各层/类型的 checkbox 引用，用于 restore 时同步控件状态
         self._layer_checkboxes: dict[str, ui.checkbox] = {}
@@ -1477,6 +1479,7 @@ class DanbooruSearchUI:
         self._current_artist_rec_tags.clear()
         self._artist_result_tags.clear()
         self._last_recommendation_seed_tags = []
+        self._last_recommendation_show_nsfw = None
         self._render_selected_chips()
         self._render_prompt_pending()
         self._render_concept_coverage()
@@ -1710,6 +1713,7 @@ class DanbooruSearchUI:
 
             self._refresh_related([], show_nsfw_val)
             self._last_recommendation_seed_tags = []
+            self._last_recommendation_show_nsfw = None
 
             # 查询理解：分词来源筛选与概念覆盖共用同一组 chips
             self.current_filter_keyword = 'ALL'
@@ -1751,9 +1755,11 @@ class DanbooruSearchUI:
 
     def _refresh_recommendations_if_seed_changed(self, selected_tags: list[str], show_nsfw: bool):
         seed_tags = self._get_recommendation_seed_tags(selected_tags)
-        if seed_tags == self._last_recommendation_seed_tags:
+        if (seed_tags == self._last_recommendation_seed_tags
+                and show_nsfw == self._last_recommendation_show_nsfw):
             return
         self._last_recommendation_seed_tags = list(seed_tags)
+        self._last_recommendation_show_nsfw = show_nsfw
         self._refresh_related_from_selection(seed_tags, show_nsfw)
         self._refresh_group_from_selection(seed_tags, show_nsfw)
         self._refresh_artist_from_selection(seed_tags, show_nsfw)
@@ -2206,6 +2212,13 @@ class DanbooruSearchUI:
         self._filter_by_source(self.current_filter_keyword)
         if not show_nsfw_val:
             self.result_table.selected = [r for r in self.result_table.selected if r.get('nsfw') != '1']
+            # 在异步推荐完成前，先移除旧快照中的敏感展示。
+            self._render_related_list(self.current_related, False)
+            self._render_artist_rec(self._artist_rec_results, {}, False)
+            if self.group_expansion_container is not None:
+                clear_group_expansion(self)
+        # 在首次 await 前更新 generation，防止旧开关状态的在途结果回填。
+        self._refresh_recommendations_if_seed_changed(self._get_selected_tags(), show_nsfw_val)
         await self._update_selection_display(None)
 
     # ── 复制 / 反馈 ──────────────────────────────────────────────────────

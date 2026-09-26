@@ -46,6 +46,32 @@ from platform_utils import (
 )
 
 
+_worker_tasks: set[asyncio.Task] = set()
+
+
+async def run_in_slot(slot, work, *, timeout: float | None = None):
+    """排队可取消；取得槽位后，由独立任务持有它直到实际计算结束。"""
+    await slot.__aenter__()
+
+    async def run():
+        try:
+            return await work()
+        finally:
+            await slot.__aexit__(None, None, None)
+
+    task = asyncio.create_task(run())
+    _worker_tasks.add(task)
+
+    def done(future):
+        _worker_tasks.discard(future)
+        if not future.cancelled():
+            future.exception()  # 请求已离开时也回收后台异常。
+
+    task.add_done_callback(done)
+    # 只取消等待者，不能取消正在持有槽位的计算任务。
+    return await asyncio.wait_for(asyncio.shield(task), timeout)
+
+
 def _positive_int_env(name: str) -> Optional[int]:
     raw = os.environ.get(name)
     if raw is None:
@@ -452,6 +478,7 @@ class DanbooruTagger:
             request.top_k,
             request.limit,
             request.popularity_weight,
+            request.show_nsfw,
             request.use_segmentation,
             tuple(sorted(request.target_layers)),
             tuple(sorted(request.target_categories)),
@@ -810,21 +837,21 @@ class DanbooruTagger:
     ) -> dict[str, Any]:
         """Run a UI recommendation snapshot outside the semantic-search queue."""
         queued_at = time.perf_counter()
-        async with self._get_recommendation_sem():
+
+        async def compute():
             record_ui_timing('recommendation_wait', (time.perf_counter() - queued_at) * 1000)
             with measure('recommendation_compute'):
-                return await asyncio.wait_for(
-                    asyncio.to_thread(
-                        self._selection_recommendations,
-                        selected_tags,
-                        show_nsfw,
-                        scopes,
-                        related_limit,
-                        artist_limit,
-                        artist_min_cooc,
-                    ),
-                    timeout=30.0,
+                return await asyncio.to_thread(
+                    self._selection_recommendations,
+                    selected_tags,
+                    show_nsfw,
+                    scopes,
+                    related_limit,
+                    artist_limit,
+                    artist_min_cooc,
                 )
+
+        return await run_in_slot(self._get_recommendation_sem(), compute, timeout=30.0)
 
     @classmethod
     def get_load_snapshot(cls) -> dict[str, int]:
@@ -841,13 +868,11 @@ class DanbooruTagger:
 
         所有异步入口（MCP / API / UI）都应改用本方法，而非各自
         asyncio.to_thread(self.search)，以共享同一个 CPU 并发闸门。
-        包含 60 秒超时，防止异常卡死导致信号量永久泄漏。
+        计算等待上限为 120 秒；超时后线程仍持有槽位，直到计算结束。
         """
-        async with self._cpu_slot():
-            return await asyncio.wait_for(
-                asyncio.to_thread(self.search, request),
-                timeout=120.0,
-            )
+        return await run_in_slot(
+            self._cpu_slot(), lambda: asyncio.to_thread(self.search, request), timeout=120.0,
+        )
 
     async def get_related_async(
         self,
@@ -858,10 +883,11 @@ class DanbooruTagger:
         target_categories: set[str] | None = None,
     ) -> list:
         """get_related() 的异步封装，使用轻量推荐通道。"""
-        async with self._get_recommendation_sem():
-            return await asyncio.to_thread(
+        return await run_in_slot(
+            self._get_recommendation_sem(), lambda: asyncio.to_thread(
                 self.get_related, seed_tags, exclude, limit, show_nsfw, target_categories,
-            )
+            ),
+        )
 
     async def get_group_candidates_async(
         self,
@@ -869,10 +895,11 @@ class DanbooruTagger:
         show_nsfw: bool = True,
     ) -> list[dict]:
         """get_group_candidates() 的异步封装，使用轻量推荐通道。"""
-        async with self._get_recommendation_sem():
-            return await asyncio.to_thread(
+        return await run_in_slot(
+            self._get_recommendation_sem(), lambda: asyncio.to_thread(
                 self.get_group_candidates, selected_tags, show_nsfw,
-            )
+            ),
+        )
 
     async def search_artists_by_tags_async(
         self,
@@ -881,10 +908,11 @@ class DanbooruTagger:
         min_cooc: int = 5,
     ) -> list:
         """search_artists_by_tags() 的异步封装，使用轻量推荐通道。"""
-        async with self._get_recommendation_sem():
-            return await asyncio.to_thread(
+        return await run_in_slot(
+            self._get_recommendation_sem(), lambda: asyncio.to_thread(
                 self.search_artists_by_tags, tags, limit, min_cooc,
-            )
+            ),
+        )
 
     async def search_artists_pipeline_async(
         self,
@@ -895,14 +923,13 @@ class DanbooruTagger:
         target_categories: list[str] | None = None,
     ) -> tuple:
         """search_artists_pipeline() 的并发安全异步封装。"""
-        async with self._cpu_slot():
-            return await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.search_artists_pipeline,
-                    query, limit, min_cooc, target_layers, target_categories,
-                ),
-                timeout=120.0,
-            )
+        return await run_in_slot(
+            self._cpu_slot(), lambda: asyncio.to_thread(
+                self.search_artists_pipeline,
+                query, limit, min_cooc, target_layers, target_categories,
+            ),
+            timeout=120.0,
+        )
 
     def _apply_group_expand(self, final: dict[str, TagResult]) -> None:
         """expand 模式：提升同 group 标签的分数。"""
@@ -971,11 +998,12 @@ class DanbooruTagger:
         raw_df = self._read_csv_robust(self.csv_path)
         new_df = self._preprocess_raw_df(raw_df)
 
-        _SIG_COLS = ['cn_name', 'wiki', 'cn_core']
+        text_columns = ['cn_name', 'wiki', 'cn_core']
+        metadata_columns = ['nsfw', 'category', 'post_count']
 
-        def _sig(df: pd.DataFrame, iloc_idx: int) -> tuple:
+        def _sig(df: pd.DataFrame, iloc_idx: int, columns: list[str]) -> tuple:
             row = df.iloc[iloc_idx]
-            return tuple(str(row.get(c, '')) for c in _SIG_COLS)
+            return tuple(str(row.get(c, '')) for c in columns)
 
         cached_idx: dict[str, int] = {n: i for i, n in enumerate(self.df['name'])}
         new_idx:    dict[str, int] = {n: i for i, n in enumerate(new_df['name'])}
@@ -984,14 +1012,20 @@ class DanbooruTagger:
         deleted_names = [n for n in cached_idx if n not in new_idx]
         changed_names = [
             n for n in new_idx
-            if n in cached_idx and _sig(new_df, new_idx[n]) != _sig(self.df, cached_idx[n])
+            if n in cached_idx
+            and _sig(new_df, new_idx[n], text_columns) != _sig(self.df, cached_idx[n], text_columns)
+        ]
+        metadata_changed_names = [
+            n for n in new_idx
+            if n in cached_idx
+            and _sig(new_df, new_idx[n], metadata_columns) != _sig(self.df, cached_idx[n], metadata_columns)
         ]
 
-        if not added_names and not deleted_names and not changed_names:
+        if not added_names and not deleted_names and not changed_names and not metadata_changed_names:
             print('[Engine] 数据已是最新，无需更新。')
             return
 
-        print(f'[Engine] 变更 → 新增: {len(added_names)}  修改: {len(changed_names)}  删除: {len(deleted_names)}')
+        print(f'[Engine] 变更 → 新增: {len(added_names)}  文本修改: {len(changed_names)}  元数据修改: {len(metadata_changed_names)}  删除: {len(deleted_names)}')
 
         if deleted_names:
             keep_mask = ~self.df['name'].isin(set(deleted_names))
@@ -1015,6 +1049,11 @@ class DanbooruTagger:
                     getattr(self, attr)[ci] = _vecs[attr][j]
                 for col in changed_rows.columns:
                     self.df.at[ci, col] = changed_rows.at[j, col]
+
+        # 元数据变化不需要重新编码；删除行后使用重建过的索引。
+        for name in metadata_changed_names:
+            for col in metadata_columns:
+                self.df.at[cached_idx[name], col] = new_df.iloc[new_idx[name]][col]
 
         if added_names:
             added_rows = new_df[new_df['name'].isin(set(added_names))].reset_index(drop=True)

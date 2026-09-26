@@ -23,11 +23,13 @@ MCP 服务层
 import json
 import asyncio
 import logging
+from typing import Annotated
+from pydantic import Field
 from anyio import BrokenResourceError, ClosedResourceError
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from core.engine import DanbooruTagger
-from core.models import SearchRequest
+from core.engine import DanbooruTagger, run_in_slot
+from core.models import MAX_INPUT_TAGS, MAX_INPUT_TAG_LENGTH, SearchRequest
 from core.prompt_formats import PROMPT_FORMATS
 from core.runtime_diagnostics import install_mcp_diagnostics
 import core.counter as counter
@@ -263,7 +265,7 @@ JSON 对象，包含 prompt（逗号分隔 tag）、keywords、results。
 
 @mcp.tool()
 async def get_related_tags(
-    tags: list[str],
+    tags: Annotated[list[Annotated[str, Field(max_length=MAX_INPUT_TAG_LENGTH)]], Field(max_length=MAX_INPUT_TAGS)],
     limit: int = 50,
     show_nsfw: bool = True,
     include_wiki: bool = False,
@@ -301,6 +303,7 @@ General / Character / Copyright 类别。
 ## 参数
 
 - tags: canonical Danbooru tag 名列表，使用下划线，不使用空格。
+        最多 128 个标签，每个标签最多 256 个字符。
         例如 ["white_serafuku", "sailor_collar"]
 - limit: 最多返回的推荐数量。默认 50。
 - show_nsfw: 是否包含 NSFW 标签。默认 True。
@@ -317,7 +320,10 @@ JSON 对象，results 按聚合 NPMI 分数降序排序。每个结果包含：
     await telemetry.increment("mcp_get_related_tags")
     tagger = await DanbooruTagger.get_instance()
 
-    corrected_tags, invalid_tags, corrections, candidates = _resolve_canonical_tags(tagger, tags)
+    corrected_tags, invalid_tags, corrections, candidates = await run_in_slot(
+        DanbooruTagger._get_recommendation_sem(),
+        lambda: asyncio.to_thread(_resolve_canonical_tags, tagger, tags),
+    )
 
     if not corrected_tags:
         payload = {
@@ -366,7 +372,7 @@ JSON 对象，results 按聚合 NPMI 分数降序排序。每个结果包含：
 
 @mcp.tool()
 async def get_artist_recommendations(
-    tags: list[str],
+    tags: Annotated[list[Annotated[str, Field(max_length=MAX_INPUT_TAG_LENGTH)]], Field(max_length=MAX_INPUT_TAGS)],
     limit: int = 30,
     min_cooc: int = 3,
     show_nsfw: bool = True,
@@ -382,6 +388,7 @@ async def get_artist_recommendations(
 
     ## 参数
     - tags: canonical Danbooru tag 名列表，使用下划线，不使用空格。
+            最多 128 个标签，每个标签最多 256 个字符。
             例如 ["1girl", "blue_hair", "school_uniform"]
     - limit: 最多返回的画师数量。默认 30。
     - min_cooc: 单个 (tag, artist) 组合进入计算所需的最小共现次数。默认 3。
@@ -402,7 +409,10 @@ async def get_artist_recommendations(
     if not tags:
         return json.dumps({"error": "tags 列表不能为空"}, ensure_ascii=False, indent=2)
 
-    corrected_tags, invalid_tags, corrections, candidates = _resolve_canonical_tags(tagger, tags)
+    corrected_tags, invalid_tags, corrections, candidates = await run_in_slot(
+        DanbooruTagger._get_recommendation_sem(),
+        lambda: asyncio.to_thread(_resolve_canonical_tags, tagger, tags),
+    )
 
     if not corrected_tags:
         payload = {

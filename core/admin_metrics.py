@@ -33,9 +33,19 @@ def summarize_window(rows: list[dict], now: datetime, hours: int) -> dict:
     cutoff = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=hours - 1)
     selected = [row for row in rows if cutoff.strftime("%Y-%m-%dT%H") <= row["day"] + "T" + str(row["hour"]).zfill(2)
                 <= now.strftime("%Y-%m-%dT%H")]
-    endpoints = defaultdict(lambda: {"count": 0, "sum_ms": 0, "errors": 0, "buckets": Counter(), "statuses": Counter()})
+    endpoints = defaultdict(lambda: {
+        "count": 0,
+        "sum_ms": 0,
+        "errors": 0,
+        "buckets": Counter(),
+        "statuses": Counter(),
+        "status_codes": Counter(),
+        "outcome_reasons": Counter(),
+    })
     hourly = defaultdict(lambda: {"count": 0, "endpoints": Counter(), "peak_in_flight": 0, "peak_per_minute": 0})
-    sources, clients, statuses = Counter(), Counter(), Counter()
+    sources, clients, statuses, status_codes, outcome_reasons = (
+        Counter(), Counter(), Counter(), Counter(), Counter()
+    )
     for row in selected:
         count = int(row["count"])
         entry = endpoints[row["endpoint"]]
@@ -43,6 +53,10 @@ def summarize_window(rows: list[dict], now: datetime, hours: int) -> dict:
         entry["sum_ms"] += row["sum_ms"]
         entry["buckets"][row["latency_bucket"]] += count
         entry["statuses"][row["status_class"]] += count
+        exact_status = str(row.get("status_code") or "unknown")
+        outcome_reason = str(row.get("outcome_reason") or "legacy_unknown")
+        entry["status_codes"][exact_status] += count
+        entry["outcome_reasons"][outcome_reason] += count
         entry["errors"] += count if row["status_class"] in {"4xx", "5xx"} else 0
         hour = hourly[row["day"] + "T" + str(row["hour"]).zfill(2) + ":00"]
         hour["count"] += count
@@ -50,6 +64,8 @@ def summarize_window(rows: list[dict], now: datetime, hours: int) -> dict:
         for peak in ("peak_in_flight", "peak_per_minute"):
             hour[peak] = max(hour[peak], int(row.get(peak, 0)))
         statuses[row["status_class"]] += count
+        status_codes[exact_status] += count
+        outcome_reasons[outcome_reason] += count
         clients[row.get("client_family", "unknown")] += count
         kind = row.get("source_kind", "unavailable")
         name, site = row.get("source_name", ""), row.get("source_site", "")
@@ -70,6 +86,8 @@ def summarize_window(rows: list[dict], now: datetime, hours: int) -> dict:
         "requested_hours": hours, "count": total, "observed_hours": len(hourly),
         "first_hour": min(hourly) if hourly else None, "last_hour": max(hourly) if hourly else None,
         "statuses": dict(statuses), "error_percent": round(100 * (statuses["4xx"] + statuses["5xx"]) / total, 2) if total else None,
+        "status_codes": dict(status_codes),
+        "outcome_reasons": dict(outcome_reasons),
         "slow_count": slow, "slow_percent": round(100 * slow / total, 2) if total else None,
         "peak_in_flight": max((item["peak_in_flight"] for item in hourly.values()), default=None),
         "peak_per_minute": max((item["peak_per_minute"] for item in hourly.values()), default=None),
@@ -79,6 +97,8 @@ def summarize_window(rows: list[dict], now: datetime, hours: int) -> dict:
         "clients": [{"label": label, "count": count} for label, count in clients.most_common()],
         "endpoints": [{"endpoint": name, **timing_summary(raw), "errors": raw["errors"],
                        "client_errors": raw["statuses"]["4xx"], "server_errors": raw["statuses"]["5xx"],
+                       "status_codes": dict(raw["status_codes"]),
+                       "outcome_reasons": dict(raw["outcome_reasons"]),
                        "slow_percent": round(100 * sum(raw["buckets"][bucket] for bucket in ("le_10000", "le_30000", "le_60000", "le_120000", "gt_120000")) / raw["count"], 2) if raw["count"] else None}
                       for name, raw in sorted(endpoints.items())],
     }

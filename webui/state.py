@@ -67,6 +67,7 @@ class PageState:
     current_artist_rec_tags: set[str] = field(default_factory=set)
     artist_result_tags: set[str] = field(default_factory=set)
     last_recommendation_seed_tags: list[str] = field(default_factory=list)
+    last_recommendation_show_nsfw: bool | None = None
     pending_recommendation_request: dict | None = None
     recommendation_generation: int = 0
 

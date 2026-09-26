@@ -5,6 +5,9 @@ core/models.py
 from __future__ import annotations
 from dataclasses import dataclass, field
 
+MAX_INPUT_TAGS = 128
+MAX_INPUT_TAG_LENGTH = 256
+
 @dataclass
 class TagResult:
     """单条标签搜索结果。"""

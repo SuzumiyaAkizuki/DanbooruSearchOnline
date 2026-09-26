@@ -53,6 +53,37 @@ _IDENTIFIED_SOURCE_KINDS = frozenset({"declared", "origin", "referer"})
 _SOURCE_KINDS = frozenset({"declared", "origin", "referer", "anonymous", "other"})
 _ENDPOINTS = frozenset({"search", "related", "artists", "health"})
 _STATUS_CLASSES = frozenset({"2xx", "3xx", "4xx", "5xx"})
+_STATUS_CODES = frozenset({"unknown", *(str(value) for value in range(100, 600))})
+_KNOWN_HTTP_OUTCOME_REASONS = frozenset({
+    "anonymous_concurrency_limited",
+    "anonymous_daily_quota_exhausted",
+    "anonymous_rate_limited",
+    "authentication_rate_limited",
+    "invalid_api_key",
+    "key_concurrency_limited",
+    "key_daily_quota_exhausted",
+    "key_rate_limited",
+    "preview_account_required",
+    "registration_mismatch",
+    "rest_concurrency_limited",
+    "rest_rate_limited",
+})
+_OUTCOME_REASONS = frozenset({
+    "success",
+    "redirect",
+    "validation_json",
+    "validation_missing",
+    "validation_literal",
+    "validation_bounds",
+    "validation_type",
+    "validation_other",
+    "not_found",
+    "method_not_allowed",
+    "client_error_other",
+    "server_error",
+    "legacy_unknown",
+    *_KNOWN_HTTP_OUTCOME_REASONS,
+})
 _CLIENT_FAMILIES = frozenset({"browser", "python", "node", "curl", "java", "unknown"})
 _LATENCY_BUCKETS = (100, 250, 500, 1_000, 2_000, 5_000, 10_000, 30_000, 60_000, 120_000)
 _LIMIT_BUCKETS = frozenset({"none", "1_20", "21_100", "101_plus"})
@@ -83,7 +114,7 @@ _SHARED_HOSTING_SUFFIXES = (
     ".netlify.app",
 )
 
-_RecordKey = tuple[str, str, str, str, str, str, str, str, str, str, str, str]
+_RecordKey = tuple[str, str, str, str, str, str, str, str, str, str, str, str, str, str]
 _MetricMap = dict[_RecordKey, dict[str, int]]
 
 
@@ -267,6 +298,61 @@ def note_safe_parameters(**values: Any) -> None:
             context[key] = values[key]
 
 
+def _validation_outcome_reason(error_types: Any) -> str:
+    types = {str(value or "").lower() for value in error_types}
+    if "json_invalid" in types:
+        return "validation_json"
+    if "missing" in types:
+        return "validation_missing"
+    if "literal_error" in types:
+        return "validation_literal"
+    if any(
+        marker in error_type
+        for error_type in types
+        for marker in ("greater_than", "less_than", "too_short", "too_long")
+    ):
+        return "validation_bounds"
+    if any(error_type.endswith(("_type", "_parsing")) for error_type in types):
+        return "validation_type"
+    return "validation_other"
+
+
+def _default_outcome_reason(status_code: int) -> str:
+    if 200 <= status_code < 300:
+        return "success"
+    if 300 <= status_code < 400:
+        return "redirect"
+    if status_code == 404:
+        return "not_found"
+    if status_code == 405:
+        return "method_not_allowed"
+    if 400 <= status_code < 500:
+        return "client_error_other"
+    return "server_error"
+
+
+def note_request_error(
+    *,
+    status_code: int,
+    detail: Any = None,
+    validation_types: Any = (),
+) -> None:
+    """Attach one bounded, content-free error reason to the active request."""
+    context = _safe_parameter_context.get()
+    if context is None:
+        return
+    if validation_types:
+        reason = _validation_outcome_reason(validation_types)
+    else:
+        stable_detail = str(detail or "")
+        reason = (
+            stable_detail
+            if stable_detail in _KNOWN_HTTP_OUTCOME_REASONS
+            else _default_outcome_reason(int(status_code))
+        )
+    context["_outcome_reason"] = reason
+
+
 def _latency_bucket(duration_ms: float) -> str:
     for limit in _LATENCY_BUCKETS:
         if duration_ms <= limit:
@@ -448,6 +534,14 @@ async def finish_request(
     stale_minutes = [key for key in _minute_counts if not key[0].startswith(day)]
     for stale in stale_minutes:
         _minute_counts.pop(stale, None)
+    try:
+        exact_status_code = int(status_code)
+    except (TypeError, ValueError):
+        exact_status_code = 0
+    status_code_value = str(exact_status_code) if 100 <= exact_status_code < 600 else "unknown"
+    outcome_reason = str(safe_parameters.get("_outcome_reason") or "")
+    if outcome_reason not in _OUTCOME_REASONS:
+        outcome_reason = _default_outcome_reason(exact_status_code)
     key: _RecordKey = (
         day,
         hour,
@@ -461,6 +555,8 @@ async def finish_request(
         limit_bucket,
         top_k_bucket,
         f"{min_cooc_bucket}:{mode_bucket}",
+        status_code_value,
+        outcome_reason,
     )
     metric = {
         "count": 1,
@@ -499,6 +595,8 @@ def _sanitize_record(raw: Any) -> tuple[_RecordKey, dict[str, int]] | None:
     limit_bucket = str(raw.get("limit_bucket") or "")
     top_k_bucket = str(raw.get("top_k_bucket") or "")
     parameter_bucket = str(raw.get("parameter_bucket") or "")
+    status_code = str(raw.get("status_code") or "unknown")
+    outcome_reason = str(raw.get("outcome_reason") or "legacy_unknown")
     if (
         not day
         or hour not in {f"{value:02d}" for value in range(24)}
@@ -510,6 +608,8 @@ def _sanitize_record(raw: Any) -> tuple[_RecordKey, dict[str, int]] | None:
         or limit_bucket not in _LIMIT_BUCKETS
         or top_k_bucket not in _TOP_K_BUCKETS
         or parameter_bucket not in _PARAMETER_BUCKETS
+        or status_code not in _STATUS_CODES
+        or outcome_reason not in _OUTCOME_REASONS
     ):
         return None
     source_name = ""
@@ -551,6 +651,8 @@ def _sanitize_record(raw: Any) -> tuple[_RecordKey, dict[str, int]] | None:
         limit_bucket,
         top_k_bucket,
         parameter_bucket,
+        status_code,
+        outcome_reason,
     )
     return key, metric
 
@@ -603,6 +705,8 @@ def _serialize(enabled_at: str, records: _MetricMap) -> bytes:
             limit_bucket,
             top_k_bucket,
             parameter_bucket,
+            status_code,
+            outcome_reason,
         ) = key
         rows.append({
             "day": day,
@@ -617,6 +721,8 @@ def _serialize(enabled_at: str, records: _MetricMap) -> bytes:
             "limit_bucket": limit_bucket,
             "top_k_bucket": top_k_bucket,
             "parameter_bucket": parameter_bucket,
+            "status_code": None if status_code == "unknown" else int(status_code),
+            "outcome_reason": outcome_reason,
             **records[key],
         })
     platform = PLATFORM if PLATFORM in {"hf", "ms"} else "local"
@@ -638,6 +744,8 @@ def _serialize(enabled_at: str, records: _MetricMap) -> bytes:
             "stores_query_or_tags": False,
             "stores_cookie_or_authorization": False,
             "stores_complete_user_agent_or_referrer": False,
+            "stores_exact_status_code": True,
+            "stores_allowlisted_outcome_reason": True,
         },
         "records": rows,
     }, ensure_ascii=False, indent=2).encode("utf-8")
@@ -753,7 +861,9 @@ def get_admin_snapshot() -> dict[str, Any]:
          "count": metric["count"], "sum_ms": metric["sum_ms"],
          "source_kind": key[2], "source_name": key[3], "source_site": key[4],
          "client_family": key[7], "peak_in_flight": metric.get("peak_in_flight", 0),
-         "peak_per_minute": metric.get("peak_per_minute", 0)}
+         "peak_per_minute": metric.get("peak_per_minute", 0),
+         "status_code": None if key[12] == "unknown" else int(key[12]),
+         "outcome_reason": key[13]}
         for key, metric in _memory_records.items()
     ]}
 

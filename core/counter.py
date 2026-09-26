@@ -110,12 +110,18 @@ def _merge_history(
 _COUNTER_FILE = 'count.json'
 
 
+class CounterDataError(ValueError):
+    """远端对象存在但不可安全合并，禁止使用零值覆盖。"""
+
+
 def _parse_remote_data(raw: bytes | None) -> tuple[int, int, int, int, int, dict, list, list]:
     """解析远端 JSON bytes，返回 (total, visits, copies, mcp, successes, keywords, bad_cases, history)。"""
     if raw is None:
         return 0, BASE_VISITS, BASE_COPIES, 0, 0, {}, [], []
     try:
         data = json.loads(raw.decode('utf-8'))
+        if not isinstance(data, dict):
+            raise ValueError()
         r_total     = int(data.get('total',     0))
         r_visits    = int(data.get('visits',    BASE_VISITS))
         r_copies    = int(data.get('copies',    BASE_COPIES))
@@ -124,9 +130,24 @@ def _parse_remote_data(raw: bytes | None) -> tuple[int, int, int, int, int, dict
         r_keywords  = data.get('hot_keywords', {})
         r_bad_cases = data.get('bad_cases', [])
         r_history   = data.get('history', [])
+        if any(value < 0 for value in (r_total, r_visits, r_copies, r_mcp, r_successes)):
+            raise ValueError()
+        if not isinstance(r_keywords, dict) or any(
+            not isinstance(key, str) or type(value) is not int or value < 0
+            for key, value in r_keywords.items()
+        ):
+            raise ValueError()
+        if not isinstance(r_bad_cases, list) or any(not isinstance(item, dict) for item in r_bad_cases):
+            raise ValueError()
+        if not isinstance(r_history, list):
+            raise ValueError()
+        for item in r_history:
+            if not isinstance(item, dict) or type(item.get('total')) is not int or item['total'] < 0:
+                raise ValueError()
+            date.fromisoformat(item['date'])
         return r_total, r_visits, r_copies, r_mcp, r_successes, r_keywords, r_bad_cases, r_history
-    except Exception:
-        return 0, BASE_VISITS, BASE_COPIES, 0, 0, {}, [], []
+    except (ValueError, TypeError, KeyError, UnicodeError) as exc:
+        raise CounterDataError('count.json 数据格式无效') from exc
 
 
 def _read_remote() -> tuple[int, int, int, int, int, dict, list, list]:
@@ -136,13 +157,10 @@ def _read_remote() -> tuple[int, int, int, int, int, dict, list, list]:
 
     try:
         raw = read_bytes(_COUNTER_FILE, cfg)
+        return _parse_remote_data(raw)
     except Exception as e:
-        print(f'[Counter] 启动读取远端数据异常: {e}')
+        print(f'[Counter] 启动读取远端数据异常: {type(e).__name__}')
         return 0, BASE_VISITS, BASE_COPIES, 0, 0, {}, [], []
-
-    if raw is None:
-        return 0, BASE_VISITS, BASE_COPIES, 0, 0, {}, [], []
-    return _parse_remote_data(raw)
 
 
 def _sync_remote_task(
@@ -161,13 +179,12 @@ def _sync_remote_task(
 
     try:
         raw = read_bytes(_COUNTER_FILE, cfg)
+        r_total, r_visits, r_copies, r_mcp, r_successes, r_keywords, r_bad_cases, r_history = (
+            _parse_remote_data(raw)
+        )
     except Exception as e:
-        print(f'[Counter] 远端读取异常，中止本次同步以保护数据: {e}')
+        print(f'[Counter] 远端数据不可合并，中止本次同步以保护数据: {type(e).__name__}')
         return False, 0, 0, 0, 0, 0, {}, [], []
-
-    r_total, r_visits, r_copies, r_mcp, r_successes, r_keywords, r_bad_cases, r_history = (
-        _parse_remote_data(raw)
-    )
 
     n_total     = r_total     + adds_count
     n_visits    = r_visits    + adds_visits
