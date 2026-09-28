@@ -67,10 +67,12 @@ API_KEY_NOTICE = (
     "超限请求届时将返回 429，各 Key 仍受服务整体容量保护。网页搜索无需申请 Key。"
 )
 if get_key_service().config.mode == "public":
+    _key_config = get_key_service().config
     API_KEY_NOTICE = (
         "API Key 与 REST 限流政策已启用。使用 Hugging Face 账号访问 /developer/apply 申请；"
-        "仅个人首把且不超过 3000 点/日可自动批准，个人上限 6000 点/日；所有公开业务、第二把及增额须人工审核。"
-        "每把 Key 独立计额，60 点/分钟、并发 1；无 Key 共享 15000 点/日、30 点/分钟、并发 1。"
+        f"仅个人首把且不超过 {_key_config.personal_daily} 点/日可自动批准，个人上限 6000 点/日；所有公开业务、第二把及增额须人工审核。"
+        f"每把 Key 独立计额，{_key_config.key_per_minute} 点/分钟、并发 {_key_config.key_concurrency}；"
+        f"无 Key 共享 {_key_config.anonymous_daily} 点/日、{_key_config.anonymous_per_minute} 点/分钟、并发 {_key_config.anonymous_concurrency}。"
         "search/related/artists/health 每次 3/2/1/0 点，北京时间零点重置。"
         "个人调用须匹配 Client，公开调用须匹配 Client 与 Site；无效 Key 不回退匿名。网页搜索及 MCP 保持原有方式。"
     )

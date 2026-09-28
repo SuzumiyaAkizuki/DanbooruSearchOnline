@@ -5,6 +5,7 @@
   if (!embedded && location.pathname.startsWith("/admin")) return;
   const $ = id => document.getElementById((embedded ? "key-" : "") + id);
   let identity = {}, names = {}, autoEligible = false;
+  let quotaPolicy={personal_daily:3000,public_daily:10000};
   let generation = 0, loadSequence = 0, adminTab = "applications";
   function selectAdminTab(tab) {
     adminTab=tab;
@@ -89,6 +90,7 @@
     for(const a of data.applications){
       const c=card($("applications"),`${a.client} · ${states[a.state]}`);
       line(c,`${a.kind==="personal"?"个人":"公开"}业务 · 申请 ${a.daily} 点/日${a.target_grant?" · 变更已有授权":""}`);
+      line(c,"申请时间："+(a.created_at?new Date(a.created_at).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})+"（北京时间）":"未记录"));
       line(c,`账号：${a.username} · 申请编号：${a.id}`);if(a.site)line(c,"Site："+a.site);if(a.purpose)line(c,"用途："+a.purpose);if(a.reason)line(c,"申请原因："+a.reason);if(a.review_reason)line(c,"审核说明："+a.review_reason);
       if(admin && a.state==="pending")for(const decision of ["approve","reject"])button(c,decision==="approve"?"批准":"拒绝",async()=>{
         const reason=prompt("填写用户可见审核说明");if(!reason)return;
@@ -117,7 +119,7 @@
     if(!data.applications.length)line($("applications"),"暂无申请记录。");if(!data.grants.length)line($("grants"),"暂无授权。");
     if(admin){
       const used=(data.pool.rows.find(x=>x.subject==="anonymous")||{}).used||0;
-      $("pool").textContent=`模式：${data.mode} · 匿名池 ${used}/${data.anonymous_daily} 点，剩余 ${Math.max(0,data.anonymous_daily-used)} · 匿名并发 ${data.in_flight.anonymous||0}/1 · 测试池并发 ${data.in_flight.anonymous_preview||0}/1 · 短时拒绝 ${data.rejections} · 待退 ${data.pool.pending_refunds}，本进程待退 ${data.local_pending_refunds}`;
+      $("pool").textContent=`模式：${data.mode} · 匿名池 ${used}/${data.anonymous_daily} 点，剩余 ${Math.max(0,data.anonymous_daily-used)} · 个人默认 ${data.quota_policy?.personal_daily??3000} 点/日 · 公开建议 ${data.quota_policy?.public_daily??10000} 点/日 · 重置：${new Date(data.pool.reset_at||data.reset_at).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})}（北京时间） · 匿名并发 ${data.in_flight.anonymous||0}/${data.anonymous_concurrency??1} · 测试池并发 ${data.in_flight.anonymous_preview||0}/${data.anonymous_concurrency??1} · 短时拒绝 ${data.rejections} · 待退 ${data.pool.pending_refunds}，本进程待退 ${data.local_pending_refunds}`;
       for(const item of [...data.applications,...data.grants]) if(item.sub && item.username)names[item.sub]=item.username;
       if(identity.sub)names[identity.sub]=identity.username;
       $("audit").replaceChildren();for(const row of data.audit.rows){
@@ -137,7 +139,7 @@
     const r=await fetch(path,{cache:"no-store",credentials:"same-origin"}), data=await r.json();
     if(epoch!==generation)return;
     if(!r.ok||!data.authenticated){$("login-link").hidden=!data.login_url;if(data.login_url)$("login-link").href=data.login_url;message(location.search.includes("login_failed")?"登录未完成或账号不在测试白名单，请使用获准的 HF 账号。":"请先登录。测试期间仅受邀账号可以申请。");return;}
-    identity=data;csrf=data.csrf;terms=data.terms || "";$("login").hidden=true;$("content").hidden=false;if($("logout"))$("logout").hidden=false;
+    identity=data;quotaPolicy=data.quota_policy||quotaPolicy;const dailyInput=$("daily");if(!target && dailyInput.value===dailyInput.defaultValue){dailyInput.value=$("kind").value==="public"?quotaPolicy.public_daily:quotaPolicy.personal_daily;dailyInput.defaultValue=dailyInput.value;}csrf=data.csrf;terms=data.terms || "";$("login").hidden=true;$("content").hidden=false;if($("logout"))$("logout").hidden=false;
     $("identity").textContent=data.username+(data.mode==="preview"?" · 测试模式，普通用户调用不受影响":"");
     expiry=setTimeout(()=>{clear();message("登录已过期，请重新登录。");},data.expires_in*1000);
     await load();message(data.mode==="preview"?"当前仅为受邀测试。正式开放由维护者手动开启。":"");
@@ -146,11 +148,11 @@
     const daily=Number($("daily").value), personal=$("kind").value==="personal";
     $("estimate").textContent=`约相当于每天 ${Math.floor(daily/3)} 次纯搜索，或 ${Math.floor(daily/2)} 次纯关联，或 ${daily} 次纯画师推荐。`;
     $("site").disabled=personal;$("site").required=!personal;$("site-required").hidden=personal;
-    const automatic=autoEligible && personal && Number.isInteger(daily) && daily>0 && daily<=3000 && !target;
+    const automatic=autoEligible && personal && Number.isInteger(daily) && daily>0 && daily<=quotaPolicy.personal_daily && !target;
     const purpose=$("apply-form").elements.purpose;
     $("purpose-field").hidden=automatic;purpose.required=!automatic;purpose.disabled=automatic;
   }
-  $("kind").onchange=()=>{$("daily").value=$("kind").value==="public"?10000:3000;estimate();};$("daily").oninput=estimate;
+  $("kind").onchange=()=>{$("daily").value=$("kind").value==="public"?quotaPolicy.public_daily:quotaPolicy.personal_daily;estimate();};$("daily").oninput=estimate;
   $("apply-form").onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,b=form.querySelector('[type="submit"]');b.disabled=true;try{const raw=Object.fromEntries(new FormData(form));await request("/developer/api/apply",{...raw,site:raw.site||"",purpose:raw.purpose||"",daily:Number(raw.daily),accepted:raw.accepted==="on",terms,submission_id:submission,grant_id:target});submission=crypto.randomUUID();message("申请已提交，请查看审批结果。");await load();}catch(error){if(error.message===errors.purpose_required){autoEligible=false;estimate();}message(error.message);}finally{b.disabled=false;}};
   $("cancel-edit").onclick=()=>{target=null;submission=crypto.randomUUID();$("apply-form").reset();$("apply-title").textContent="申请独立额度";$("cancel-edit").hidden=true;estimate();};
   for(const id of ["refresh-login","refresh"])$(id).onclick=()=>session().catch(e=>message(e.message));

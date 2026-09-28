@@ -157,6 +157,7 @@ def create_developer_router(service=None, config=None, auth=None):
             value = current(request)
             return response({"authenticated": True, "username": value.username, "csrf": value.csrf,
                 "mode": service.config.mode, "terms": TERMS_VERSION, "ready": service.config.ready,
+                "quota_policy": service.config.quota_policy(),
                 "expires_in": max(0, int(value.expires-auth.clock()))})
         except HTTPException as exc:
             return response({"error": exc.detail, "mode": service.config.mode, "authenticated": False,
@@ -224,7 +225,7 @@ def create_developer_router(service=None, config=None, auth=None):
             value = current(request)
             check_csrf(request, value, config.origin)
             application = ApplicationIn.model_validate(await read_body(request))
-            return response(await service.rpc.call("ds_key_portal", action="apply", actor=actor(value), application=application.payload()))
+            return response(await service.rpc.call("ds_key_portal", action="apply", actor=actor(value), application=application.payload(service.config)))
         except ValidationError:
             return response({"error": "invalid_application_fields"}, 422)
         except HTTPException as exc:
@@ -291,6 +292,7 @@ def install_admin_key_routes(router, session, same_origin, service=None):
             result["pool"] = await service.rpc.call("ds_key_portal", action="pool", actor=actor(value))
             result["audit"] = await service.rpc.call("ds_key_portal", action="audit", actor=actor(value), page=max(0,page))
             result.update(mode=service.config.mode, anonymous_daily=service.config.anonymous_daily,
+                quota_policy=service.config.quota_policy(), anonymous_concurrency=service.config.anonymous_concurrency,
                 in_flight={k:b.active for k,b in service.limiter.buckets.items() if k.startswith("anonymous")},
                 rejections=service.limiter.rejections, local_pending_refunds=len(service.pending_refunds))
             return response(result)

@@ -36,6 +36,8 @@ class KeyConfig:
     service_key: str = field(default="", repr=False)
     hmac_keys: dict[str, str] = field(default_factory=dict, repr=False)
     hmac_version: str = "v1"
+    personal_daily: int = 3000
+    public_daily: int = 10000
     anonymous_daily: int = 15000
     anonymous_per_minute: int = 30
     key_per_minute: int = 60
@@ -69,6 +71,10 @@ class KeyConfig:
             daily = int(os.getenv("API_KEY_ANONYMOUS_DAILY", "15000"))
             if daily < 1:
                 raise ValueError()
+            personal_daily = int(os.getenv("API_KEY_PERSONAL_DAILY", "3000"))
+            public_daily = int(os.getenv("API_KEY_PUBLIC_DAILY", "10000"))
+            if not 1 <= personal_daily <= 6000 or not 1 <= public_daily <= 10000000:
+                raise ValueError()
             limits = {}
             for name in ("anonymous_per_minute", "key_per_minute", "rest_per_minute", "anonymous_burst", "key_burst", "rest_burst",
                          "anonymous_concurrency", "key_concurrency", "rest_concurrency", "search_concurrency", "recommendation_concurrency"):
@@ -80,7 +86,11 @@ class KeyConfig:
         return cls(mode=mode, testers=frozenset({ADMIN_SUB} | set(filter(None, os.getenv("API_KEY_TEST_SUBS", "").split(",")))),
                    url=os.getenv("SUPABASE_URL", "").rstrip("/"),
                    service_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""), hmac_keys=keys,
-                   hmac_version=os.getenv("API_KEY_HMAC_VERSION", "v1"), anonymous_daily=daily, **limits)
+                   hmac_version=os.getenv("API_KEY_HMAC_VERSION", "v1"), personal_daily=personal_daily, public_daily=public_daily, anonymous_daily=daily, **limits)
+
+    def quota_policy(self):
+        return {"personal_daily": self.personal_daily, "public_daily": self.public_daily,
+                "anonymous_daily": self.anonymous_daily}
 
     @property
     def ready(self):
@@ -136,16 +146,19 @@ class ApplicationIn(BaseModel):
             raise ValueError("Site 必须是单个不含账号密码的 HTTPS 地址（域名使用 ASCII）") from None
         return value
 
-    def payload(self):
+    def payload(self, config=None):
+        config = config or KeyConfig()
+        daily = self.daily if "daily" in self.model_fields_set else (config.personal_daily if self.kind == "personal" else config.public_daily)
         if not self.accepted or self.terms != TERMS_VERSION:
             raise HTTPException(422, "请阅读并同意当前版本须知")
         if self.kind == "public" and not self.site:
             raise HTTPException(422, "公开业务须登记 HTTPS Site")
-        if self.kind == "personal" and self.daily > 6000:
+        if self.kind == "personal" and daily > 6000:
             raise HTTPException(422, "个人业务最高 6000 点/日")
-        if (self.kind == "public" or self.daily > 3000 or self.grant_id) and not self.purpose.strip():
+        if (self.kind == "public" or daily > config.personal_daily or self.grant_id) and not self.purpose.strip():
             raise HTTPException(422, "需要人工审核，请填写用途说明")
         data = self.model_dump(mode="json")
+        data["daily"] = daily
         if self.kind == "personal":
             data["site"] = ""
         return data
@@ -162,7 +175,7 @@ class RPC:
             async with httpx.AsyncClient(timeout=8, follow_redirects=False, transport=self.transport) as client:
                 response = await client.post(self.config.url + "/rest/v1/rpc/" + name,
                     headers={"apikey": self.config.service_key, "Authorization": "Bearer " + self.config.service_key},
-                    json={"p": payload})
+                    json={"p": {**payload, "policy": self.config.quota_policy()}})
                 response.raise_for_status()
                 result = response.json()
                 if not isinstance(result, dict):
