@@ -59,7 +59,20 @@
     if (!r.ok) { if (r.status===401) clear(); throw new Error(errors[result.error] || result.error || result.detail || "操作失败，请刷新后重试。"); }
     return result;
   }
-  function wipeSecret(){ $("secret").value="";$("curl-windows").textContent="";$("curl-posix").textContent="";$("secret-feedback").textContent=""; }
+  let secretExamples = {};
+  const exampleNames = ["windows", "posix", "python"];
+  function selectExample(name) {
+    for(const item of exampleNames) {
+      const tab=$("example-"+item);
+      tab.setAttribute("aria-selected",String(item===name));
+      tab.setAttribute("aria-controls",$("example-panel").id);
+      tab.tabIndex=item===name?0:-1;
+    }
+    $("example-panel").setAttribute("aria-labelledby",$("example-"+name).id);
+    $("example-code").textContent=secretExamples[name] || "";
+    $("example-hint").textContent={windows:"在 PowerShell 7 中运行",posix:"在 Bash / Zsh 中运行",python:"Python 3 · 无需安装额外依赖"}[name];
+  }
+  function wipeSecret(){ secretExamples={};$("secret").value="";$("example-code").textContent="";$("secret-feedback").textContent=""; }
   function clearSecret(){ wipeSecret(); if($("secret-dialog").open) $("secret-dialog").close(); }
   function clear(){generation++;identity={};names={};autoEligible=false;estimate();csrf=null;clearTimeout(expiry);clearSecret();$("content").hidden=true;if($("logout"))$("logout").hidden=true;$("login").hidden=false;for(const id of ["applications","grants","audit"]) $(id).replaceChildren();}
   function button(root,text,action){const b=document.createElement("button");b.textContent=text;b.onclick=async()=>{b.disabled=true;try{await action();}catch(e){message(e.message);}finally{b.disabled=false;}};root.append(b);}
@@ -71,8 +84,8 @@
     if(!confirm(action==="revoke"?"永久吊销这把逻辑 Key？旧凭证无法恢复。":action==="rotate"?"生成新 Key 并立即撤销旧 Key？额度不会重置。":"领取 Key？完整值只展示一次。"))return;
     const result=await request(`/developer/api/grants/${g.id}/${action}`,{version:g.version});
     if(result.key){
-      const examples=KeyPortalView.searchExamples(result.key,g);
-      $("secret").value=result.key;$("curl-windows").textContent=examples.windows;$("curl-posix").textContent=examples.posix;
+      secretExamples=KeyPortalView.searchExamples(result.key,g);
+      $("secret").value=result.key;selectExample("windows");
       $("secret-feedback").textContent="";$("secret-dialog").showModal();
     }
     await load();
@@ -165,8 +178,16 @@
     catch{if($("secret-dialog").open)$("secret-feedback").textContent="自动复制不可用，请选中内容手动复制。";}
   }
   $("copy-secret").onclick=()=>copyValue($("secret").value,"Key");
-  $("copy-windows").onclick=()=>copyValue($("curl-windows").textContent,"PowerShell 命令");
-  $("copy-posix").onclick=()=>copyValue($("curl-posix").textContent,"Bash / Zsh 命令");
+  $("copy-example").onclick=()=>copyValue($("example-code").textContent,"示例代码");
+  exampleNames.forEach((name,index)=>{
+    const tab=$("example-"+name);
+    tab.onclick=()=>selectExample(name);
+    tab.onkeydown=e=>{
+      const next={ArrowRight:(index+1)%3,ArrowLeft:(index+2)%3,Home:0,End:2}[e.key];
+      if(next===undefined)return;
+      e.preventDefault();selectExample(exampleNames[next]);$("example-"+exampleNames[next]).focus();
+    };
+  });
   window.addEventListener("pagehide",clear);window.addEventListener("pageshow",e=>{if(e.persisted)session().catch(err=>message(err.message));});
   if($("admin-link"))$("admin-link").hidden=!admin;$("admin-tools").hidden=!admin;$("audit-section").hidden=!admin;$("apply-section").hidden=admin;$("rules").hidden=admin;$("title").textContent=admin?"API Key 审核与管理":"API 接入";
   showView();

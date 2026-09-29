@@ -34,18 +34,26 @@
     const headers=["Content-Type: application/json", "Authorization: Bearer "+key,
       "X-DanbooruSearch-Client: "+grant.client];
     if(grant.kind==="public") headers.push("X-DanbooruSearch-Site: "+grant.site);
-    const args=["--silent","--show-error","--include",
-      "https://sakizuki-danboorusearch.hf.space/api/search",
-      ...headers.flatMap(header=>["--header",header]),"--data-binary","@-"];
-    // ASCII JSON travels through PowerShell pipelines independently of console encoding.
-    const body=JSON.stringify({query:"白色水手服",limit:5}).replace(/[^\x00-\x7f]/g,
-      char=>"\\u"+char.charCodeAt(0).toString(16).padStart(4,"0"));
+    const url="https://sakizuki-danboorusearch.hf.space/api/search";
+    const body=JSON.stringify({query:"白色水手服",limit:5});
     const ps=value=>"'"+value.replace(/'/g,"''")+"'";
     const sh=value=>"'"+value.replace(/'/g,"'\"'\"'")+"'";
     return {
-      windows:["& {", "  $PSNativeCommandArgumentPassing = 'Standard'", "  $curlArgs = @(",
-        ...args.map(value=>"    "+ps(value)), "  )", "  "+ps(body)+" | curl.exe @curlArgs", "}"].join("\n"),
-      posix:"printf '%s' "+sh(body)+" | curl \\\n  "+args.map(sh).join(" \\\n  ")
+      // stdin avoids native JSON argument quoting differences across PowerShell 7 versions.
+      windows:["& {", "  $OutputEncoding = [System.Text.UTF8Encoding]::new()",
+        "  "+ps(body)+" | curl.exe -sS -i "+ps(url)+" `",
+        ...headers.map(header=>"    -H "+ps(header)+" `"), "    --data-binary '@-'", "}"].join("\n"),
+      posix:["curl -sS -i "+sh(url),...headers.map(header=>"  -H "+sh(header)),
+        "  --data-binary "+sh(body)].join(" \\\n"),
+      python:["import json", "import urllib.request", "import urllib.error", "",
+        "headers = "+JSON.stringify(Object.fromEntries(headers.map(header=>{
+          const split=header.indexOf(": ");return [header.slice(0,split),header.slice(split+2)];
+        })),null,4),
+        'data = json.dumps({"query": "白色水手服", "limit": 5}, ensure_ascii=False).encode("utf-8")',
+        "request = urllib.request.Request("+JSON.stringify(url)+", data=data, headers=headers)",
+        "try:","    response = urllib.request.urlopen(request, timeout=30)",
+        "except urllib.error.HTTPError as error:","    response = error",
+        "with response:","    print(response.status)", '    print(response.read().decode("utf-8"))'].join("\n")
     };
   }
   const api={sections,audit,searchExamples};

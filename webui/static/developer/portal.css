@@ -49,8 +49,11 @@
 :is(.developer-shell,#key-workspace) .secret-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px;flex-wrap:wrap}
 :is(.developer-shell,#key-workspace) .secret-actions .primary:hover{background:#174f86;color:white}
 :is(.developer-shell,#key-workspace) .curl-examples{border-top:1px solid var(--line);padding-top:18px;margin-top:16px}
-:is(.developer-shell,#key-workspace) .example-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px}
+:is(.developer-shell,#key-workspace) .example-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-top:18px}
+:is(.developer-shell,#key-workspace) .example-tabs button{border:0;border-radius:6px 6px 0 0;background:transparent;border-bottom:3px solid transparent;color:var(--muted);padding:10px 12px}
+:is(.developer-shell,#key-workspace) .example-tabs [aria-selected="true"]{background:var(--blue-soft);border-bottom-color:var(--blue);color:var(--blue)}
+:is(.developer-shell,#key-workspace) .example-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px}
 :is(.developer-shell,#key-workspace) .example-heading h4{margin:0;font-size:14px}
-:is(.developer-shell,#key-workspace) .curl-example pre{margin:10px 0 0;max-height:230px;overflow:auto}
+:is(.developer-shell,#key-workspace) .curl-example pre{margin:10px 0 0;height:260px;overflow:auto;font-size:13px;line-height:1.65}
 :is(.developer-shell,#key-workspace) [id$="secret-feedback"]{min-height:20px;margin:8px 0 0;font-size:13px}
 @media(max-width:650px){:is(.developer-shell,#key-workspace) dialog{padding:20px}:is(.developer-shell,#key-workspace) .secret-actions button{flex:1}}
