@@ -205,6 +205,14 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
                 font-weight: 400;
                 line-height: 1.55;
             }
+            .help-section-heading--tutorial {
+                border-color: var(--reduce-border);
+                background: var(--reduce-bg);
+            }
+            .help-section-heading--tutorial .help-section-heading-title,
+            .help-section-heading--tutorial .help-section-heading-subtitle {
+                color: var(--purple);
+            }
             .help-section-heading--documentation {
                 border-color: var(--help-success-border);
                 background: var(--success-bg);
