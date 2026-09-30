@@ -50,6 +50,9 @@ def build_search_panel(controller: Any) -> None:
                 ).classes('px-6 h-full min-h-16 motion-search-button').props('unelevated color=dark')
                 with controller.search_btn:
                     ui.label('搜索').classes('text-sm mt-1')
+                controller.search_btn.disable()
+                # Tooltip 挂在外层容器，禁用按钮时仍可响应悬停。
+                controller.search_startup_tooltip = ui.tooltip('正在启动，请稍候')
                 controller.spinner = ui.spinner(size='2em').classes(
                     'hidden motion-search-spinner'
                 )

@@ -237,6 +237,17 @@ class DanbooruTagger:
 
     _instance: Optional['DanbooruTagger'] = None
     _lock: Optional[asyncio.Lock] = None
+    # 单例在加载完成后才发布，启动阶段需单独保存供页面读取。
+    _startup_status: str = '等待引擎初始化…'
+
+    @classmethod
+    def get_startup_status(cls) -> str:
+        return cls._startup_status
+
+    @classmethod
+    def _set_startup_status(cls, message: str) -> None:
+        cls._startup_status = message
+
     # 进程级搜索闸门：限制 PyTorch 密集型任务，避免并发抢占 CPU。
     _cpu_sem: Optional[asyncio.Semaphore] = None
     _cpu_sem_limit: Optional[int] = None
@@ -255,8 +266,13 @@ class DanbooruTagger:
             cls._lock = asyncio.Lock()
         async with cls._lock:
             if cls._instance is None:
-                inst = cls(**kwargs)
-                await asyncio.to_thread(inst.load)
+                cls._set_startup_status('解析模型路径…')
+                try:
+                    inst = cls(**kwargs)
+                    await asyncio.to_thread(inst.load)
+                except Exception:
+                    cls._set_startup_status('引擎初始化失败，请稍后重试')
+                    raise
                 cls._instance = inst
             return cls._instance
 
@@ -339,6 +355,7 @@ class DanbooruTagger:
             self._load_model()
             self._build_full()
         else:
+            self._set_startup_status(f'加载缓存 ({self.paths.dir.name}) …')
             print(f'[Engine] 加载缓存 ({self.paths.dir}) ...')
             self._load_from_cache()
             if self._cached_schema_version() != SCHEMA_VERSION:
@@ -352,16 +369,25 @@ class DanbooruTagger:
         if self.model is None:
             self._load_model()
 
+        self._set_startup_status('初始化分词词典…')
         self._setup_jieba_from_memory()
+        self._set_startup_status('加载标签共现数据…')
         self._load_cooc()
+        self._set_startup_status('加载画师共现数据…')
         self._load_tag_artist_cooc()
+        self._set_startup_status('构建标签索引…')
         self._name_to_idx = {n: i for i, n in enumerate(self.df['name'])}
         self._tag_names_set: set[str] = set(self._name_to_idx.keys())
+        self._set_startup_status('加载标签别名…')
         self._load_tag_aliases()
+        self._set_startup_status('预处理检索数据…')
         self._rebuild_arrays_from_df()
+        self._set_startup_status('归一化向量…')
         self._normalize_embeddings()
+        self._set_startup_status('加载标签分组…')
         self._load_groups()
         self.is_loaded = True
+        self._set_startup_status('初始化完成')
         print(f'[Engine] 初始化完成，耗时 {time.time() - t0:.2f}s')
 
     def _normalize_embeddings(self) -> None:
@@ -409,6 +435,7 @@ class DanbooruTagger:
             }
 
         def pull(filename: str) -> str:
+            self._set_startup_status(f'拉取数据文件 ({Path(filename).name}) …')
             try:
                 return download_file(filename, **extra_hf_kwargs)
             except Exception as e:
@@ -974,6 +1001,7 @@ class DanbooruTagger:
     # ── 全量构建 ──────────────────────────────────────────────────────────
 
     def _build_full(self) -> None:
+        self._set_startup_status('读取标签数据，准备全量构建…')
         print(f'[Engine] 全量读取 {self.csv_path} ...')
         raw_df         = self._read_csv_robust(self.csv_path)
         self.df        = self._preprocess_raw_df(raw_df)
@@ -982,7 +1010,8 @@ class DanbooruTagger:
 
     def _encode_all_and_save(self) -> None:
         print('[Engine] 全量编码...')
-        for _, attr, col in _LAYER_SPEC:
+        for name, attr, col in _LAYER_SPEC:
+            self._set_startup_status(f'全量编码：{name} ({len(self.df):,} 条) …')
             texts = self.df[col].tolist()
             if col == 'name':  # 英文层：编码时将下划线替换为空格
                 texts = [t.replace('_', ' ') for t in texts]
@@ -992,6 +1021,7 @@ class DanbooruTagger:
     # ── 增量更新 ──────────────────────────────────────────────────────────
 
     def _smart_update(self) -> None:
+        self._set_startup_status('检查增量变更…')
         print('[Engine] 检查增量变更...')
         t0 = time.time()
 
@@ -1026,6 +1056,7 @@ class DanbooruTagger:
             return
 
         print(f'[Engine] 变更 → 新增: {len(added_names)}  文本修改: {len(changed_names)}  元数据修改: {len(metadata_changed_names)}  删除: {len(deleted_names)}')
+        self._set_startup_status('更新增量数据与向量…')
 
         if deleted_names:
             keep_mask = ~self.df['name'].isin(set(deleted_names))
@@ -1077,6 +1108,7 @@ class DanbooruTagger:
     # ── 缓存 I/O ──────────────────────────────────────────────────────────
 
     def _save_cache(self) -> None:
+        self._set_startup_status('保存向量与元数据缓存…')
         self.paths.ensure_dir()
         st_save(
             {attr: getattr(self, attr).half() for _, attr, _ in _LAYER_SPEC},
@@ -1103,9 +1135,11 @@ class DanbooruTagger:
 
         # ── 步骤 1/3: embedding 文件（逐层加载以显示进度）─────────────────
         n_layers = len(_LAYER_SPEC)
+        self._set_startup_status(f'加载向量 ({emb_size_mb:.0f} MB, {n_layers} 层) …')
         print(f'  [1/3] 加载 embedding ({emb_size_mb:.0f} MB, {n_layers} 层) ...')
         with safe_open(emb_path, framework="pt", device=self.device) as f:
             for i, (name, attr, _) in enumerate(_LAYER_SPEC, 1):
+                self._set_startup_status(f'加载向量 ({emb_size_mb:.0f} MB)：{name} [{i}/{n_layers}] …')
                 print(f'    [{i}/{n_layers}] {attr:12s} ...', end=' ', flush=True)
                 _t = time.time()
                 tensor = f.get_tensor(attr)
@@ -1114,12 +1148,14 @@ class DanbooruTagger:
         print(f'  [1/3] ✓ {time.time() - t0:.1f}s')
 
         # ── 步骤 2/3: 元数据 ──────────────────────────────────────────────
+        self._set_startup_status(f'加载元数据 ({meta_size_mb:.0f} MB) …')
         print(f'  [2/3] 加载元数据 ({meta_size_mb:.0f} MB) ...', end=' ', flush=True)
         _t = time.time()
         self.df = pd.read_parquet(meta_path)
         print(f'✓ {time.time() - _t:.1f}s  ({len(self.df):,} 条)')
 
         # ── 步骤 3/3: 统计信息 ────────────────────────────────────────────
+        self._set_startup_status('计算统计信息…')
         print(f'  [3/3] 计算统计信息 ...', end=' ', flush=True)
         _t = time.time()
         self.max_log_count = float(np.log1p(self.df['post_count'].max()))
@@ -1144,11 +1180,13 @@ class DanbooruTagger:
     def _load_model(self) -> None:
         if self.model is not None:
             return
+        self._set_startup_status('加载语义模型…')
         print(f'[Engine] 加载模型 (path={self.model_path}, device={self.device})...')
         try:
             self.model = SentenceTransformer(self.model_path, device=self.device)
         except Exception as e:
             print(f'[Engine] 指定路径加载失败，尝试重新解析: {e}')
+            self._set_startup_status('重新解析并加载语义模型…')
             fallback = resolve_model_path()
             self.model = SentenceTransformer(fallback, device=self.device)
 

@@ -383,6 +383,8 @@ class DanbooruSearchUI:
         self.keywords_container = None
         self.spinner = None
         self.search_btn = None
+        self.search_startup_tooltip = None
+        self._search_waiting_for_startup = True
 
         self.selected_layers = {'英文': True, '中文扩展词': True, '释义': True, '中文核心词': True, 'artist': True}
         self.selected_cats = {'General': True, 'Copyright': True, 'Character': True}
@@ -458,19 +460,27 @@ class DanbooruSearchUI:
             return
 
         ready = DanbooruTagger.is_ready()
+        if ready and self._search_waiting_for_startup and self.search_btn is not None:
+            self.search_btn.enable()
+            if self.search_startup_tooltip is not None:
+                self.search_startup_tooltip.delete()
+                self.search_startup_tooltip = None
+            self._search_waiting_for_startup = False
         online_sessions = _get_active_ui_session_count()
         load = DanbooruTagger.get_load_snapshot()
         active = load['active']
         waiting = load['waiting']
         capacity = load['capacity']
         busy = ready and (waiting > 0 or active >= capacity)
-        status_key = (ready, busy, online_sessions, active, waiting, capacity)
+        startup_status = '' if ready else DanbooruTagger.get_startup_status()
+        status_key = (ready, busy, online_sessions, active, waiting, capacity, startup_status)
         if status_key == self._last_service_status_key:
             return
         self._last_service_status_key = status_key
 
         render_service_status(self, {
             'ready': ready,
+            'startup_status': startup_status,
             'busy': busy,
             'online_sessions': online_sessions,
             'active': active,
@@ -495,7 +505,7 @@ class DanbooruSearchUI:
         next_probe = time.monotonic() + 30.0
         try:
             while self._client_alive():
-                await asyncio.sleep(5.0)
+                await asyncio.sleep(5.0 if DanbooruTagger.is_ready() else 1.0)
                 if not self._client_alive():
                     return
                 if not self._client_connected():
@@ -1599,6 +1609,9 @@ class DanbooruSearchUI:
     # ── 搜索 ──────────────────────────────────────────────────────────────
 
     async def perform_search(self):
+        if not DanbooruTagger.is_ready():
+            ui.notify('正在启动，请稍候', type='info')
+            return
         query = self.search_input.value.strip()
         if not query:
             return

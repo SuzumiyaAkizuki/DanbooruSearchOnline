@@ -362,7 +362,7 @@ def render_service_status(controller: Any, status: dict) -> None:
                 'w-full items-center gap-2 service-state-panel loading'
             ):
                 ui.spinner(size='18px', color='primary')
-                ui.label('引擎初始化中，请稍候…约需 5~10 分钟').classes('font-medium')
+                ui.label(status['startup_status']).classes('font-medium')
             return
 
         with ui.row().classes(

@@ -10,7 +10,7 @@
 <main><header class="topbar"><span>DanbooruSearch / 开发者中心</span><button id="logout" class="text-button" hidden>退出登录</button></header>
 <div class="heading"><div><span class="eyebrow">开发者中心</span><h1 id="title">API 接入</h1><p id="view-description">申请独立额度，管理程序调用凭证。</p></div></div>
 <section id="readonly-notice" class="panel" {{readonly_hidden}}><h2>请使用 Hugging Face 账号申请 API Key</h2><p>当前站点仅提供开发者说明与申请表预览，不支持提交业务申请、领取或管理 Key。请前往 Hugging Face 站点，使用 Hugging Face 账号登录后申请；开放范围以该站点为准。</p><a href="https://sakizuki-danboorusearch.hf.space/developer/apply" target="_blank" rel="noopener">前往 Hugging Face 申请 Key →</a></section>
-<p id="message" role="status" aria-live="polite"></p><section id="login" class="panel"><h2>使用 Hugging Face 账号登录</h2><p>测试期间仅向受邀账号开放。请在新标签页完成登录，再回到这里刷新。</p><a id="login-link" target="_blank" rel="noopener">登录 Hugging Face</a><button id="refresh-login">已登录，刷新</button></section>
+<p id="message" role="status" aria-live="polite"></p><section id="login" class="panel"><h2>使用 Hugging Face 账号登录</h2><p>测试期间仅向受邀账号开放。请在新标签页完成登录，再回到这里刷新。</p><div class="toolbar"><a id="login-link" class="button primary" target="_blank" rel="noopener">登录 Hugging Face</a><button id="refresh-login">已登录，刷新</button></div></section>
 <div id="content" hidden><div class="toolbar"><span id="identity"></span><button id="refresh">刷新</button></div>
 <details id="rules" class="panel"><summary>{{rules_title}}</summary><div class="markdown-copy">{{rules_body}}</div></details>
 <section id="apply-section" class="panel"><h2 id="apply-title">申请独立额度</h2><form id="apply-form"><fieldset {{form_disabled}} aria-label="API Key 申请信息">
