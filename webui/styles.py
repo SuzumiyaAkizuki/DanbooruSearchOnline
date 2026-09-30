@@ -38,12 +38,12 @@ MOTION_STYLE = '''
     to { opacity: 1; transform: translateY(0); }
 }
 @keyframes motion-recommendation-enter-from-right {
-    from { opacity: 0; transform: translateX(10px); }
-    to { opacity: 1; transform: translateX(0); }
+    from { transform: translateX(16px); }
+    to { transform: translateX(0); }
 }
 @keyframes motion-recommendation-enter-from-left {
-    from { opacity: 0; transform: translateX(-10px); }
-    to { opacity: 1; transform: translateX(0); }
+    from { transform: translateX(-16px); }
+    to { transform: translateX(0); }
 }
 .motion-results-enter, .motion-secondary-enter, .motion-refresh-enter {
     animation: motion-content-enter var(--motion-content) var(--motion-ease-out) both;
