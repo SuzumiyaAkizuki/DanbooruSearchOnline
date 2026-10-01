@@ -855,9 +855,10 @@ def get_admin_snapshot() -> dict[str, Any]:
     The detached snapshot can be aggregated in a worker without racing mutable
     request counters. Pending, sub-threshold records remain excluded.
     """
-    return {"records": [
+    return {"enabled_at": _enabled_at, "records": [
         {"day": key[0], "hour": key[1], "endpoint": key[5],
          "status_class": key[6], "latency_bucket": key[8],
+         "limit_bucket": key[9], "top_k_bucket": key[10], "parameter_bucket": key[11],
          "count": metric["count"], "sum_ms": metric["sum_ms"],
          "source_kind": key[2], "source_name": key[3], "source_site": key[4],
          "client_family": key[7], "peak_in_flight": metric.get("peak_in_flight", 0),

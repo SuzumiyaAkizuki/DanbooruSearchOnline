@@ -34,14 +34,34 @@
   </section>
   <div id="dashboard" hidden>
     <section id="overview">
-      <div class="heading"><div><span class="eyebrow">服务运行</span><h1>运行概览</h1><p>按访问渠道查看用量与响应表现。</p></div><button id="refresh">刷新数据</button></div>
+      <div class="heading"><div><h1>运行概览</h1><p>查看异常原因、调用来源与已有性能采样。</p></div><button id="refresh">刷新数据</button></div>
       <div class="meta"><span id="updated">读取数据中…</span><span>每 30 秒自动刷新 · 北京时间</span></div>
+      <div class="section-links" aria-label="概览内导航"><a href="#rest-diagnostics">REST 排查</a><a href="#cumulative-metrics">累计指标</a><a href="#performance-details">性能明细</a></div>
+      <p id="data-boundary" class="footnote boundary"></p>
       <section class="panel history-panel">
         <div class="panel-heading"><div><h2>近期 UI 性能</h2><p class="muted">现有性能采样 · 当前进程窗口 · 延迟单位为毫秒</p></div><span id="history-state" class="badge">性能采样</span></div>
         <div id="history-insight" class="notice neutral"></div>
         <div id="history-stats" class="signal-grid"></div>
         <div id="history-chart" class="chart trend"></div>
         <p id="history-note" class="footnote"></p>
+        <details id="performance-details"><summary>全部 UI 与运行时采样</summary>
+          <div class="detail-toolbar"><label>性能窗口 <select id="performance-window"></select></label></div>
+          <div id="runtime-stats" class="signal-grid"></div>
+          <div class="table-scroll" tabindex="0" aria-label="UI 性能指标表"><table><thead><tr><th>指标</th><th>样本数</th><th>平均耗时</th><th>最大耗时</th><th>&gt; 200ms</th></tr></thead><tbody id="performance-metrics"></tbody></table></div>
+          <h3 class="detail-heading">垃圾回收（GC）</h3>
+          <div class="table-scroll" tabindex="0" aria-label="GC 指标表"><table><thead><tr><th>代</th><th>次数</th><th>平均耗时</th><th>最大耗时</th><th>&gt; 200ms</th><th>回收对象</th><th>不可回收</th></tr></thead><tbody id="gc-metrics"></tbody></table></div>
+          <p class="footnote">CPU 100% 表示占用一个逻辑核，可能超过 100%；内存为当时 RSS。指标缺失显示「—」，不补零。所有值均来自所选采样窗口，重启后重新积累。</p>
+        </details>
+      </section>
+      <section class="panel" id="cumulative-metrics"><div class="panel-heading"><h2>全部累计指标</h2><span class="muted">UI / REST / MCP / 反馈 / 冷启动</span></div>
+        <details><summary>查看所有事件计数与耗时分布</summary>
+          <p id="feedback-summary" class="footnote"></p>
+          <div class="table-scroll" tabindex="0" aria-label="累计事件计数"><table><thead><tr><th>事件</th><th>字段</th><th>累计次数</th></tr></thead><tbody id="counter-details"></tbody></table></div>
+          <h3 class="detail-heading">累计耗时</h3>
+          <div class="table-scroll" tabindex="0" aria-label="累计耗时指标"><table><thead><tr><th>指标</th><th>样本数</th><th>平均耗时</th><th>P95 区间上界</th><th>分桶完整</th></tr></thead><tbody id="timing-details"></tbody></table></div>
+          <div class="detail-toolbar"><label>耗时分布 <select id="timing-metric"></select></label></div><div id="timing-chart" class="chart"></div>
+          <p class="footnote">事件计数各有采集边界，REST 累计业务计数不包含所有前置拒绝；应通过下方 REST 窗口排查 429。延迟分桶分别计数，缺少完整分桶时不估算 P95。反馈这里只展示数量，不展示用户提交正文。</p>
+        </details>
       </section>
       <section class="panel"><div class="panel-heading"><h2>调用渠道</h2><span id="since" class="muted">累计统计</span></div>
         <div class="channels">
@@ -51,8 +71,13 @@
         </div>
       </section>
       <section class="panel quality-panel"><div class="panel-heading"><h2>使用质量与启动记录</h2><span class="muted">累计口径</span></div><div id="quality-stats" class="signal-grid"></div><p class="footnote">复制操作 / 搜索是事件比值，不是独立用户转化率。冷启动统计包含历史记录，不代表当前服务不可用。</p></section>
-      <div class="rest-toolbar"><div><h2>REST 运行窗口</h2><p class="muted">筛选同步应用于请求量、延迟、趋势、来源和峰值</p></div><label class="range-label">时间范围 <select id="range"><option value="24" selected>近 24 小时</option><option value="168">近 7 天</option><option value="336">近 14 天</option></select></label></div>
+      <div class="rest-toolbar" id="rest-diagnostics"><div><h2>REST 运行窗口</h2><p class="muted">时间与统计范围应用于下方所有 REST 数据</p></div><div class="detail-toolbar"><label class="range-label">时间范围 <select id="range"><option value="1">当前小时</option><option value="6">近 6 个小时</option><option value="24" selected>近 24 个小时</option><option value="168">近 7 天</option><option value="336">近 14 天</option></select></label><label class="range-label">统计范围 <select id="rest-scope"><option value="business" selected>业务请求（不含 health）</option><option value="all">全部请求（含 health）</option></select></label></div></div>
       <p id="rest-insight" class="notice neutral"></p>
+      <section class="panel"><div class="panel-heading"><h2>拒绝与错误原因</h2><span class="window-label muted"></span></div>
+        <div id="rejection-stats" class="signal-grid"></div>
+        <div class="metrics-grid"><div><h3>精确状态码</h3><div id="status-codes" class="rank-list"></div></div><div><h3>结果原因</h3><div id="outcome-reasons" class="rank-list"></div></div></div>
+        <p class="footnote">频率、并发、日额度、认证与参数错误分别统计。原因是触发的第一个拒绝条件，不能据此断定其余条件未超限；历史 unknown 表示当时未采集精确原因。</p>
+      </section>
       <div class="metrics-grid">
         <section class="panel"><div class="panel-heading"><h2>网页搜索延迟</h2><span class="muted">累计样本</span></div>
           <div class="latency-numbers"><div><span class="muted">平均延迟</span><strong id="ui-avg">—</strong></div><div><span class="muted">P95 所在区间上界</span><strong id="ui-p95">—</strong></div></div>
@@ -60,18 +85,31 @@
         </section>
         <section class="panel"><div class="panel-heading"><h2>REST 观测窗口</h2><span class="badge window-label">近 24 小时</span></div>
           <dl class="window-stats"><div><dt>已记录请求</dt><dd id="window-count">—</dd></div><div><dt>4xx 客户端错误 / 5xx 服务错误</dt><dd id="window-errors">—</dd></div><div><dt>耗时 &gt; 5 秒</dt><dd id="window-slow">—</dd></div><div><dt>状态码分布</dt><dd id="window-status">—</dd></div></dl>
-          <p class="footnote" id="window-range"></p><p class="footnote">包含健康检查。按现有归因规则聚合，少量未达阈值的来源暂不展示；不等于全站累计调用量。</p>
+          <p class="footnote" id="window-range"></p><p class="footnote">按所选统计范围与现有归因规则聚合，少量未达阈值的来源暂不展示；不等于全站累计调用量。</p>
         </section>
       </div>
       <section class="panel"><div class="panel-heading"><div><h2>REST 请求趋势</h2><p class="muted">每小时已记录请求数 · 按接口区分</p></div><span class="window-label badge">近 24 小时</span></div><div class="chart-legend"><span class="search-dot">search</span><span class="related-dot">related</span><span class="artists-dot">artists</span><span class="health-dot">health</span></div>
         <div id="trend-chart" class="chart trend"></div><p class="footnote">空白时段表示没有可用记录，不自动视为零请求。首尾小时可能不完整。</p>
       </section>
+      <section class="panel"><div class="panel-heading"><div><h2>每小时拒绝与错误</h2><p class="muted">429 / 其他 4xx / 5xx · 查看异常发生的时间</p></div><span class="window-label badge"></span></div>
+        <div class="chart-legend"><span class="rejected-dot">429</span><span class="client-error-dot">其他 4xx（含历史未分类）</span><span class="server-error-dot">5xx</span></div>
+        <div id="error-trend" class="chart trend"></div>
+        <details><summary>查看逐小时数据</summary><div class="table-scroll" tabindex="0" aria-label="逐小时 REST 数据"><table><thead><tr><th>北京时间</th><th>请求</th><th>429</th><th>其他 4xx</th><th>5xx</th><th>主要非成功原因</th><th>在途峰值</th><th>分组分钟峰值</th></tr></thead><tbody id="hourly-details"></tbody></table></div></details>
+        <p class="footnote">429 只统计已知精确状态码；历史只记录 4xx 的请求归入「其他 4xx」，无法判定其中有多少是 429。图中无柱且无缺失标记的小时表示有记录、没有已知错误。</p>
+      </section>
       <section class="panel"><div class="panel-heading"><h2>REST 接口表现</h2><span class="muted window-label">近 24 小时</span></div>
-        <div class="table-scroll"><table><thead><tr><th scope="col">接口</th><th scope="col">请求数</th><th scope="col">平均延迟</th><th scope="col">P95 区间上界</th><th scope="col">&gt; 5 秒</th><th scope="col">4xx</th><th scope="col">5xx</th></tr></thead><tbody id="endpoints"></tbody></table></div>
-        <p class="footnote">延迟是现有观测链路的耗时，P95 由延迟分桶估算。MCP 尚无对应延迟数据，因此不展示推测值。</p>
+        <div class="table-scroll" tabindex="0" aria-label="REST 接口表现"><table><thead><tr><th scope="col">接口</th><th scope="col">请求数</th><th scope="col">全部平均</th><th scope="col">全部 P95</th><th scope="col">2xx 平均</th><th scope="col">2xx P95</th><th scope="col">&gt; 5 秒</th><th scope="col">429</th><th scope="col">4xx</th><th scope="col">5xx</th></tr></thead><tbody id="endpoints"></tbody></table></div>
+        <p class="footnote">2xx 延迟单独计算，避免大量快速拒绝降低平均值。延迟是 HTTP 观测链路耗时，P95 由分桶估算；MCP 没有对应延迟数据。</p>
       </section>
       <div class="metrics-grid"><section class="panel"><div class="panel-heading"><h2>来源概览</h2><span class="muted window-label"></span></div><div id="sources" class="rank-list"></div><p class="footnote">来源为自声明或粗粒度归因，不是已验证用户。“未声明”不等于无 Key，也不能区分具体调用者。</p></section><section class="panel"><div class="panel-heading"><h2>客户端分布</h2><span class="muted window-label"></span></div><div id="clients" class="rank-list"></div><p class="footnote">客户端类别不是独立用户数，同一类别可能对应多个服务。</p></section></div>
       <section class="panel"><div class="panel-heading"><h2>观测压力</h2><span class="muted window-label"></span></div><div id="pressure-stats" class="signal-grid"></div><p class="footnote">HTTP 在途峰值包含等待，不是同时运行的模型任务数。分钟峰值取来源 / 客户端 / 接口分组的最大值，不是全站 RPM；各组峰值不能相加。</p></section>
+      <section class="panel"><div class="panel-heading"><div><h2>REST 聚合明细</h2><p class="muted">定位哪些接口与来源触发了具体原因</p></div><span class="window-label badge"></span></div>
+        <div class="detail-toolbar filters"><label>接口 <select id="detail-endpoint"><option value="">全部接口</option></select></label><label>结果原因 <select id="detail-reason"><option value="">全部原因</option></select></label><label>状态码 <select id="detail-status"><option value="">全部状态码</option></select></label><label>客户端 <select id="detail-client"><option value="">全部客户端</option></select></label><label>来源关键词 <input id="detail-source" type="search" placeholder="Client、Site 或来源类型" maxlength="200"></label><button id="detail-reset">清除明细筛选</button></div>
+        <p id="detail-summary" class="footnote" aria-live="polite"></p>
+        <div class="table-scroll" tabindex="0" aria-label="REST 聚合明细"><table><thead><tr><th>小时</th><th>接口</th><th>来源 / Site</th><th>客户端</th><th>状态码 / 原因</th><th>次数</th><th>平均耗时</th><th>耗时桶</th><th>limit / top_k 桶</th><th>参数桶</th><th>在途 / 分钟峰值</th></tr></thead><tbody id="diagnostic-details"></tbody></table></div>
+        <div class="pagination"><button id="detail-prev">上一页</button><span id="detail-page"></span><button id="detail-next">下一页</button></div>
+        <p class="footnote">一行是聚合记录，次数不是用户数。参数桶依次为 min_cooc 范围 / group_mode / use_segmentation；none 表示未观测到该参数，1_20 等表示数值区间。参数只包含已有分桶，不含搜索词、标签或请求正文。明细筛选仅影响本表，上方汇总仍按时间与统计范围展示；旧记录缺失字段显示「—」。</p>
+      </section>
     </section>
     <section id="keys" hidden>
       <!-- KEY_WORKSPACE -->

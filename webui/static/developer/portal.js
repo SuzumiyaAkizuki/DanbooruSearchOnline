@@ -132,7 +132,7 @@
     if(!data.applications.length)line($("applications"),"暂无申请记录。");if(!data.grants.length)line($("grants"),"暂无授权。");
     if(admin){
       const used=(data.pool.rows.find(x=>x.subject==="anonymous")||{}).used||0;
-      $("pool").textContent=`模式：${data.mode} · 匿名池 ${used}/${data.anonymous_daily} 点，剩余 ${Math.max(0,data.anonymous_daily-used)} · 个人默认 ${data.quota_policy?.personal_daily??3000} 点/日 · 公开建议 ${data.quota_policy?.public_daily??10000} 点/日 · 重置：${new Date(data.pool.reset_at||data.reset_at).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})}（北京时间） · 匿名并发 ${data.in_flight.anonymous||0}/${data.anonymous_concurrency??1} · 测试池并发 ${data.in_flight.anonymous_preview||0}/${data.anonymous_concurrency??1} · 短时拒绝 ${data.rejections} · 待退 ${data.pool.pending_refunds}，本进程待退 ${data.local_pending_refunds}`;
+      $("pool").textContent=`模式：${data.mode} · 匿名池 ${used}/${data.anonymous_daily} 点，剩余 ${Math.max(0,data.anonymous_daily-used)} · 个人默认 ${data.quota_policy?.personal_daily??3000} 点/日 · 公开建议 ${data.quota_policy?.public_daily??10000} 点/日 · 重置：${new Date(data.pool.reset_at||data.reset_at).toLocaleString("zh-CN",{timeZone:"Asia/Shanghai"})}（北京时间） · 匿名并发 ${data.in_flight.anonymous||0}/${data.anonymous_concurrency??1} · 测试池并发 ${data.in_flight.anonymous_preview||0}/${data.anonymous_concurrency??1} · 本进程累计限频 / 并发拒绝 ${data.rejections}（重启清零；按小时原因请看运行概览） · 待退 ${data.pool.pending_refunds}，本进程待退 ${data.local_pending_refunds}`;
       for(const item of [...data.applications,...data.grants]) if(item.sub && item.username)names[item.sub]=item.username;
       if(identity.sub)names[identity.sub]=identity.username;
       $("audit").replaceChildren();for(const row of data.audit.rows){

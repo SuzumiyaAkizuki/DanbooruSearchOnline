@@ -11,6 +11,38 @@
   --amber:#896016;
   --focus:#4a90e2;
 }
+.section-links { display:flex; flex-wrap:wrap; gap:8px 22px; font-size:13px; margin-bottom:12px; }
+.boundary { margin:0 0 22px; max-width:95ch; }
+details { margin-top:18px; }
+summary { cursor:pointer; color:var(--blue); font-size:13px; font-weight:600; padding:8px 0; }
+summary:hover { text-decoration:underline; text-underline-offset:4px; }
+summary:focus-visible,input:focus-visible,.table-scroll:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
+.detail-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; margin:12px 0; }
+.detail-toolbar label { font-size:12px; color:var(--muted); }
+.detail-toolbar select { max-width:280px; }
+.detail-toolbar input { font:inherit; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:5px; padding:7px 10px; margin-left:8px; width:220px; }
+.detail-toolbar input::placeholder { color:var(--muted); }
+.detail-toolbar button { font-size:12px; }
+.detail-heading { margin:24px 0 10px; font-size:14px; font-weight:600; }
+.pagination { display:flex; justify-content:flex-end; align-items:center; gap:14px; margin-top:14px; font-size:12px; }
+.pagination button { font-size:12px; }
+#sources,#clients,#outcome-reasons { max-height:340px; overflow-y:auto; padding-right:8px; }
+#outcome-reasons span { font-size:11px; }
+#diagnostic-details td:nth-child(3),#diagnostic-details td:nth-child(5),#performance-metrics td:first-child { white-space:normal; min-width:180px; max-width:300px; overflow-wrap:anywhere; text-align:left; }
+#counter-details td:nth-child(2) { text-align:left; font:12px Consolas,monospace; }
+#counter-details td:first-child,#timing-details td:first-child,#performance-metrics td:first-child { font-family:inherit; }
+.rejected-dot::before,.chart .endpoint-rejected { background:#896016; fill:#896016; }
+.client-error-dot::before,.chart .endpoint-client-error { background:#7161a8; fill:#7161a8; }
+.server-error-dot::before,.chart .endpoint-server-error { background:#b13d3d; fill:#b13d3d; }
+::selection { background:var(--blue-soft); color:var(--ink); }
+@media(max-width:700px) {
+  .rest-toolbar#rest-diagnostics { display:block; }
+  .rest-toolbar .range-label { font-size:12px!important; }
+  .detail-toolbar { align-items:flex-start; }
+  .detail-toolbar label { display:flex; flex-direction:column; gap:5px; max-width:100%; }
+  .detail-toolbar select,.detail-toolbar input { margin-left:0; max-width:100%; }
+  .pagination { justify-content:center; }
+}
 .signal-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:18px; margin:12px 0 18px; }
 .signal-grid span { display:block; color:var(--muted); font-size:12px; }
 .signal-grid strong { display:block; font:500 23px/1.8 "Bahnschrift","Segoe UI",sans-serif; font-variant-numeric:tabular-nums; }
