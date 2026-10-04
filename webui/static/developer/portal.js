@@ -51,7 +51,7 @@
     return;
   }
   let csrf = null, terms = "", page = 0, submission = crypto.randomUUID(), target = null, expiry;
-  const errors = {pending_application_exists:"已有待审核申请，请等待审核。", purpose_required:"本次申请需要人工审核，请填写用途说明。", review_reason_required:"请填写审核说明。", stale_version_refresh_required:"记录已变更，请刷新后重试。", key_service_unconfigured:"服务尚未配置完成，请联系维护者。", key_service_unavailable:"额度服务暂不可用，请稍后重试。", already_claimed_use_rotate:"已领取；若未保存，请轮换 Key。", invalid_application_fields:"请检查申请字段、Client 格式及 HTTPS 地址。", login_required:"登录已过期，请重新登录。"};
+  const errors = {application_cooldown:"同一账号两次申请至少间隔 5 分钟（包括自动批准的申请），请稍后重试。",pending_application_exists:"已有待审核申请，请等待审核。", purpose_required:"本次申请需要人工审核，请填写用途说明。", review_reason_required:"请填写审核说明。", stale_version_refresh_required:"记录已变更，请刷新后重试。", key_service_unconfigured:"服务尚未配置完成，请联系维护者。", key_service_unavailable:"额度服务暂不可用，请稍后重试。", already_claimed_use_rotate:"已领取；若未保存，请轮换 Key。", invalid_application_fields:"请检查申请字段、Client 格式及 HTTPS 地址。", login_required:"登录已过期，请重新登录。"};
   function message(text) { $("message").textContent = text; }
   async function request(path, data) {
     const r = await fetch(path, {method:data === undefined?"GET":"POST", cache:"no-store", credentials:"same-origin", headers:data === undefined?{}:{"Content-Type":"application/json","X-CSRF-Token":csrf || ""}, body:data === undefined?undefined:JSON.stringify(data)});
@@ -80,9 +80,11 @@
   function card(root,title){const c=document.createElement("article");c.className="card";const h=document.createElement("h3");h.textContent=title;c.append(h);root.append(c);return c;}
   const states={pending:"待审核",approved:"已批准",rejected:"已拒绝",active:"有效",paused:"已暂停",closed:"已关闭"};
   async function adminAction(data){await request("/admin/api/key-action",data);message("操作已保存。");await load();}
-  async function grantAction(g,action){
-    if(!confirm(action==="revoke"?"永久吊销这把逻辑 Key？旧凭证无法恢复。":action==="rotate"?"生成新 Key 并立即撤销旧 Key？额度不会重置。":"领取 Key？完整值只展示一次。"))return;
+  async function grantAction(g,action,automatic=false){
+    if(!(automatic && action==="claim") && !confirm(action==="revoke"?"永久吊销这把逻辑 Key？旧凭证无法恢复。":action==="rotate"?"生成新 Key 并立即撤销旧 Key？额度不会重置。":"领取 Key？完整值只展示一次。"))return;
+    const epoch=generation;
     const result=await request(`/developer/api/grants/${g.id}/${action}`,{version:g.version});
+    if(epoch!==generation)return;
     if(result.key){
       secretExamples=KeyPortalView.searchExamples(result.key,g);
       $("secret").value=result.key;selectExample("windows");
@@ -146,6 +148,7 @@
       if(!data.audit.rows.length)line($("audit"),"暂无操作记录。");
       selectAdminTab(adminTab);
     }
+    return data;
   }
   async function session(){
     clear();const epoch=generation, path=admin?"/admin/api/session":"/developer/api/session";
@@ -166,7 +169,24 @@
     $("purpose-field").hidden=automatic;purpose.required=!automatic;purpose.disabled=automatic;
   }
   $("kind").onchange=()=>{$("daily").value=$("kind").value==="public"?quotaPolicy.public_daily:quotaPolicy.personal_daily;estimate();};$("daily").oninput=estimate;
-  $("apply-form").onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,b=form.querySelector('[type="submit"]');b.disabled=true;try{const raw=Object.fromEntries(new FormData(form));await request("/developer/api/apply",{...raw,site:raw.site||"",purpose:raw.purpose||"",daily:Number(raw.daily),accepted:raw.accepted==="on",terms,submission_id:submission,grant_id:target});submission=crypto.randomUUID();message("申请已提交，请查看审批结果。");await load();}catch(error){if(error.message===errors.purpose_required){autoEligible=false;estimate();}message(error.message);}finally{b.disabled=false;}};
+  $("apply-form").onsubmit=async e=>{
+    e.preventDefault();const form=e.currentTarget,b=form.querySelector('[type="submit"]');b.disabled=true;
+    try{
+      const raw=Object.fromEntries(new FormData(form)),epoch=generation;
+      const result=await request("/developer/api/apply",{...raw,site:raw.site||"",purpose:raw.purpose||"",daily:Number(raw.daily),accepted:raw.accepted==="on",terms,submission_id:submission,grant_id:target});
+      if(epoch!==generation)return;
+      submission=crypto.randomUUID();message("申请已提交，请查看审批结果。");page=0;
+      const data=await load();
+      if(!admin && !target && result.state==="approved" && result.grant_id && data){
+        const grant=data.grants.find(g=>g.id===result.grant_id && g.state==="active" && !g.key_id);
+        if(grant){
+          try{await grantAction(grant,"claim",true);if(epoch===generation)message("申请已自动批准，请保存窗口中的 Key。");}
+          catch(error){message("申请已批准，自动领取失败："+error.message+" 请前往“我的 Key”手动领取；如已领取但未保存，请轮换。");}
+        }
+      }
+    }catch(error){if(error.message===errors.purpose_required){autoEligible=false;estimate();}message(error.message);}
+    finally{b.disabled=false;}
+  };
   $("cancel-edit").onclick=()=>{target=null;submission=crypto.randomUUID();$("apply-form").reset();$("apply-title").textContent="申请独立额度";$("cancel-edit").hidden=true;estimate();};
   for(const id of ["refresh-login","refresh"])$(id).onclick=()=>session().catch(e=>message(e.message));
   if($("logout"))$("logout").onclick=async()=>{try{await request(admin?"/admin/logout":"/developer/logout",{});clear();message("已退出。");}catch(e){message(e.message);}};
