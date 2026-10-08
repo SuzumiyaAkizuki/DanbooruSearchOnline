@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "source": "https://danbooru.donmai.us/tag_aliases.json",
-  "fetched_at": "2026-09-30T09:54:36.331738Z",
-  "active_count": 41206,
-  "target_in_tag_db_count": 14845,
-  "target_missing_count": 26361,
-  "max_id": 240590
+  "fetched_at": "2026-10-08T09:58:05.920039Z",
+  "active_count": 41277,
+  "target_in_tag_db_count": 14910,
+  "target_missing_count": 26367,
+  "max_id": 241726
 }

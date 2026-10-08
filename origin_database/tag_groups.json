@@ -46,6 +46,9 @@
       "tag_group:artistic_license",
       "tag_group:technology"
     ],
+    "redesign": [
+      "tag_group:artistic_license"
+    ],
     "slimification": [
       "tag_group:artistic_license"
     ],
@@ -1336,7 +1339,7 @@
       "tag_group:image_composition",
       "tag_group:patterns"
     ],
-    "ryusuimon": [
+    "ryuusuimon": [
       "tag_group:image_composition",
       "tag_group:patterns"
     ],
@@ -12173,7 +12176,7 @@
     "rito": [
       "tag_group:wings"
     ],
-    "wind_glider": [
+    "wind_glider_(genshin_impact)": [
       "tag_group:wings"
     ],
     "gradient_wings": [
@@ -23039,7 +23042,7 @@
     "misaka_imouto_10032's_cat": [
       "tag_group:cats"
     ],
-    "miss_christine_(arknights)": [
+    "miss.christine_(arknights)": [
       "tag_group:cats"
     ],
     "miyu_miyu": [
@@ -25053,7 +25056,7 @@
     "silk_flower_(genshin_impact)": [
       "tag_group:flowers"
     ],
-    "sweet_flower": [
+    "sweet_flower_(genshin_impact)": [
       "tag_group:flowers"
     ],
     "wither_rose": [
@@ -28598,6 +28601,9 @@
     "guard": [
       "tag_group:jobs"
     ],
+    "gym_teacher": [
+      "tag_group:jobs"
+    ],
     "hikikomori": [
       "tag_group:jobs"
     ],
@@ -28641,6 +28647,9 @@
     "office_lady": [
       "tag_group:jobs"
     ],
+    "patissier": [
+      "tag_group:jobs"
+    ],
     "pilot": [
       "tag_group:jobs",
       "tag_group:technology"
@@ -28657,6 +28666,9 @@
     "spy": [
       "tag_group:jobs"
     ],
+    "store_clerk": [
+      "tag_group:jobs"
+    ],
     "teacher": [
       "tag_group:jobs"
     ],
@@ -28667,6 +28679,9 @@
       "tag_group:jobs"
     ],
     "train_conductor": [
+      "tag_group:jobs"
+    ],
+    "tutor": [
       "tag_group:jobs"
     ],
     "voice_actor": [
@@ -31899,6 +31914,9 @@
       "tag_group:people"
     ],
     "hyuna_(singer)": [
+      "tag_group:people"
+    ],
+    "imakuni_tomoaki": [
       "tag_group:people"
     ],
     "irene_(red_velvet)": [
@@ -37282,6 +37300,9 @@
       "tag_group:family_relationships",
       "tag_group:theme"
     ],
+    "parent_and_child": [
+      "tag_group:family_relationships"
+    ],
     "father_and_child": [
       "tag_group:family_relationships"
     ],
@@ -37298,9 +37319,6 @@
       "tag_group:family_relationships"
     ],
     "mother_and_son": [
-      "tag_group:family_relationships"
-    ],
-    "other_parent_and_other_child": [
       "tag_group:family_relationships"
     ],
     "adoptive_parent_and_adoptive_child": [
@@ -42382,6 +42400,9 @@
     "gender_transition_timeline": [
       "tag_group:transgender"
     ],
+    "genderswapped_through_transition": [
+      "tag_group:transgender"
+    ],
     "hormone_replacement_therapy": [
       "tag_group:transgender"
     ],
@@ -46290,6 +46311,12 @@
     "check_copyright": [
       "tag_group:metatags"
     ],
+    "microphone_request": [
+      "tag_group:metatags"
+    ],
+    "check_microphone": [
+      "tag_group:metatags"
+    ],
     "source_request": [
       "tag_group:metatags"
     ],
@@ -46768,7 +46795,7 @@
     "sketchable_(medium)": [
       "tag_group:drawing_software"
     ],
-    "tuxpaint_(medium)": [
+    "tux_paint_(medium)": [
       "tag_group:drawing_software"
     ],
     "wigglypaint_(medium)": [
@@ -47037,6 +47064,7 @@
       "monsterification",
       "objectification",
       "personification",
+      "redesign",
       "slimification",
       "vehicalization",
       "zombification",
@@ -47404,7 +47432,7 @@
       "kikkoumon",
       "kojitsunagi_(pattern)",
       "matsu_symbol",
-      "ryusuimon",
+      "ryuusuimon",
       "sakuramon",
       "sayagata",
       "seigaiha",
@@ -48186,7 +48214,7 @@
       "kikkoumon",
       "kojitsunagi_(pattern)",
       "matsu_symbol",
-      "ryusuimon",
+      "ryuusuimon",
       "sakuramon",
       "sayagata",
       "seigaiha",
@@ -51168,7 +51196,7 @@
       "wing_ribbon",
       "light_hawk_wings",
       "rito",
-      "wind_glider",
+      "wind_glider_(genshin_impact)",
       "gradient_wings",
       "multicolored_wings",
       "rainbow_wings",
@@ -55328,7 +55356,7 @@
       "maru_(cat)",
       "mayaa_(azumanga_daioh)",
       "misaka_imouto_10032's_cat",
-      "miss_christine_(arknights)",
+      "miss.christine_(arknights)",
       "miyu_miyu",
       "morgana_(persona_5)",
       "nekobus",
@@ -56021,7 +56049,7 @@
       "qingxin_flower",
       "silent_princess",
       "silk_flower_(genshin_impact)",
-      "sweet_flower",
+      "sweet_flower_(genshin_impact)",
       "wither_rose",
       "bouquet",
       "boutonniere",
@@ -57227,6 +57255,7 @@
       "florist",
       "geisha",
       "guard",
+      "gym_teacher",
       "hikikomori",
       "host",
       "hostess",
@@ -57243,6 +57272,7 @@
       "nurse",
       "school_nurse",
       "office_lady",
+      "patissier",
       "pilot",
       "sailor",
       "salaryman",
@@ -57250,10 +57280,12 @@
       "shepherd",
       "slave",
       "spy",
+      "store_clerk",
       "teacher",
       "trucker",
       "train_attendant",
       "train_conductor",
+      "tutor",
       "voice_actor",
       "waiter",
       "waitress",
@@ -58359,6 +58391,7 @@
       "hirasawa_susumu",
       "huh_yunjin",
       "hyuna_(singer)",
+      "imakuni_tomoaki",
       "irene_(red_velvet)",
       "iu_(singer)",
       "james_hetfield",
@@ -60178,13 +60211,13 @@
     ],
     "tag_group:family_relationships": [
       "family",
+      "parent_and_child",
       "father_and_child",
       "father_and_daughter",
       "father_and_son",
       "mother_and_child",
       "mother_and_daughter",
       "mother_and_son",
-      "other_parent_and_other_child",
       "adoptive_parent_and_adoptive_child",
       "step-parent_and_step-child",
       "siblings",
@@ -62312,6 +62345,7 @@
       "gender_transitioning_(mtf)",
       "gender_transitioning_(ftm)",
       "gender_transition_timeline",
+      "genderswapped_through_transition",
       "hormone_replacement_therapy",
       "estrogen",
       "testosterone",
@@ -63682,6 +63716,8 @@
       "check_character",
       "copyright_request",
       "check_copyright",
+      "microphone_request",
+      "check_microphone",
       "source_request",
       "check_source",
       "translation_request",
@@ -63924,7 +63960,7 @@
       "realistic_paint_studio_(medium)",
       "rebelle_(medium)",
       "sketchable_(medium)",
-      "tuxpaint_(medium)",
+      "tux_paint_(medium)",
       "wigglypaint_(medium)",
       "pixel_art",
       "aseprite_(medium)",
