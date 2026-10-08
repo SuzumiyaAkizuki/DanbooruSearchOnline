@@ -32,6 +32,7 @@ from safetensors import safe_open
 from sentence_transformers import SentenceTransformer
 
 from .models import SearchRequest, SearchResponse, TagResult
+from .work_queue import PrioritySemaphore
 from .ui_performance import measure, record as record_ui_timing
 from .tag_aliases import (
     TagAliasRecord,
@@ -773,7 +774,7 @@ class DanbooruTagger:
     def _get_cpu_sem(cls) -> asyncio.Semaphore:
         if cls._cpu_sem is None:
             cls._cpu_sem_limit = _resolve_cpu_sem_limit()
-            cls._cpu_sem = asyncio.Semaphore(cls._cpu_sem_limit)
+            cls._cpu_sem = PrioritySemaphore(cls._cpu_sem_limit)
         return cls._cpu_sem
 
     @classmethod
@@ -799,7 +800,7 @@ class DanbooruTagger:
     @classmethod
     def _get_recommendation_sem(cls) -> asyncio.Semaphore:
         if cls._recommendation_sem is None:
-            cls._recommendation_sem = asyncio.Semaphore(
+            cls._recommendation_sem = PrioritySemaphore(
                 _resolve_recommendation_sem_limit()
             )
         return cls._recommendation_sem

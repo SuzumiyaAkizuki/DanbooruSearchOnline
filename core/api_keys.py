@@ -12,6 +12,7 @@ import re
 import secrets
 import time
 import uuid
+from collections import deque
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import lru_cache, wraps
@@ -22,6 +23,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.admin_auth import ADMIN_SUB, TARGET_SPACE
+from core.work_queue import ANONYMOUS_WORK
 
 TERMS_VERSION = "2026-09-22-v1"
 COSTS = {"search": 3, "related": 2, "artists": 1}
@@ -204,8 +206,38 @@ class Limiter:
         self.total = Bucket(self.config.rest_burst, clock())
         self.lanes = {"search": 0, "recommendation": 0}
         self.rejections = 0
+        self.waiters = deque()
+        self.anonymous_waiters = deque()
+        self.changed = asyncio.Event()
 
-    def acquire(self, subject, endpoint):
+    async def acquire_queued(self, subject, endpoint):
+        """Keys precede anonymous callers; each class preserves FIFO admission."""
+        waiter = object()
+        queue = self.anonymous_waiters if subject.startswith("anonymous") else self.waiters
+        queue.append(waiter)
+        try:
+            while True:
+                changed = self.changed
+                first_queue = self.waiters if self.waiters else self.anonymous_waiters
+                if first_queue[0] is waiter:
+                    try:
+                        return self.acquire(subject, endpoint, queue_concurrency=True)
+                    except HTTPException as exc:
+                        if exc.detail not in {
+                            "anonymous_concurrency_limited", "key_concurrency_limited",
+                            "rest_concurrency_limited",
+                        }:
+                            raise
+                await changed.wait()
+        finally:
+            queue.remove(waiter)
+            self._notify_waiters()
+
+    def _notify_waiters(self):
+        changed, self.changed = self.changed, asyncio.Event()
+        changed.set()
+
+    def acquire(self, subject, endpoint, *, queue_concurrency=False):
         now, cost = self.clock(), COSTS[endpoint]
         anonymous = subject.startswith("anonymous")
         c = self.config
@@ -235,7 +267,8 @@ class Limiter:
         elif self.total.tokens < cost:
             error, retry = "rest_rate_limited", math.ceil((cost - self.total.tokens) * 60 / c.rest_per_minute)
         if error:
-            self.rejections += 1
+            if not (queue_concurrency and error.endswith("_concurrency_limited")):
+                self.rejections += 1
             raise HTTPException(429, error, headers={"Retry-After": str(retry)})
         bucket.tokens -= cost
         self.total.tokens -= cost
@@ -251,6 +284,7 @@ class Limiter:
                 bucket.active -= 1
                 self.total.active -= 1
                 self.lanes[lane] -= 1
+                self._notify_waiters()
         return release
 
 
@@ -343,7 +377,7 @@ class KeyService:
             if not self.config.allows(identity["sub"]):
                 raise HTTPException(403, "preview_account_required")
             subject = identity["grant_id"]
-        release = self.limiter.acquire(subject, endpoint)
+        release = await self.limiter.acquire_queued(subject, endpoint)
         request_id = str(uuid.uuid4())
         try:
             debit = await self.rpc.call("ds_key_meter", action="debit", request_id=request_id,
@@ -359,6 +393,7 @@ class KeyService:
 
         async def run():
             token = GOVERNED.set(True)
+            priority_token = ANONYMOUS_WORK.set(not key_id)
             try:
                 result = await business()
                 if isinstance(result, dict) and "error" in result:
@@ -370,7 +405,7 @@ class KeyService:
                         mode = "API Key 受邀测试" if self.config.mode == "preview" else "API Key 限流已启用"
                         notice = (f"{mode}。本次消耗 {COSTS[endpoint]} 点，{pool}今日剩余 {remaining} 点。"
                                   "余额为本次扣额后的快照，每日北京时间 00:00 重置；"
-                                  "其他请求可能继续消耗额度，分钟额度与并发限制仍适用。")
+                                  "其他请求可能继续消耗额度，分钟额度仍适用；并发繁忙时排队等待。")
                         if isinstance(result, dict) and "api_key_notice" in result:
                             result = {**result, "api_key_notice": notice}
                         elif isinstance(result, BaseModel) and hasattr(result, "api_key_notice"):
@@ -381,6 +416,7 @@ class KeyService:
                 raise
             finally:
                 GOVERNED.reset(token)
+                ANONYMOUS_WORK.reset(priority_token)
                 release()
 
         task = self.track(asyncio.create_task(run()))
@@ -405,7 +441,11 @@ def governed(endpoint):
             if request is None:  # direct internal invocation, existing contract tests
                 return await function(*args, **kwargs)
             service = get_key_service()
-            return await service.execute(request.headers, endpoint, lambda: function(*args, **kwargs))
+            priority_token = ANONYMOUS_WORK.set("authorization" not in request.headers)
+            try:
+                return await service.execute(request.headers, endpoint, lambda: function(*args, **kwargs))
+            finally:
+                ANONYMOUS_WORK.reset(priority_token)
         # FastAPI must resolve endpoint annotations in the endpoint's own module.
         wrapper.__signature__ = inspect.signature(function, eval_str=True)
         return wrapper

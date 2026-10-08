@@ -194,7 +194,7 @@ def build_dashboard(telemetry: dict, attribution: dict, now: datetime | None = N
         "rest_records": [{key: row[key] for key in (
             "day", "hour", "endpoint", "status_class", "status_code", "outcome_reason", "count", "sum_ms",
             "source_kind", "source_name", "source_site", "client_family", "latency_bucket", "limit_bucket",
-            "top_k_bucket", "parameter_bucket", "peak_in_flight", "peak_per_minute") if key in row} for row in rows],
+            "top_k_bucket", "parameter_bucket", "peak_in_flight", "peak_per_minute", "validation_samples") if key in row} for row in rows],
         "rest": {"retention_days": 14, "first_hour": first_hour,
                  "last_hour": max(hours) if hours else None,
                  "count": total, "error_percent": round(100 * (statuses["4xx"] + statuses["5xx"]) / total, 2) if total else None,

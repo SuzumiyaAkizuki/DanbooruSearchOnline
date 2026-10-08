@@ -13,6 +13,7 @@ import asyncio
 import ipaddress
 import json
 import math
+import random
 import re
 import time
 from collections.abc import Mapping
@@ -38,6 +39,20 @@ ATTRIBUTION_MAX_IDENTIFIED_SOURCES_PER_DAY = 50
 ATTRIBUTION_MAX_PENDING_SOURCES_PER_DAY = 200
 ATTRIBUTION_SYNC_INTERVAL = 1_800
 ATTRIBUTION_SYNC_THRESHOLD = 200
+VALIDATION_SAMPLE_RATE = 0.1
+VALIDATION_SAMPLE_MAX_ERRORS = 3
+_VALIDATION_FIELDS = frozenset({
+    "body", "query", "tags", "top_k", "limit", "popularity_weight", "show_nsfw",
+    "use_segmentation", "target_layers", "target_categories", "group_mode",
+    "max_per_group", "min_cooc", "other",
+})
+_VALIDATION_TYPES = frozenset({
+    "json_invalid", "missing", "literal_error", "greater_than", "greater_than_equal",
+    "less_than", "less_than_equal", "too_short", "too_long", "string_too_short",
+    "string_too_long", "int_type", "int_parsing", "int_from_float", "float_type",
+    "float_parsing", "finite_number", "bool_type", "bool_parsing", "string_type",
+    "list_type", "dict_type", "model_attributes_type", "other",
+})
 
 ATTRIBUTION_RESPONSE_HEADERS = {
     "X-DanbooruSearch-Attribution": "optional-during-observation",
@@ -115,7 +130,7 @@ _SHARED_HOSTING_SUFFIXES = (
 )
 
 _RecordKey = tuple[str, str, str, str, str, str, str, str, str, str, str, str, str, str]
-_MetricMap = dict[_RecordKey, dict[str, int]]
+_MetricMap = dict[_RecordKey, dict[str, Any]]
 
 
 class AttributionDataError(ValueError):
@@ -298,6 +313,47 @@ def note_safe_parameters(**values: Any) -> None:
             context[key] = values[key]
 
 
+def note_validation_sample(errors: Any) -> None:
+    """Sample field/type only; never retain input, message, context or full loc."""
+    context = _safe_parameter_context.get()
+    if context is None or random.random() >= VALIDATION_SAMPLE_RATE:
+        return
+    signatures = set()
+    for error in errors[:VALIDATION_SAMPLE_MAX_ERRORS]:
+        loc = error.get("loc", ())
+        field = loc[1] if len(loc) > 1 and loc[0] == "body" else "body"
+        if not isinstance(field, str) or field not in _VALIDATION_FIELDS:
+            field = "other"
+        error_type = error.get("type")
+        if not isinstance(error_type, str) or error_type not in _VALIDATION_TYPES:
+            error_type = "other"
+        signatures.add(f"{field}:{error_type}")
+    if signatures:
+        context["_validation_samples"] = {key: 1 for key in sorted(signatures)}
+
+
+def _sanitize_validation_samples(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    result = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            continue
+        parts = key.split(":")
+        if len(parts) != 2 or parts[0] not in _VALIDATION_FIELDS or parts[1] not in _VALIDATION_TYPES:
+            continue
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            result[key] = value
+    return result
+
+
+def _copy_metric(metric: Mapping[str, Any]) -> dict[str, Any]:
+    copied = dict(metric)
+    if "validation_samples" in copied:
+        copied["validation_samples"] = dict(copied["validation_samples"])
+    return copied
+
+
 def _validation_outcome_reason(error_types: Any) -> str:
     types = {str(value or "").lower() for value in error_types}
     if "json_invalid" in types:
@@ -370,11 +426,11 @@ def _status_class(status_code: int) -> str:
     return "5xx"
 
 
-def _empty_metric() -> dict[str, int]:
+def _empty_metric() -> dict[str, Any]:
     return {"count": 0, "sum_ms": 0, "peak_in_flight": 0, "peak_per_minute": 0}
 
 
-def _merge_metric(target: dict[str, int], addition: Mapping[str, Any]) -> None:
+def _merge_metric(target: dict[str, Any], addition: Mapping[str, Any]) -> None:
     target["count"] += max(0, int(addition.get("count", 0)))
     target["sum_ms"] += max(0, int(addition.get("sum_ms", 0)))
     target["peak_in_flight"] = max(
@@ -383,6 +439,11 @@ def _merge_metric(target: dict[str, int], addition: Mapping[str, Any]) -> None:
     target["peak_per_minute"] = max(
         target["peak_per_minute"], max(0, int(addition.get("peak_per_minute", 0)))
     )
+    samples = _sanitize_validation_samples(addition.get("validation_samples"))
+    if samples:
+        merged = target.setdefault("validation_samples", {})
+        for signature, count in samples.items():
+            merged[signature] = merged.get(signature, 0) + count
 
 
 def _add_record(target: _MetricMap, key: _RecordKey, metric: Mapping[str, Any]) -> None:
@@ -391,7 +452,7 @@ def _add_record(target: _MetricMap, key: _RecordKey, metric: Mapping[str, Any]) 
 
 
 def _merge_record_maps(base: _MetricMap, additions: _MetricMap) -> _MetricMap:
-    merged: _MetricMap = {key: dict(metric) for key, metric in base.items()}
+    merged: _MetricMap = {key: _copy_metric(metric) for key, metric in base.items()}
     for key, metric in additions.items():
         _add_record(merged, key, metric)
     return merged
@@ -564,6 +625,8 @@ async def finish_request(
         "peak_in_flight": observation.peak_in_flight,
         "peak_per_minute": _minute_counts[minute_key],
     }
+    if exact_status_code == 422 and safe_parameters.get("_validation_samples"):
+        metric["validation_samples"] = safe_parameters["_validation_samples"]
     _record_with_threshold(key, metric)
     if not _enabled_at:
         _enabled_at = _utc_now_iso()
@@ -582,7 +645,7 @@ def _valid_day(value: Any) -> str:
     return text
 
 
-def _sanitize_record(raw: Any) -> tuple[_RecordKey, dict[str, int]] | None:
+def _sanitize_record(raw: Any) -> tuple[_RecordKey, dict[str, Any]] | None:
     if not isinstance(raw, dict):
         return None
     day = _valid_day(raw.get("day"))
@@ -638,6 +701,9 @@ def _sanitize_record(raw: Any) -> tuple[_RecordKey, dict[str, int]] | None:
         return None
     if metric["count"] <= 0:
         return None
+    samples = _sanitize_validation_samples(raw.get("validation_samples"))
+    if status_code == "422" and samples:
+        metric["validation_samples"] = samples
     key: _RecordKey = (
         day,
         hour,
@@ -739,6 +805,7 @@ def _serialize(enabled_at: str, records: _MetricMap) -> bytes:
             "overflow_bucket": "other",
         },
         "privacy": {
+            "stores_validation_input": False,
             "stores_ip": False,
             "stores_request_body": False,
             "stores_query_or_tags": False,
@@ -748,6 +815,12 @@ def _serialize(enabled_at: str, records: _MetricMap) -> bytes:
             "stores_allowlisted_outcome_reason": True,
         },
         "records": rows,
+        "validation_sampling": {
+            "request_probability": VALIDATION_SAMPLE_RATE,
+            "max_errors_per_sampled_request": VALIDATION_SAMPLE_MAX_ERRORS,
+            "fields": "allowlisted top-level field and validation type only",
+            "counts": "sampled requests per distinct field/type; not total failures",
+        },
     }, ensure_ascii=False, indent=2).encode("utf-8")
 
 
@@ -785,7 +858,7 @@ async def _perform_sync() -> None:
     async with lock:
         if not _dirty_records:
             return
-        additions = {key: dict(metric) for key, metric in _dirty_records.items()}
+        additions = {key: _copy_metric(metric) for key, metric in _dirty_records.items()}
         _dirty_records.clear()
         loop = asyncio.get_running_loop()
         try:
@@ -864,7 +937,8 @@ def get_admin_snapshot() -> dict[str, Any]:
          "client_family": key[7], "peak_in_flight": metric.get("peak_in_flight", 0),
          "peak_per_minute": metric.get("peak_per_minute", 0),
          "status_code": None if key[12] == "unknown" else int(key[12]),
-         "outcome_reason": key[13]}
+         "outcome_reason": key[13],
+         "validation_samples": dict(metric.get("validation_samples", {}))}
         for key, metric in _memory_records.items()
     ]}
 

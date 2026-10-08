@@ -71,8 +71,9 @@ if get_key_service().config.mode == "public":
     API_KEY_NOTICE = (
         "API Key 与 REST 限流政策已启用。使用 Hugging Face 账号访问 /developer/apply 申请；"
         f"仅个人首把且不超过 {_key_config.personal_daily} 点/日可自动批准，个人上限 6000 点/日；所有公开业务、第二把及增额须人工审核。"
-        f"每把 Key 独立计额，{_key_config.key_per_minute} 点/分钟、并发 {_key_config.key_concurrency}；"
-        f"无 Key 共享 {_key_config.anonymous_daily} 点/日、{_key_config.anonymous_per_minute} 点/分钟、并发 {_key_config.anonymous_concurrency}。"
+        f"每把 Key 独立计额，{_key_config.key_per_minute} 点/分钟；"
+        f"无 Key 共享 {_key_config.anonymous_daily} 点/日、{_key_config.anonymous_per_minute} 点/分钟。"
+        "并发繁忙时排队等待，不因匿名池、Key 或 REST 并发超限拒绝。"
         "search/related/artists/health 每次 3/2/1/0 点，北京时间零点重置。"
         "个人调用须匹配 Client，公开调用须匹配 Client 与 Site；无效 Key 不回退匿名。网页搜索及 MCP 保持原有方式。"
     )
@@ -220,6 +221,7 @@ async def _policy_notice_error(request: Request, exc):
             status_code=422,
             validation_types=(item.get("type") for item in exc.errors()),
         )
+        traffic_attribution.note_validation_sample(exc.errors())
     else:
         traffic_attribution.note_request_error(
             status_code=exc.status_code,
@@ -230,6 +232,15 @@ async def _policy_notice_error(request: Request, exc):
     if response.body:
         payload = json.loads(response.body)
         payload["api_key_notice"] = API_KEY_NOTICE
+        if (not isinstance(exc, RequestValidationError) and exc.status_code == 429
+                and isinstance(exc.detail, str) and exc.detail in {
+                    "anonymous_rate_limited", "anonymous_concurrency_limited",
+                    "anonymous_daily_quota_exhausted"}):
+            payload["api_key_apply_url"] = "/developer/apply"
+            payload["api_key_notice"] += (
+                " 无 Key 请求共享试用池。持续调用请访问 /developer/apply 申请 API Key；"
+                "Key 有独立额度，仍受服务整体容量保护。请遵循 Retry-After 后重试。"
+            )
         response.body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
         response.headers["content-length"] = str(len(response.body))
     return response
