@@ -6,7 +6,6 @@ import hashlib
 import hmac
 import inspect
 import json
-import math
 import os
 import re
 import secrets
@@ -262,16 +261,11 @@ class Limiter:
             error = prefix + "_concurrency_limited"
         elif self.total.active >= c.rest_concurrency or self.lanes[lane] >= (c.search_concurrency if lane=="search" else c.recommendation_concurrency):
             error = "rest_concurrency_limited"
-        elif bucket.tokens < cost:
-            error, retry = prefix + "_rate_limited", math.ceil((cost - bucket.tokens) / rate)
-        elif self.total.tokens < cost:
-            error, retry = "rest_rate_limited", math.ceil((cost - self.total.tokens) * 60 / c.rest_per_minute)
+        # Minute/burst admission is temporarily disabled for all REST callers.
         if error:
             if not (queue_concurrency and error.endswith("_concurrency_limited")):
                 self.rejections += 1
             raise HTTPException(429, error, headers={"Retry-After": str(retry)})
-        bucket.tokens -= cost
-        self.total.tokens -= cost
         bucket.active += 1
         self.total.active += 1
         self.lanes[lane] += 1
@@ -295,7 +289,7 @@ class KeyService:
         self.limiter = limiter or Limiter(config=config)
         self.tasks = set()
         self.pending_refunds = {}  # bounded, no user content; manual recovery if process is lost
-        self.auth_gate = Bucket(12, time.monotonic())
+        self.auth_gate = asyncio.Semaphore(4)
 
     def track(self, task):
         self.tasks.add(task)
@@ -363,17 +357,8 @@ class KeyService:
                 raise HTTPException(401, "invalid_api_key")
             key_id, digest = self.digest(value[7:])
             # Resolve the stable logical grant before bucket lookup; rotation keeps its bucket.
-            gate, now = self.auth_gate, time.monotonic()
-            gate.tokens = min(12, gate.tokens + (now-gate.at)*2)
-            gate.at = now
-            if gate.tokens < 1 or gate.active >= 4:
-                raise HTTPException(429, "authentication_rate_limited", headers={"Retry-After": "1"})
-            gate.tokens -= 1
-            gate.active += 1
-            try:
+            async with self.auth_gate:
                 identity = await self.rpc.call("ds_key_resolve", key_id=key_id, digest=digest)
-            finally:
-                gate.active -= 1
             if not self.config.allows(identity["sub"]):
                 raise HTTPException(403, "preview_account_required")
             subject = identity["grant_id"]
@@ -405,7 +390,7 @@ class KeyService:
                         mode = "API Key 受邀测试" if self.config.mode == "preview" else "API Key 限流已启用"
                         notice = (f"{mode}。本次消耗 {COSTS[endpoint]} 点，{pool}今日剩余 {remaining} 点。"
                                   "余额为本次扣额后的快照，每日北京时间 00:00 重置；"
-                                  "其他请求可能继续消耗额度，分钟额度仍适用；并发繁忙时排队等待。")
+                                  "其他请求可能继续消耗额度；分钟频率限制暂时停用，并发繁忙时排队等待。")
                         if isinstance(result, dict) and "api_key_notice" in result:
                             result = {**result, "api_key_notice": notice}
                         elif isinstance(result, BaseModel) and hasattr(result, "api_key_notice"):

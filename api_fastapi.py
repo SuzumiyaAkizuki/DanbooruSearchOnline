@@ -59,21 +59,21 @@ GroupMode = Literal['off', 'expand', 'diverse']
 
 API_KEY_NOTICE = (
     "即将上线 API Key 与限流政策，当前尚未生效，申请入口及生效时间将另行公告。"
-    "上线后每把 Key 默认 3000 点/日、60 点/分钟、并发 1，各 Key 独立；"
-    "无 Key 调用共享 15000 点/日、30 点/分钟、并发 1 的试用池。"
+    "每把 Key 默认 3000 点/日，各 Key 独立；并发繁忙时排队等待。"
+    "无 Key 调用共享 15000 点/日的试用池，并发繁忙时排队等待。"
     "search/related/artists/health 每次分别消耗 3/2/1/0 点，每日北京时间 00:00 重置。"
     "入口开放后使用 Hugging Face 账号登录申请；仅个人业务首把且不超默认日额度可自动批准，所有公开业务须人工审核；"
     "第二把及后续 Key、首把超默认额度或后续超默认额度增额需说明原因并人工审核。"
-    "超限请求届时将返回 429，各 Key 仍受服务整体容量保护。网页搜索无需申请 Key。"
+    "日额度耗尽返回 429。网页搜索无需申请 Key。"
 )
 if get_key_service().config.mode == "public":
     _key_config = get_key_service().config
     API_KEY_NOTICE = (
         "API Key 与 REST 限流政策已启用。使用 Hugging Face 账号访问 /developer/apply 申请；"
         f"仅个人首把且不超过 {_key_config.personal_daily} 点/日可自动批准，个人上限 6000 点/日；所有公开业务、第二把及增额须人工审核。"
-        f"每把 Key 独立计额，{_key_config.key_per_minute} 点/分钟；"
-        f"无 Key 共享 {_key_config.anonymous_daily} 点/日、{_key_config.anonymous_per_minute} 点/分钟。"
-        "并发繁忙时排队等待，不因匿名池、Key 或 REST 并发超限拒绝。"
+        "每把 Key 独立计额；"
+        f"无 Key 共享 {_key_config.anonymous_daily} 点/日。"
+        "并发繁忙时排队等待。"
         "search/related/artists/health 每次 3/2/1/0 点，北京时间零点重置。"
         "个人调用须匹配 Client，公开调用须匹配 Client 与 Site；无效 Key 不回退匿名。网页搜索及 MCP 保持原有方式。"
     )
