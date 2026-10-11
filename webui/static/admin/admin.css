@@ -387,6 +387,65 @@ main {
   color:var(--muted);
   font-size:13px;
 }
+.telemetry-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:24px;
+  margin:24px 0;
+}
+.telemetry-grid section { min-width:0; }
+.telemetry-grid h3 { font-weight:600; }
+.chart .series-line { fill:none; stroke-width:1.5; }
+.chart .series-0 { stroke:var(--blue); fill:var(--blue); }
+.chart .series-1 { stroke:var(--teal); fill:var(--teal); }
+.chart .series-line.series-0,.chart .series-line.series-1 { fill:none; }
+.series-label::before,.bucket-label::before {
+  content:"";
+  display:inline-block;
+  width:9px;
+  height:9px;
+  margin-right:6px;
+  background:var(--series-color);
+}
+.series-0 { --series-color:var(--blue); }
+.series-1 { --series-color:var(--teal); }
+.distribution-legend {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 16px;
+  font-size:11px;
+  color:var(--muted);
+  margin:12px 0 18px;
+}
+.distribution-row { margin:0 0 20px; }
+.distribution-row>div {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  gap:4px 12px;
+  margin-bottom:6px;
+  font-size:12px;
+}
+.distribution-row span { color:var(--muted); font-variant-numeric:tabular-nums; }
+.distribution-row svg { width:100%; display:block; }
+.bucket-0 { --series-color:#2563eb; fill:#2563eb; }
+.bucket-1 { --series-color:#38bdf8; fill:#38bdf8; }
+.bucket-2 { --series-color:#34d399; fill:#34d399; }
+.bucket-3 { --series-color:#fbbf24; fill:#fbbf24; }
+.bucket-4 { --series-color:#fb923c; fill:#fb923c; }
+.bucket-5 { --series-color:#f87171; fill:#f87171; }
+.status-0 { --series-color:#22a06b; fill:#22a06b; }
+.status-1 { --series-color:#38bdf8; fill:#38bdf8; }
+.status-2 { --series-color:#f59e0b; fill:#f59e0b; }
+.status-3 { --series-color:#ef4444; fill:#ef4444; }
+.status-4 { --series-color:#94a3b8; fill:#94a3b8; }
+@media(max-width:900px) {
+  .telemetry-grid { grid-template-columns:1fr; gap:20px; }
+}
+@media(max-width:700px) {
+  #render-summary>div { grid-template-columns:minmax(0,1fr); }
+  #render-summary strong { white-space:normal; }
+}
 .trend {
   min-height:150px;
 }

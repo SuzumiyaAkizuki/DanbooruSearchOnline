@@ -43,6 +43,14 @@
         <div id="history-insight" class="notice neutral"></div>
         <div id="history-stats" class="signal-grid"></div>
         <div id="history-chart" class="chart trend"></div>
+        <div class="telemetry-grid">
+          <section><h3>进程 CPU 与驻留内存</h3><div id="resource-chart" class="chart"></div></section>
+          <section><h3>UI 客户端与元素数量</h3><div id="objects-chart" class="chart"></div></section>
+          <section><h3>事件循环与浏览器往返</h3><div id="response-chart" class="chart"></div></section>
+          <section><h3>浏览器探测失败</h3><div id="probe-chart" class="chart"></div></section>
+        </div>
+        <h3 class="detail-heading">渲染与等待 · 按样本数加权</h3><div id="render-summary" class="rank-list"></div>
+        <h3 class="detail-heading">GC · 按代汇总</h3><div class="table-scroll" tabindex="0" aria-label="性能窗口 GC 汇总"><table><thead><tr><th>代</th><th>次数</th><th>加权平均</th><th>最大暂停</th><th>回收对象</th><th>不可回收</th></tr></thead><tbody id="gc-summary"></tbody></table></div>
         <p id="history-note" class="footnote"></p>
         <details id="performance-details"><summary>全部 UI 与运行时采样</summary>
           <div class="detail-toolbar"><label>性能窗口 <select id="performance-window"></select></label></div>
@@ -54,6 +62,8 @@
         </details>
       </section>
       <section class="panel" id="cumulative-metrics"><div class="panel-heading"><h2>全部累计指标</h2><span class="muted">UI / REST / MCP / 反馈 / 冷启动</span></div>
+        <div class="telemetry-grid"><section><h3>UI 行为事件</h3><div id="ui-events" class="rank-list"></div></section><section><h3>REST / MCP 工具调用</h3><div id="tool-events" class="rank-list"></div></section></div>
+        <h3 class="detail-heading">累计耗时分布 · 区间占比</h3><div id="cumulative-distributions"></div>
         <details><summary>查看所有事件计数与耗时分布</summary>
           <p id="feedback-summary" class="footnote"></p>
           <div class="table-scroll" tabindex="0" aria-label="累计事件计数"><table><thead><tr><th>事件</th><th>字段</th><th>累计次数</th></tr></thead><tbody id="counter-details"></tbody></table></div>
@@ -98,11 +108,14 @@
         <p class="footnote">429 只统计已知精确状态码；历史只记录 4xx 的请求归入「其他 4xx」，无法判定其中有多少是 429。图中无柱且无缺失标记的小时表示有记录、没有已知错误。</p>
       </section>
       <section class="panel"><div class="panel-heading"><h2>REST 接口表现</h2><span class="muted window-label">近 24 小时</span></div>
+        <div class="telemetry-grid"><section><h3>接口响应状态 · 请求次数</h3><div id="endpoint-status"></div></section><section><h3>成功请求耗时 · 仅 2xx</h3><div id="success-distributions"></div></section></div>
         <div class="table-scroll" tabindex="0" aria-label="REST 接口表现"><table><thead><tr><th scope="col">接口</th><th scope="col">请求数</th><th scope="col">全部平均</th><th scope="col">全部 P95</th><th scope="col">2xx 平均</th><th scope="col">2xx P95</th><th scope="col">&gt; 5 秒</th><th scope="col">429</th><th scope="col">4xx</th><th scope="col">5xx</th></tr></thead><tbody id="endpoints"></tbody></table></div>
-        <p class="footnote">2xx 延迟单独计算，避免大量快速拒绝降低平均值。延迟是 HTTP 观测链路耗时，P95 由分桶估算；MCP 没有对应延迟数据。</p>
+        <p class="footnote">2xx 延迟单独计算，避免大量快速拒绝降低平均值。延迟是 HTTP 观测链路耗时，P95 为所在区间的上界；分桶不完整时留空。</p>
       </section>
       <div class="metrics-grid"><section class="panel"><div class="panel-heading"><h2>来源概览</h2><span class="muted window-label"></span></div><div id="sources" class="rank-list"></div><p class="footnote">来源为自声明或粗粒度归因，不是已验证用户。“未声明”不等于无 Key，也不能区分具体调用者。</p></section><section class="panel"><div class="panel-heading"><h2>客户端分布</h2><span class="muted window-label"></span></div><div id="clients" class="rank-list"></div><p class="footnote">客户端类别不是独立用户数，同一类别可能对应多个服务。</p></section></div>
       <section class="panel"><div class="panel-heading"><h2>观测压力</h2><span class="muted window-label"></span></div><div id="pressure-stats" class="signal-grid"></div><p class="footnote">HTTP 在途峰值包含等待，不是同时运行的模型任务数。分钟峰值取来源 / 客户端 / 接口分组的最大值，不是全站 RPM；各组峰值不能相加。</p></section>
+      <section class="panel"><div class="panel-heading"><h2>每小时观测峰值</h2><span class="muted window-label"></span></div><div id="pressure-chart" class="chart"></div><p class="footnote">两条曲线均为分组峰值取最大，不相加。缺失小时留空；当前小时尚未结束。</p></section>
+      <section class="panel"><div class="panel-heading"><h2>参数校验抽样 · 字段与错误类型</h2><span class="muted window-label"></span></div><div id="validation-samples" class="rank-list"></div><p class="footnote">仅汇总所选 REST 范围中的已有抽样。每个抽样请求可出现多个签名，签名计数不能相加作为失败请求数，也不能按抽样比例精确反推总量。没有抽样不代表没有校验失败；不展示参数值。</p></section>
       <section class="panel"><div class="panel-heading"><div><h2>REST 聚合明细</h2><p class="muted">定位哪些接口与来源触发了具体原因</p></div><span class="window-label badge"></span></div>
         <div class="detail-toolbar filters"><label>接口 <select id="detail-endpoint"><option value="">全部接口</option></select></label><label>结果原因 <select id="detail-reason"><option value="">全部原因</option></select></label><label>状态码 <select id="detail-status"><option value="">全部状态码</option></select></label><label>客户端 <select id="detail-client"><option value="">全部客户端</option></select></label><label>来源关键词 <input id="detail-source" type="search" placeholder="Client、Site 或来源类型" maxlength="200"></label><button id="detail-reset">清除明细筛选</button></div>
         <p id="detail-summary" class="footnote" aria-live="polite"></p>
@@ -115,7 +128,7 @@
       <!-- KEY_WORKSPACE -->
       <div id="key-disabled" class="panel"><h1>API Key</h1><p>API Key 功能当前关闭，请由维护者配置开放模式。</p></div>
     </section>
-    <footer>累计与 REST 数据来自服务内存快照；UI 性能来自当前进程的采样窗口，按各自时间范围展示。<span>普通用户继续匿名使用标签搜索。</span></footer>
+    <footer>累计事件、REST 观察窗口和 UI 性能采样按各自时间范围展示。<span>普通用户继续匿名使用标签搜索。</span></footer>
   </div>
 </main>
 </body>

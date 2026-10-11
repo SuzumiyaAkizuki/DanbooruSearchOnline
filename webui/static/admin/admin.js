@@ -21,6 +21,7 @@
   const presentNumber = (v) => v == null ? "—" : number(v);
   const bytes = (v) => v == null ? "—" : `${(v / 1024 / 1024).toFixed(1)} MiB`;
   const sourceName = (r) => r.source_kind === "anonymous" ? `未声明 · ${r.source_name || r.client_family || "unknown"}` : r.source_kind === "declared" ? `声明 · ${r.source_name || "未命名"}${r.source_site ? " · " + r.source_site : ""}` : [r.source_kind || "无来源维度", r.source_name, r.source_site].filter(Boolean).join(" · ");
+  const visualIds = ["resource-chart","objects-chart","response-chart","probe-chart","render-summary","gc-summary","ui-events","tool-events","cumulative-distributions","endpoint-status","success-distributions","pressure-chart","validation-samples"];
   function selectedRest() {
     const window = snapshot.rest_windows[$("range").value];
     return $("rest-scope").value === "business" ? window.business : window;
@@ -52,6 +53,7 @@
     for (const id of ["history-state","history-insight","history-stats","history-chart","history-note","quality-stats","rest-insight","window-slow","sources","clients","pressure-stats"]) $(id).replaceChildren();
     for (const id of ["data-boundary","runtime-stats","performance-metrics","gc-metrics","counter-details","timing-details","timing-chart","feedback-summary","rejection-stats","status-codes","outcome-reasons","error-trend","hourly-details","diagnostic-details","detail-summary","detail-page","performance-window","timing-metric","detail-endpoint","detail-reason","detail-status","detail-client"]) $(id).replaceChildren();
     $("detail-source").value="";
+    for (const id of visualIds) $(id).replaceChildren();
   }
   async function session() {
     const response = await request("/admin/api/session", {cache:"no-store", credentials:"same-origin"});
@@ -114,6 +116,130 @@
     });
     root.append(svg);
   }
+  // Each series owns its scale when units differ; null observations break paths.
+  function lines(id, points, series, separate = false) {
+    const root=$(id);root.replaceChildren();
+    const valid=v=>typeof v==="number" && Number.isFinite(v);
+    if(!points.length || !series.some(s=>points.some(p=>valid(s.value(p))))){
+      const p=document.createElement("p");p.className="chart-empty";p.textContent="当前范围没有可用采样";root.append(p);return;
+    }
+    const width=Math.max(280,root.clientWidth || 480),height=220,left=48,right=separate?52:12,top=20,bottom=36;
+    const plotWidth=width-left-right,plotHeight=height-top-bottom;
+    const maxima=series.map(s=>Math.max(1,...points.map(p=>valid(s.value(p))?s.value(p):0)));
+    if(!separate)maxima.fill(Math.max(...maxima));
+    const times=points.map(p=>new Date(p.at).getTime()),first=times[0],span=times[times.length-1]-first;
+    const x=i=>left+(span?(times[i]-first)/span:.5)*plotWidth;
+    const legend=document.createElement("div");legend.className="chart-legend";
+    series.forEach((s,i)=>{const label=document.createElement("span");label.className=`series-label series-${i}`;label.textContent=`${s.label}${separate?(i?" · 右轴":" · 左轴"):""}`;legend.append(label);});
+    const svg=svgNode("svg",{viewBox:`0 0 ${width} ${height}`,role:"img","aria-label":series.map(s=>s.label).join(" / ")+"，按北京时间显示"});
+    svg.append(svgNode("title",{},series.map(s=>s.label).join(" / ")));
+    [0,.5,1].forEach(r=>{
+      const y=top+plotHeight*(1-r);svg.append(svgNode("line",{x1:left,y1:y,x2:width-right,y2:y,class:"gridline"}));
+      [0,...(separate?[1]:[])].forEach(i=>svg.append(svgNode("text",{x:i?width-right+6:left-6,y:y+4,"text-anchor":i?"start":"end"},new Intl.NumberFormat("zh-CN",{notation:"compact",maximumFractionDigits:1}).format(maxima[i]*r))));
+    });
+    series.forEach((s,j)=>{
+      let path="",connected=false;
+      points.forEach((p,i)=>{
+        const value=s.value(p);
+        if(!valid(value)){connected=false;return;}
+        const px=x(i),py=top+plotHeight*(1-value/maxima[j]);
+        path+=`${connected?"L":"M"}${px},${py} `;connected=true;
+        const dot=svgNode("circle",{cx:px,cy:py,r:2.5,class:`series-${j}`});
+        dot.append(svgNode("title",{},`${date(p.at)} · ${s.label}: ${s.format?s.format(value):number(value)}`));svg.append(dot);
+      });
+      svg.append(svgNode("path",{d:path,class:`series-line series-${j}`}));
+    });
+    const stride=Math.max(1,Math.ceil(points.length/(width<450?2:4)));
+    points.forEach((p,i)=>{if(i%stride===0)svg.append(svgNode("text",{x:x(i),y:height-10,"text-anchor":i===0?"start":"middle"},date(p.at)));});
+    root.append(legend,svg);
+  }
+  const timingGroups = [
+    ["≤250ms",[0,1]],["250ms–1s",[2,3]],["1–5s",[4,5]],
+    ["5–30s",[6,7]],["30–120s",[8,9]],[">120s",[10]]
+  ];
+  function distributions(id, entries, status = false) {
+    const root=$(id);root.replaceChildren();
+    const labels=status?["2xx","3xx","4xx","5xx","unknown"]:timingGroups.map(g=>g[0]);
+    const legend=document.createElement("div");legend.className="distribution-legend";
+    labels.forEach((label,i)=>{const span=document.createElement("span");span.className=`bucket-label ${status?"status":"bucket"}-${i}`;span.textContent=label;legend.append(span);});root.append(legend);
+    if(!entries.length){const p=document.createElement("p");p.className="chart-empty";p.textContent="当前范围没有可用记录";root.append(p);return;}
+    const maxCount=Math.max(1,...entries.map(e=>e.metric.count));
+    entries.forEach(({label,metric})=>{
+      const row=document.createElement("div");row.className="distribution-row";
+      const heading=document.createElement("div"),name=document.createElement("strong"),note=document.createElement("span");
+      name.textContent=label;note.textContent=status?`${number(metric.count)} 次`:`均值 ${duration(metric.average_ms)} · P95 ${p95(metric)} · ${number(metric.count)} 样本`;
+      heading.append(name,note);row.append(heading);
+      if(!metric.count || (!status && !metric.distribution_available)){
+        const p=document.createElement("p");p.className="footnote";p.textContent=metric.count?"分桶不完整，暂不展示占比":"暂无样本";row.append(p);
+      }else{
+        const values=status?labels.map(key=>metric.statuses[key] || 0):timingGroups.map(([,indices])=>indices.reduce((sum,i)=>sum+(metric.buckets[i]?.count || 0),0));
+        const width=Math.max(280,root.clientWidth || 480),svg=svgNode("svg",{viewBox:`0 0 ${width} 28`,role:"img","aria-label":`${label} · ${values.map((v,i)=>`${labels[i]} ${number(v)} 次`).join("，")}`});
+        let offset=0;
+        values.forEach((value,i)=>{
+          const size=width*value/(status?maxCount:metric.count);
+          const rect=svgNode("rect",{x:offset,y:2,width:size,height:24,class:`${status?"status":"bucket"}-${i}`});
+          rect.append(svgNode("title",{},`${label} · ${labels[i]}: ${number(value)} 次（${(100*value/metric.count).toFixed(1)}%）`));svg.append(rect);offset+=size;
+        });row.append(svg);
+      }root.append(row);
+    });
+  }
+  function weighted(windows, getSamples) {
+    const totals=new Map();
+    windows.forEach(window=>Object.entries(getSamples(window) || {}).forEach(([name,m])=>{
+      if(!(m.count>0))return;
+      const t=totals.get(name) || {count:0,sum:0,max:0,collected:0,uncollectable:0};
+      t.count+=m.count;t.sum+=m.count*m.avg_ms;t.max=Math.max(t.max,m.max_ms || 0);
+      t.collected+=m.collected || 0;t.uncollectable+=m.uncollectable || 0;totals.set(name,t);
+    }));
+    return [...totals].map(([name,t])=>({name,...t,average:t.sum/t.count}));
+  }
+  function renderVisuals() {
+    const c=snapshot.counters;
+    const events=(prefix)=>Object.entries(c).filter(([key])=>key.startsWith(prefix)).sort((a,b)=>b[1]-a[1]).map(([key,count])=>({label:eventLabels[key] || key,count}));
+    const ui=events("ui_"),tools=[...events("rest_"),...events("mcp_")].sort((a,b)=>b.count-a.count);
+    ranks("ui-events",ui,Math.max(1,...ui.map(e=>e.count)));
+    ranks("tool-events",tools,tools.reduce((sum,e)=>sum+e.count,0));
+    // UI counters overlap, so their bars show counts rather than a composition.
+    $("ui-events").querySelectorAll("strong").forEach((node,i)=>{node.textContent=`${number(ui[i].count)} 次`;});
+    $("ui-events").querySelectorAll("meter").forEach((node,i)=>node.setAttribute("aria-label",`${ui[i].label} ${number(ui[i].count)} 次`));
+    distributions("cumulative-distributions",Object.entries(snapshot.timings).map(([key,metric])=>({label:timingLabels[key] || key,metric})));
+  }
+  function renderPerformanceVisuals() {
+    const windows=snapshot.ui_performance.windows || [],points=windows.map(w=>({...w,at:w.recorded_at}));
+    lines("resource-chart",points,[{label:"CPU %（单核 = 100%）",value:p=>p.runtime?.process_cpu_percent,format:percent},{label:"RSS MiB",value:p=>p.runtime?.rss_bytes==null?null:p.runtime.rss_bytes/1048576,format:v=>`${v.toFixed(1)} MiB`}],true);
+    lines("objects-chart",points,[{label:"客户端",value:p=>p.runtime?.ui_clients},{label:"元素",value:p=>p.runtime?.ui_elements}],true);
+    lines("response-chart",points,[{label:"事件循环 ms",value:p=>p.metrics?.event_loop_lag?.avg_ms,format:duration},{label:"浏览器往返 ms",value:p=>p.metrics?.browser_roundtrip?.avg_ms,format:duration}]);
+    lines("probe-chart",points,[{label:"探测失败次数",value:p=>p.browser_probe_failures}]);
+    const samples=weighted(windows,w=>w.metrics).filter(m=>!["event_loop_lag","browser_roundtrip"].includes(m.name)).sort((a,b)=>b.average-a.average);
+    const root=$("render-summary");root.replaceChildren();
+    if(!samples.length)root.textContent="当前范围没有渲染或等待采样";
+    samples.forEach(m=>{
+      const row=document.createElement("div"),label=document.createElement("span"),value=document.createElement("strong"),meter=document.createElement("meter");
+      label.textContent=performanceLabels[m.name] || m.name;value.textContent=`均值 ${duration(m.average)} · 最大 ${duration(m.max)} · ${number(m.count)} 样本`;
+      meter.min=0;meter.max=Math.max(1,...samples.map(s=>s.average));meter.value=m.average;meter.setAttribute("aria-label",`${label.textContent}加权平均 ${duration(m.average)}`);row.append(label,value,meter);root.append(row);
+    });
+    table("gc-summary",weighted(windows,w=>w.runtime?.gc).sort((a,b)=>a.name.localeCompare(b.name)).map(m=>[m.name,number(m.count),duration(m.average),duration(m.max),number(m.collected),number(m.uncollectable)]),6,"当前范围没有 GC 采样");
+  }
+  function renderRestVisuals(rest) {
+    const cutoff=rest.cutoff_hour.slice(0,13),last=snapshot.generated_at.slice(0,13);
+    const records=(snapshot.rest_records || []).filter(r=>{
+      const at=r.day+"T"+String(r.hour).padStart(2,"0");
+      return at>=cutoff && at<=last && ($("rest-scope").value!=="business" || r.endpoint!=="health");
+    });
+    const statuses=new Map();
+    records.forEach(r=>{const counts=statuses.get(r.endpoint) || {};const key=["2xx","3xx","4xx","5xx"].includes(r.status_class)?r.status_class:"unknown";counts[key]=(counts[key] || 0)+r.count;statuses.set(r.endpoint,counts);});
+    distributions("success-distributions",rest.endpoints.map(e=>({label:e.endpoint,metric:e.success_latency})));
+    distributions("endpoint-status",rest.endpoints.map(e=>({label:e.endpoint,metric:{count:e.count,statuses:statuses.get(e.endpoint) || {}}})),true);
+    lines("pressure-chart",rest.hours.map(p=>({...p,at:p.hour+":00+08:00"})),[{label:"HTTP 在途峰值",value:p=>p.peak_in_flight},{label:"分组分钟请求峰值",value:p=>p.peak_per_minute}]);
+    const samples=new Map();
+    records.forEach(r=>{
+      Object.entries(r.validation_samples || {}).forEach(([signature,count])=>samples.set(signature,(samples.get(signature) || 0)+count));
+    });
+    const items=[...samples].sort((a,b)=>b[1]-a[1]);
+    ranks("validation-samples",items.map(([label,count])=>({label,count})),Math.max(1,...items.map(([,count])=>count)));
+    $("validation-samples").querySelectorAll("strong").forEach((node,i)=>{node.textContent=`${number(items[i][1])} 次抽样出现`;});
+    $("validation-samples").querySelectorAll("meter").forEach((node,i)=>node.setAttribute("aria-label",`${items[i][0]} ${number(items[i][1])} 次抽样出现`));
+  }
   function trend() {
     if (!snapshot) return;
     const rest = selectedRest();
@@ -135,10 +261,11 @@
     $("history-state").textContent=h.stale?"采样已过期":`${h.window_count} 个性能窗口`;
     $("history-stats").replaceChildren();
     $("history-chart").replaceChildren();
-    $("history-note").textContent="仅显示当前进程最近最多 180 个性能采样窗口，重启后重新积累；不是 UI 搜索耗时，也不代表历史搜索量。无需配置或上传额外文件。";
+    $("history-note").textContent="显示当前进程最近的性能采样窗口，重启后重新积累。窗口均值按各自样本计算；渲染与 GC 汇总按样本数加权，最大值取窗口最大值。浏览器往返包含网络与浏览器响应；探测失败为每窗口次数。缺失采样留空，不补零。";
     const windows=h.windows || [];
     options("performance-window",["latest",...windows.slice().reverse().map(item=>item.recorded_at)],null,value=>value==="latest"?"最新窗口":date(value));
     renderPerformanceDetails();
+    renderPerformanceVisuals();
     if(!h.latest){
       $("history-insight").textContent="当前进程尚无 UI 性能采样，产生采样后自动显示。累计统计及 REST 观测仍可使用。";
       return;
@@ -211,12 +338,13 @@
     table("hourly-details",hourly.slice().reverse().map(item=>[item.hour.replace("T"," "),presentNumber(item.count),item.count==null?"—":number(item.rejected),item.count==null?"—":number(item.client),item.count==null?"—":number(item.server),item.main?`${reasonName(item.main[0])} · ${number(item.main[1])}`:item.count==null?"无可用记录":item.outcome_reasons?.legacy_unknown?"历史原因未采集":"—",presentNumber(item.peak_in_flight),presentNumber(item.peak_per_minute)]),8);
     renderDiagnostics();
     trend();
+    renderRestVisuals(rest);
   }
   function render(data) {
     snapshot = data;
     const c = data.counters, sum = (names) => names.reduce((total,key) => total + (c[key] || 0),0);
     $("updated").textContent = `页面快照生成 ${date(data.generated_at)}`;
-    $("data-boundary").textContent=`累计事件自 ${date(data.telemetry_since)} 起；REST 自 ${date(data.attribution_since)} 采集，最后有记录的小时 ${data.rest.last_hour?.replace("T"," ") || "—"}。页面快照生成时间不等于 OSS 同步时间。${data.attribution_updated_at?`此回放的 REST 持久化快照更新于 ${date(data.attribution_updated_at)}。`:"当前读取服务内存，不据此判断 OSS 是否已同步。"}${data.telemetry_updated_at?`累计持久化快照更新于 ${date(data.telemetry_updated_at)}。`:""}小时聚合包含当前未结束小时；没有记录不等于零流量。`;
+    $("data-boundary").textContent=`累计事件自 ${date(data.telemetry_since)} 起；REST 自 ${date(data.attribution_since)} 采集，最后有记录的小时 ${data.rest.last_hour?.replace("T"," ") || "—"}。${data.attribution_updated_at?`REST 数据更新于 ${date(data.attribution_updated_at)}。`:""}${data.telemetry_updated_at?`累计数据更新于 ${date(data.telemetry_updated_at)}。`:""}各数据源统计范围独立；当前小时尚未结束，没有记录不等于零流量。`;
     $("since").textContent = `累计 · 自 ${data.telemetry_since ? data.telemetry_since.slice(0,10) : "开始采集"}`;
     $("ui-count").textContent = number(c.ui_search);
     $("ui-detail").textContent = `${number(c.ui_visit)} 次访问 · ${number(c.ui_zero_result)} 次零结果`;
@@ -228,7 +356,7 @@
     $("ui-p95").textContent = p95(data.ui_latency);
     $("latency-note").textContent = `${number(data.ui_latency.count)} 个延迟样本。${data.ui_latency.distribution_available ? "分桶分别计数，P95 为区间估算；超过末档时显示 > 120 s。" : "当前数据未提供完整分桶，不能还原分布或估算 P95。"}`;
     chart("latency-chart", data.ui_latency.distribution_available?data.ui_latency.buckets:[]);
-    $("feedback-summary").textContent=`内存保留 ${number(data.feedback_count)} 条反馈记录（受保留上限影响），累计反馈事件见下表。`;
+    $("feedback-summary").textContent=`当前保留 ${number(data.feedback_count)} 条反馈记录（受保留上限影响），累计反馈事件见下表。`;
     table("counter-details",Object.entries(c).sort((a,b)=>a[0].localeCompare(b[0])).map(([key,count])=>[eventLabels[key] || key,key,number(count)]),3);
     table("timing-details",Object.entries(data.timings).map(([key,value])=>[timingLabels[key] || key,number(value.count),duration(value.average_ms),p95(value),value.distribution_available?"是":"否"]),5);
     options("timing-metric",Object.keys(data.timings),null,key=>timingLabels[key] || key);renderTiming();
@@ -236,7 +364,7 @@
     options("detail-endpoint",unique("endpoint"),"全部接口");options("detail-reason",unique("outcome_reason","legacy_unknown"),"全部原因",value=>`${reasonName(value)} · ${value}`);options("detail-status",unique("status_code","unknown"),"全部状态码");options("detail-client",unique("client_family","unknown"),"全部客户端");
     const q=data.quality;
     signals("quality-stats",[["发生选词的搜索会话",percent(q.selection_percent)],["复制操作 / 搜索",percent(q.copy_events_per_search)],["零结果率",percent(q.zero_percent)],["60 秒内重复搜索",percent(q.repeat_percent)],["冷启动成功 / 尝试",`${number(q.cold_successes)} / ${number(q.cold_attempts)}`],["冷启动失败",number(q.cold_failures)]]);
-    renderHistory();renderRest();
+    renderVisuals();renderHistory();renderRest();
   }
   async function refresh() {
     if (loading || document.hidden) return;
@@ -293,6 +421,6 @@
   document.addEventListener("visibilitychange", () => {if(!document.hidden) refresh();});
   setInterval(refresh, 30000);
   let resizeTimer;
-  window.addEventListener("resize", () => {clearTimeout(resizeTimer);resizeTimer=setTimeout(() => {if(snapshot && !keysPage) {chart("latency-chart",snapshot.ui_latency.distribution_available?snapshot.ui_latency.buckets:[]);renderTiming();renderHistory();renderRest();}},100);});
+  window.addEventListener("resize", () => {clearTimeout(resizeTimer);resizeTimer=setTimeout(() => {if(snapshot && !keysPage) {chart("latency-chart",snapshot.ui_latency.distribution_available?snapshot.ui_latency.buckets:[]);renderVisuals();renderTiming();renderHistory();renderRest();}},100);});
   refresh();
 })();
