@@ -18,11 +18,15 @@ MCP 服务层
     get_newbie_format  返回 NewBie 模型 XML 提示词格式规范
     get_qwen_image_2_1_format
                        返回 Qwen-Image-2.1 模型的 T2I/I2I 提示词格式规范
+    get_moss_image_format 返回 MOSS-Image 提示词指引及 Layout 规范
+    compile_moss_prompt 编译 MOSS caption / Layout 提示词
+    convert_moss_bbox   转换 MOSS 单个像素框坐标
 """
 
 import json
 import asyncio
 import logging
+from pathlib import Path
 from typing import Annotated
 from pydantic import Field
 from anyio import BrokenResourceError, ClosedResourceError
@@ -31,6 +35,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from core.engine import DanbooruTagger, run_in_slot
 from core.models import MAX_INPUT_TAGS, MAX_INPUT_TAG_LENGTH, SearchRequest
 from core.prompt_formats import PROMPT_FORMATS
+from core.moss_prompt import compile_prompt as _compile_moss_prompt, centered_box as _centered_moss_box
 from core.runtime_diagnostics import install_mcp_diagnostics
 import core.counter as counter
 import core.telemetry as telemetry
@@ -584,3 +589,43 @@ async def get_qwen_image_2_1_format(mode: str) -> str:
         return '错误：mode 必须是 "T2I" 或 "I2I"。'
 
     return prompt
+
+
+@mcp.tool()
+async def get_moss_image_format() -> str:
+    """返回 MOSS-Image 提示词指引及完整 Layout 规范。
+
+    编写 MOSS caption 或 Layout 前先调用此工具，再用 compile_moss_prompt 编译。
+    工具仅提供指引，不调用图像模型。
+    """
+    await telemetry.increment("mcp_get_moss_image_format")
+    return (Path(__file__).resolve().parent / "config" / "moss_prompt_guide.md").read_text(encoding="utf-8")
+
+
+@mcp.tool()
+async def compile_moss_prompt(draft: dict) -> str:
+    """将 MOSS caption 或 Layout JSON 对象编译为可直接粘贴的正向提示词。
+
+    先调用 get_moss_image_format 获取字段规范。caption 草稿仅含 caption 字段。
+    Layout 必须含 width、height（16 的正整数倍）、summary、items，
+    bbox_coord_space="abs"、bbox_format="xyxy"；bbox 使用画布左上角起算的像素坐标。
+    返回纯文本 caption 或单行 Layout JSON，自动转换为 abs_centralized/yxyx。
+    非法字段、越界坐标会报错；不读取客户端文件、不生成图片。
+    """
+    await telemetry.increment("mcp_compile_moss_prompt")
+    return await asyncio.to_thread(_compile_moss_prompt, draft)
+
+
+@mcp.tool()
+async def convert_moss_bbox(bbox: list[float], width: int, height: int) -> list[int]:
+    """将一个绝对像素 xyxy 框转换为 MOSS 中心原点 yxyx 整数框。
+
+    bbox=[x_min,y_min,x_max,y_max]，必须在 width×height 画布范围内。
+    width、height 必须为 16 的正整数倍；小数边界先向外取整再减画布中心。
+    仅在需要单独换算坐标时调用；compile_moss_prompt 已自动完成此转换，勿重复转换。
+    """
+    await telemetry.increment("mcp_convert_moss_bbox")
+    for name, value in (("width", width), ("height", height)):
+        if type(value) is not int or value <= 0 or value % 16:
+            raise ValueError(f"{name} must be a positive integer multiple of 16")
+    return _centered_moss_box(bbox, width, height, "bbox")
