@@ -26,7 +26,6 @@ MCP 服务层
 import json
 import asyncio
 import logging
-from pathlib import Path
 from typing import Annotated
 from pydantic import Field
 from anyio import BrokenResourceError, ClosedResourceError
@@ -523,6 +522,7 @@ JSON 对象，包含：
 async def get_anima_format() -> str:
     """
     返回 Anima 文生图模型的 Hybrid 混合提示词格式规范。
+    仅约束模型输入；最终回答包装、说明语言、解释及翻译由调用方指定。
 
     当用户提到「Anima 提示词」「Anima 格式」「Anima Prompt」「Anima 模型」等关键词时，
     应调用此工具，以获取完整的提示词组装规范。
@@ -549,6 +549,7 @@ async def get_anima_format() -> str:
 async def get_newbie_format() -> str:
     """
     返回 NewBie 文生图模型的 XML 格式提示词规范。
+    仅约束模型输入；最终回答包装、说明语言、解释及翻译由调用方指定。
 
     当用户提到「NewBie 提示词」「NewBie 格式」「NewBie Prompt」「NewBie 模型」等关键词时，
     应调用此工具，以获取完整的 XML 格式组装规范。
@@ -596,10 +597,11 @@ async def get_moss_image_format() -> str:
     """返回 MOSS-Image 提示词指引及完整 Layout 规范。
 
     编写 MOSS caption 或 Layout 前先调用此工具，再用 compile_moss_prompt 编译。
+    仅约束模型输入；最终回答包装、说明语言、解释及翻译由调用方指定。
     工具仅提供指引，不调用图像模型。
     """
     await telemetry.increment("mcp_get_moss_image_format")
-    return (Path(__file__).resolve().parent / "config" / "moss_prompt_guide.md").read_text(encoding="utf-8")
+    return PROMPT_FORMATS["moss"]
 
 
 @mcp.tool()
@@ -610,6 +612,7 @@ async def compile_moss_prompt(draft: dict) -> str:
     Layout 必须含 width、height（16 的正整数倍）、summary、items，
     bbox_coord_space="abs"、bbox_format="xyxy"；bbox 使用画布左上角起算的像素坐标。
     返回纯文本 caption 或单行 Layout JSON，自动转换为 abs_centralized/yxyx。
+    Layout 返回值不含画布尺寸；调用方须保留草稿 width、height 并用于图像生成工作流。
     非法字段、越界坐标会报错；不读取客户端文件、不生成图片。
     """
     await telemetry.increment("mcp_compile_moss_prompt")

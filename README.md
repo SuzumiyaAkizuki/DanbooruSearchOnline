@@ -540,11 +540,21 @@ npm install -g mcp-remote
 
 **`get_anima_format`** — 获取 Anima 提示词格式规范
 
-当用户需要把检索到的标签整理为 Anima 模型的 Hybrid 提示词时调用。返回完整格式说明，包括硬标签层、空间叙事层、标签格式化、权重语法、多人物防串扰和中文解释规则。
+当用户需要把检索到的标签整理为 Anima 模型的 Hybrid 提示词时调用。返回完整模型输入规范，包括硬标签层、空间叙事层、标签格式化、权重语法和多人物防串扰规则。
 
 **`get_newbie_format`** — 获取 NewBie XML 提示词格式规范
 
 当用户需要输出 NewBie 模型 XML 提示词时调用。返回 XML 结构、字段职责、标签处理规则、多人角色分组和 caption 写作要求。
+
+**`get_moss_image_format` / `compile_moss_prompt` / `convert_moss_bbox`** — 获取 MOSS Caption / Layout 规范、编译模型输入及独立转换坐标。
+
+MOSS 指引与其他提示词规范统一存于 `config/prompt_formats.yaml`，由共享加载器在服务启动时读取；修改后需重启服务生效。
+
+Anima、NewBie 和 MOSS 规范仅约束模型输入内容与结构；最终回答的接口字段、Markdown 包装、说明语言、解释及翻译由调用方指定。规范中的代码围栏仅用于展示结构和示例，不要求最终回答使用围栏。Anima/NewBie 的 REST 对应端点与 MCP 共用规范来源；MOSS 当前仅提供 MCP 工具。
+
+`compile_moss_prompt` 仍返回纯文本 Caption 或单行 Layout JSON，Layout 不含画布尺寸。调用方必须从草稿保留 `width`、`height`，并将图像生成工作流设为同一尺寸；执行尺寸不能依赖中文解释传递。
+
+依赖旧规范自动生成 `## Prompt`、`## 中文解释`、XML 代码围栏或 caption 中文翻译的调用方，需要在自己的系统提示词或输出协议中显式补充要求，包括 ComfyUI-NewBie-LLM-Formatter、WenQiuYue Prompt Agent 及直接使用 MCP/REST 规范的自建客户端。按标题或围栏提取提示词的解析器也应由调用方维持对应输出约定。本次不修改下游项目、工具名称、参数或返回类型；Qwen-Image-2.1 T2I/I2I 协议保持不变。
 
 **`get_qwen_image_2_1_format`** — 获取 Qwen-Image-2.1 提示词格式规范
 

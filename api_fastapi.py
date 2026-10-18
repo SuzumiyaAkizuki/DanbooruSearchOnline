@@ -338,13 +338,13 @@ async def observe_rest_attribution(request: Request, call_next):
 
 @app.get("/get_anima_format", response_class=PlainTextResponse)
 async def get_anima_format() -> str:
-    """返回完整 Anima Hybrid 提示词格式规范，与同名 MCP 工具一致。"""
+    """返回完整 Anima Hybrid 模型输入规范，与同名 MCP 工具一致；回答包装及解释翻译由调用方指定。"""
     return PROMPT_FORMATS["anima"]
 
 
 @app.get("/get_newbie_format", response_class=PlainTextResponse)
 async def get_newbie_format() -> str:
-    """返回完整 NewBie XML 提示词格式规范，与同名 MCP 工具一致。"""
+    """返回完整 NewBie XML 模型输入规范，与同名 MCP 工具一致；回答包装及解释翻译由调用方指定。"""
     return PROMPT_FORMATS["newbie"]
 
 

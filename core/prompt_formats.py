@@ -16,7 +16,7 @@ def load_prompt_formats(path: Path = DEFAULT_PROMPT_FORMATS_PATH) -> dict[str, s
         raise RuntimeError(f"无法读取提示词规范配置: {path}") from exc
     if not isinstance(content, dict):
         raise RuntimeError(f"提示词规范配置顶层必须是对象: {path}")
-    for key in ("anima", "newbie", "qwen_t2i", "qwen_i2i"):
+    for key in ("anima", "newbie", "qwen_t2i", "qwen_i2i", "moss"):
         value = content.get(key)
         if not isinstance(value, str) or not value.strip():
             raise RuntimeError(f"提示词规范配置缺少非空文本: {key} ({path})")
