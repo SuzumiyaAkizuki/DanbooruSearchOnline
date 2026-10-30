@@ -15,7 +15,9 @@ jobs:
           lfs: false
 
       - name: Install Dependencies
-        run: pip install huggingface_hub
+        run: |
+          python -m pip install --upgrade "pip>=26.2.2"
+          python -m pip install huggingface_hub "certifi>=2026.10.19"
 
       - name: Sync to HuggingFace Space
         env:
