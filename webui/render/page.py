@@ -71,6 +71,18 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
             :root {
                 --section-radius: 8px;
             }
+            .storage-loading-panel {
+                width: min(360px, calc(100vw - 32px));
+                padding: 28px;
+                align-items: center;
+                text-align: center;
+                gap: 12px;
+            }
+            .storage-loading-description { color: var(--muted); line-height: 1.6; }
+            @media (prefers-reduced-motion: reduce) {
+                .storage-loading-panel .q-spinner,
+                .storage-loading-panel .q-spinner * { animation: none !important; }
+            }
             .product-search-card {
                 background: var(--surface);
                 border: 1px solid var(--section-border);
@@ -321,7 +333,11 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
     controller._build_sponsor_dialog()
     controller._build_help_dialog()
 
-    with ui.column().classes('w-full max-w-7xl mx-auto p-4 gap-3'):
+    build_storage_loading(controller)
+    controller.page_content = ui.column().classes('w-full max-w-7xl mx-auto p-4 gap-3').props(
+        'inert aria-busy=true'
+    )
+    with controller.page_content:
 
         # ── 1. 搜索主路径 ──
         controller._build_search_card()
@@ -359,6 +375,48 @@ def build_page(controller: Any, *, motion_style: str, sponsor_notice_text: str) 
             ui.button(sponsor_notice_text, on_click=controller.sponsor_dialog.open) \
                 .props('flat dense no-caps color=grey-6') \
                 .classes('text-xs mt-1')
+
+
+def build_storage_loading(controller: Any) -> None:
+    controller.storage_loading_dialog = ui.dialog(value=True).props(
+        'persistent no-shake transition-show=none transition-hide=none'
+    )
+    with controller.storage_loading_dialog:
+        with ui.card().classes('storage-loading-panel').props('aria-labelledby=storage-loading-title'):
+            controller.storage_loading_spinner = ui.spinner(size='32px', color='primary').props(
+                'aria-hidden=true'
+            )
+            controller.storage_loading_title = ui.label('正在读取你的数据').classes(
+                'text-base font-medium'
+            ).props('id=storage-loading-title role=status aria-live=polite')
+            controller.storage_loading_description = ui.label(
+                '正在恢复设置、工作区、历史记录和收藏，请稍候。'
+            ).classes('text-sm storage-loading-description')
+            with ui.row().classes('w-full justify-center gap-2'):
+                controller.storage_loading_retry = ui.button(
+                    '重新读取', on_click=controller._start_storage_restore_task,
+                ).props('unelevated no-caps')
+                controller.storage_loading_retry.set_visibility(False)
+                controller.storage_loading_abandon = ui.button(
+                    '放弃读取', on_click=controller._abandon_storage_restore,
+                ).props('flat no-caps')
+                controller.storage_loading_abandon.set_visibility(False)
+
+
+def render_storage_loading(controller: Any, state: str) -> None:
+    if state in ('ready', 'dismissed'):
+        controller.page_content.props(remove='inert', add='aria-busy=false')
+        controller.storage_loading_dialog.close()
+        return
+    failed = state == 'error'
+    controller.storage_loading_spinner.set_visibility(not failed)
+    controller.storage_loading_title.set_text('数据读取未完成' if failed else '正在读取你的数据')
+    controller.storage_loading_description.set_text(
+        '可以重新读取，或放弃读取后继续使用。未读取的数据会保留，刷新页面可重试。' if failed
+        else '正在恢复设置、工作区、历史记录和收藏，请稍候。'
+    )
+    controller.storage_loading_retry.set_visibility(failed)
+    controller.storage_loading_abandon.set_visibility(failed)
 
 
 def render_service_status(controller: Any, status: dict) -> None:

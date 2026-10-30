@@ -128,6 +128,7 @@ from webui.render.workspace_panel import (
 from webui.render.search_panel import build_search_panel
 from webui.render.page import (
     build_page as render_page,
+    render_storage_loading,
     build_release_announcement,
     render_service_status,
 )
@@ -356,6 +357,7 @@ class DanbooruSearchUI:
         self._coverage_render_task = None  # type: asyncio.Task | None
         self._storage_restore_task = None  # type: asyncio.Task | None
         self._storage_restore_started = False
+        self._storage_restore_abandoned = False
         self._storage_restoring = False
         self._storage_failure_notified = False
         self._storage_states = {name: 'pending' for name in _LOCAL_STORAGE_NAMES}
@@ -1390,6 +1392,7 @@ class DanbooruSearchUI:
         self._storage_restore_started = True
         was_cancelled = False
         try:
+            render_storage_loading(self, 'loading')
             result = await restore_with_retries(
                 self,
                 _LOCAL_STORAGE_RESTORE_RETRY_DELAYS,
@@ -1400,6 +1403,7 @@ class DanbooruSearchUI:
                 flush_storage_session_changes(self)
                 self._install_workspace_storage_listener()
                 self._storage_failure_notified = False
+                render_storage_loading(self, 'ready')
                 if result.warnings:
                     print(
                         f'[UI] 本地数据恢复提示: {sorted(set(result.warnings))}',
@@ -1411,6 +1415,7 @@ class DanbooruSearchUI:
                 if self._storage_states.get(name) != 'ready'
             )
             if unresolved:
+                render_storage_loading(self, 'error')
                 client_id = str(getattr(self.client, 'id', 'unknown'))[:8]
                 detail = '; '.join(
                     f'{name}={message}' for name, message in sorted(result.failures.items())
@@ -1434,6 +1439,10 @@ class DanbooruSearchUI:
                         pass
         except asyncio.CancelledError:
             was_cancelled = True
+        except Exception as exc:
+            print(f'[UI] 本地数据恢复异常: {exc}', flush=True)
+            if self._client_alive():
+                render_storage_loading(self, 'error')
         finally:
             if finish_storage_restore_task(
                 self,
@@ -1443,10 +1452,17 @@ class DanbooruSearchUI:
                 self._start_storage_restore_task()
 
     def _start_storage_restore_task(self):
+        if self._storage_restore_abandoned:
+            return None
         return start_storage_restore_task(
             self,
             self._restore_local_storage_with_retries,
         )
+
+    def _abandon_storage_restore(self):
+        self._storage_restore_abandoned = True
+        self._pause_storage_restore()
+        render_storage_loading(self, 'dismissed')
 
     def _pause_storage_restore(self):
         pause_storage_restore(self)
