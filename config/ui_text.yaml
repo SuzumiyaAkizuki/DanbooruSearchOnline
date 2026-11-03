@@ -161,6 +161,9 @@ developer:
     | Anima 提示词规范（/get_anima_format） | 0 点 |
     | NewBie 提示词规范（/get_newbie_format） | 0 点 |
     | Qwen 提示词规范（/get_qwen_image_2_1_format，T2I / I2I） | 0 点 |
+    | MOSS 提示词规范（/get_moss_image_format） | 0 点 |
+    | MOSS 提示词编译（/compile_moss_prompt） | 1 点 |
+    | MOSS 坐标转换（/convert_moss_bbox） | 1 点 |
 
     - **有 Key：** 每把 Key 默认每天 3,000 点，相当于 1,000 次纯标签搜索；混合调用按上表累加。每把 Key 默认每分钟 60 点，最多同时处理 1 个业务请求。同一账号的不同 Key 各自独立计算日额度、分钟额度和并发上限。
     - **无 Key：** 所有调用者共享每天 **15,000 点**的试用池，同时共享每分钟 30 点、最多 1 个业务请求的并发限制；公共池耗尽后，无 Key 调用需等待重置，建议长期集成申请自己的 Key。

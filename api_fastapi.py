@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.engine import DanbooruTagger, run_in_slot
 from core.models import MAX_INPUT_TAGS, MAX_INPUT_TAG_LENGTH, SearchRequest, SearchResponse
 from core.prompt_formats import PROMPT_FORMATS
+from core.moss_prompt import compile_prompt as _compile_moss_prompt, centered_box as _centered_moss_box
 from core.api_keys import governed, engine_call, get_key_service
 import core.counter as counter
 import core.telemetry as telemetry
@@ -62,6 +63,7 @@ API_KEY_NOTICE = (
     "每把 Key 默认 3000 点/日，各 Key 独立；并发繁忙时排队等待。"
     "无 Key 调用共享 15000 点/日的试用池，并发繁忙时排队等待。"
     "search/related/artists/health 每次分别消耗 3/2/1/0 点，每日北京时间 00:00 重置。"
+    "MOSS 提示词编译、坐标转换每次各 1 点；提示词规范查询为 0 点。"
     "入口开放后使用 Hugging Face 账号登录申请；仅个人业务首把且不超默认日额度可自动批准，所有公开业务须人工审核；"
     "第二把及后续 Key、首把超默认额度或后续超默认额度增额需说明原因并人工审核。"
     "日额度耗尽返回 429。网页搜索无需申请 Key。"
@@ -75,8 +77,21 @@ if get_key_service().config.mode == "public":
         f"无 Key 共享 {_key_config.anonymous_daily} 点/日。"
         "并发繁忙时排队等待。"
         "search/related/artists/health 每次 3/2/1/0 点，北京时间零点重置。"
+        "MOSS 提示词编译、坐标转换每次各 1 点；提示词规范查询为 0 点。"
         "个人调用须匹配 Client，公开调用须匹配 Client 与 Site；无效 Key 不回退匿名。网页搜索及 MCP 保持原有方式。"
     )
+
+
+class MossCompileIn(BaseModel):
+    draft: dict[str, Any] = Field(description="Caption 草稿或绝对像素 xyxy Layout 草稿。")
+
+
+class MossBBoxIn(BaseModel):
+    bbox: list[Annotated[float, Field(strict=True, allow_inf_nan=False)]] = Field(
+        min_length=4, max_length=4, description="绝对像素 [x_min, y_min, x_max, y_max]。"
+    )
+    width: int = Field(strict=True, gt=0, multiple_of=16)
+    height: int = Field(strict=True, gt=0, multiple_of=16)
 
 
 class SearchIn(BaseModel):
@@ -354,6 +369,32 @@ async def get_qwen_image_2_1_format(mode: Literal["T2I", "I2I"]) -> str:
     return PROMPT_FORMATS[{"T2I": "qwen_t2i", "I2I": "qwen_i2i"}[mode]]
 
 
+@app.get("/get_moss_image_format", response_class=PlainTextResponse)
+async def get_moss_image_format() -> str:
+    """获取 MOSS 艺术与格式规范，消耗 0 点；与 MCP 共用规范来源。"""
+    return PROMPT_FORMATS["moss"]
+
+
+@app.post("/compile_moss_prompt", response_class=PlainTextResponse, response_model=str)
+@governed("compile_moss_prompt")
+async def compile_moss_prompt(body: MossCompileIn, http_request: Request = None) -> str:
+    """编译 Caption 或 Layout，消耗 1 点。返回纯文本；Layout 不含画布尺寸，调用方须保留草稿尺寸。无效草稿返回 422，不扣点。"""
+    try:
+        return await asyncio.to_thread(_compile_moss_prompt, body.draft)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/convert_moss_bbox", response_model=list[int])
+@governed("convert_moss_bbox")
+async def convert_moss_bbox(body: MossBBoxIn, http_request: Request = None) -> list[int]:
+    """将绝对像素 xyxy 框转换为中心原点 yxyx 整数框，消耗 1 点。尺寸须为 16 的正整数倍；非法框返回 422，不扣点。完整 Layout 编译已包含此转换。"""
+    try:
+        return _centered_moss_box(body.bbox, body.width, body.height, "bbox")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.post("/search", response_model=SearchOut)
 @governed("search")
 async def search(body: SearchIn, http_request: Request = None) -> SearchOut:
@@ -490,12 +531,15 @@ async def health():
 
 def key_openapi():
     if app.openapi_schema:
+        if app.servers:
+            app.openapi_schema["servers"] = app.servers
         return app.openapi_schema
-    schema = get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes)
+    schema = get_openapi(title=app.title, version=app.version, description=app.description,
+                         routes=app.routes, servers=app.servers)
     schema.setdefault("components", {}).setdefault("securitySchemes", {})["APIKey"] = {
         "type": "http", "scheme": "bearer", "description": "本站签发的 API Key；不是 Hugging Face Token。无 Key 试用请完全不发送 Authorization。"
     }
-    for endpoint in ("search", "related", "artists"):
+    for endpoint in ("search", "related", "artists", "compile_moss_prompt", "convert_moss_bbox"):
         operation = schema["paths"]["/" + endpoint]["post"]
         operation["security"] = [{}, {"APIKey": []}]
         operation.setdefault("parameters", []).extend([

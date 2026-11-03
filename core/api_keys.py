@@ -25,7 +25,7 @@ from core.admin_auth import ADMIN_SUB, TARGET_SPACE
 from core.work_queue import ANONYMOUS_WORK
 
 TERMS_VERSION = "2026-09-22-v1"
-COSTS = {"search": 3, "related": 2, "artists": 1}
+COSTS = {"search": 3, "related": 2, "artists": 1, "compile_moss_prompt": 1, "convert_moss_bbox": 1}
 GOVERNED = ContextVar("api_key_governed", default=False)
 
 

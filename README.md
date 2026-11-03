@@ -415,6 +415,32 @@ POST /api/artists
 
 响应字段：`artist`（画师名）、`cooc_count`（共现次数）、`post_count`（作品数）、`sources`（命中标签）、`top_tags`（该画师最常画的 10 个标签，含中文名）。
 
+**MOSS 提示词接口**
+
+REST 与 MCP 提供相同的 MOSS 规范、提示词编译和坐标转换能力，不调用图像生成模型。
+
+| 方法与路径 | 返回内容 | 每次消耗 |
+| --- | --- | --- |
+| `GET /api/get_moss_image_format` | 艺术规范与 MOSS 格式规范，纯文本 | 0 点 |
+| `POST /api/compile_moss_prompt` | Caption 纯文本或单行 Layout JSON，`text/plain` | 1 点 |
+| `POST /api/convert_moss_bbox` | 中心原点 yxyx 坐标，JSON 整数数组 | 1 点 |
+
+编译请求将草稿放入 `draft` 字段：
+
+```json
+{"draft":{"caption":"A girl reading beside a sunlit window."}}
+```
+
+该请求返回 Caption 原文。Layout 草稿的完整字段见 `/api/get_moss_image_format`；`width`、`height` 须为 16 的正整数倍，输入框使用左上角起算的绝对像素 `[x_min, y_min, x_max, y_max]`。编译结果不含画布尺寸，调用方须保留草稿尺寸并用于生成工作流。编译已转换全部坐标，无需逐框调用转换接口。
+
+独立坐标转换请求：
+
+```json
+{"bbox":[176,224,800,864],"width":1536,"height":1024}
+```
+
+返回 `[-288,-592,352,32]`。小数边界先向外取整，再转换到中心原点。非法草稿、尺寸或坐标返回 HTTP 422，不扣点。两个执行接口沿用现有 API Key 与匿名试用池计费方式；持 Key 调用时发送 `Authorization: Bearer <API_KEY>` 和登记的 `X-DanbooruSearch-Client`，公开业务还须发送登记的 `X-DanbooruSearch-Site`。
+
 **健康检查接口**
 
 ```
@@ -550,7 +576,7 @@ npm install -g mcp-remote
 
 MOSS 指引与其他提示词规范统一存于 `config/prompt_formats.yaml`，由共享加载器在服务启动时读取；修改后需重启服务生效。
 
-Anima、NewBie 和 MOSS 规范仅约束模型输入内容与结构；最终回答的接口字段、Markdown 包装、说明语言、解释及翻译由调用方指定。规范中的代码围栏仅用于展示结构和示例，不要求最终回答使用围栏。Anima/NewBie 的 REST 对应端点与 MCP 共用规范来源；MOSS 当前仅提供 MCP 工具。
+Anima、NewBie 和 MOSS 规范仅约束模型输入内容与结构；最终回答的接口字段、Markdown 包装、说明语言、解释及翻译由调用方指定。规范中的代码围栏仅用于展示结构和示例，不要求最终回答使用围栏。Anima、NewBie 和 MOSS 的 REST 对应端点与 MCP 共用规范来源；MOSS 编译与坐标转换也可通过同名 REST 接口调用。
 
 `compile_moss_prompt` 仍返回纯文本 Caption 或单行 Layout JSON，Layout 不含画布尺寸。调用方必须从草稿保留 `width`、`height`，并将图像生成工作流设为同一尺寸；执行尺寸不能依赖中文解释传递。
 
