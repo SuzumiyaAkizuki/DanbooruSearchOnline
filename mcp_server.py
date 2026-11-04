@@ -33,7 +33,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from core.engine import DanbooruTagger, run_in_slot
 from core.models import MAX_INPUT_TAGS, MAX_INPUT_TAG_LENGTH, SearchRequest
-from core.prompt_formats import PROMPT_FORMATS
+from core.prompt_formats import ArtProfile, PROMPT_FORMATS, get_prompt_format
 from core.moss_prompt import compile_prompt as _compile_moss_prompt, centered_box as _centered_moss_box
 from core.runtime_diagnostics import install_mcp_diagnostics
 import core.counter as counter
@@ -572,12 +572,14 @@ async def get_newbie_format() -> str:
 
 
 @mcp.tool()
-async def get_qwen_image_2_1_format(mode: str) -> str:
+async def get_qwen_image_2_1_format(mode: str, art_profile: ArtProfile | None = None) -> str:
     """
     获取 Qwen-Image-2.1 模型的提示词格式规范。
 
     ## 参数
     - mode: 必须是 "T2I" 或 "I2I"。T2I 返回文生图格式，I2I 返回图生图格式。
+    - art_profile: T2I 可选 "illustration" 或 "graphic_design"（海报、封面、平面设计）。
+      省略时保持原规范；I2I 不接受此参数。
 
     ## 返回
     返回对应模式的完整 Qwen-Image-2.1 提示词格式文本。
@@ -585,23 +587,27 @@ async def get_qwen_image_2_1_format(mode: str) -> str:
     """
     await telemetry.increment("mcp_get_qwen_image_2_1_format")
 
-    prompt = PROMPT_FORMATS.get({"T2I": "qwen_t2i", "I2I": "qwen_i2i"}.get(mode))
-    if prompt is None:
+    model = {"T2I": "qwen_t2i", "I2I": "qwen_i2i"}.get(mode)
+    if model is None:
         return '错误：mode 必须是 "T2I" 或 "I2I"。'
-
-    return prompt
+    try:
+        return get_prompt_format(model, art_profile)
+    except ValueError as exc:
+        return f"错误：{exc}"
 
 
 @mcp.tool()
-async def get_moss_image_format() -> str:
+async def get_moss_image_format(art_profile: ArtProfile | None = None) -> str:
     """返回 MOSS-Image 提示词指引及完整 Layout 规范。
 
     编写 MOSS caption 或 Layout 前先调用此工具，再用 compile_moss_prompt 编译。
+    海报、封面或平面设计使用 art_profile="graphic_design"；插画使用 "illustration"。
+    省略 art_profile 时沿用现有插画规范，返回纯文本。
     仅约束模型输入；最终回答包装、说明语言、解释及翻译由调用方指定。
     工具仅提供指引，不调用图像模型。
     """
     await telemetry.increment("mcp_get_moss_image_format")
-    return PROMPT_FORMATS["moss"]
+    return get_prompt_format("moss", art_profile)
 
 
 @mcp.tool()

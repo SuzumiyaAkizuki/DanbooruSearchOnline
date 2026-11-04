@@ -1,3 +1,170 @@
+graphic_design_art_direction: |2-
+  # Graphic Design & Layout Art Direction Specification
+
+  本规范用于指导 AI 生成平面设计作品（海报、书籍/唱片封面、杂志版式、品牌视觉、包装平面、UI/卡片、矢量图形与排版设计）时的版面规划、视觉层级、字体排印、色彩体系与材质表现。最终输出的语言、格式与模型特定语法由下游模型规范或调用方指定。
+
+  ## 核心设计原则
+
+  1. **二维版面优先于三维透视**：平面设计的核心是画布平面（2D Canvas）上的元素组织、网格对齐与比例分割。除非明确要求 3D 视觉主图或样机展示（Mockup），否则默认采用正交平视视角（Flat-lay / Orthographic Front View），禁止无故将整个版面倾斜或放入透视空间。
+  2. **扁平展示 vs 实体样机（Flat vs. Mockup）分离**：
+     - 用户未明确要求“样机、摆拍、手持、张贴在墙上”时，默认生成**满画幅纯平面设计稿（Full-bleed 2D Graphic Design）**，画框边缘即设计稿裁切边缘。
+     - 严禁为了增加所谓“真实感”擅自添加木桌背景、咖啡杯、绿植阴影、画框边缘或褶皱背景墙。
+  3. **信息层级与视觉动线（Visual Hierarchy & Eye Flow）**：版面必须具备清晰的阅读顺序（第一视觉落点 → 核心标题 → 视觉辅助图形 → 次要信息/角标）。任何装饰元素不得干扰核心标题与主图形的辨识度。
+  4. **负空间即设计元素（Active Negative Space）**：留白不是“未填满的区域”，而是用于控制视觉呼吸感、建立高级感与分割信息块的核心结构。禁止用零碎装饰填满所有角落。
+  5. **文字可渲染性控制**：AI 对长文本和微小字体的渲染能力有限。凡需要精确可读的文字，必须精简字数、明确字形风格与空间位置；但是用户指定必须准确呈现的文字，保留原文，不得擅自删减或转为纹理；
+
+  ---
+
+  ## 组装前版面规划
+
+  在生成具体提示词前，必须完成以下两条规划链路：
+
+  **1. 视觉层级与网格链路：**
+  `设计载体是什么（海报/封面/标志/包装）` → `版式架构模式是什么` → `第一视觉锚点（主图或主标题）位于哪里` → `网格如何划分区域` → `留白占比多少` → `阅读视线如何流动`
+
+  **2. 风格与媒介质感链路：**
+  `设计流派/美学风格` → `图形表现手法（矢量/摄影拼贴/3D渲染/粗野主义）` → `色彩对比与面积配比` → `印刷工艺与纸张基底质感`
+
+  ### 版式架构模式（四选一）
+
+  组装前必须明确选择一种版式架构，不得混用导致重心瓦解：
+
+  - **字体主导型（Typography-Driven）**：巨大、极具表现力的字体排印本身就是第一视觉主体（占版面 50%～80%），图形仅作为穿插、点缀或底纹。
+  - **主图主导型（Key-Visual / Hero-Image Driven）**：核心高冲击力图形、插画或摄影拼贴占据主导（60%～85%），文字以精炼标题、角标或环绕形式配合主图。
+  - **网格分割型（Modular Grid / Swiss Style）**：版面由严格的不对称网格、线条、色块或几何容器分割，图文各居其位，强调秩序感、对齐关系与几何比例。
+  - **极简留白型（Minimalist / Negative-Space Driven）**：大面积纯色或肌理留白占据画幅（60%～85%），核心图形与排印高度浓缩在特定视觉焦点（如黄金分割点或绝对中心），依靠极致的尺度对比建立张力。
+
+  ---
+
+  ## 版式构图与网格规则
+
+  ### 网格系统与对齐逻辑
+
+  平面描述必须使用明确的版面坐标与几何关系词汇，避免模糊的方位词：
+
+  - **网格结构**：明确指定采用居中对称（Centered Symmetry）、瑞士国际主义网格（Swiss Modular Grid）、双栏/三栏分割（Two-column / Three-column Split）、对角线张力（Diagonal Tension）或边缘环绕（Frame / Border Layout）。
+  - **对齐与边界**：使用 `flush left`（左对齐）、`centered alignment`（居中对齐）、`justified block`（两端对齐块）、`anchored to the four corners`（四角锚定）、`bleeding off the right edge`（右侧出血裁切）等精确描述。
+  - **尺度对比（Scale Contrast）**：通过极大与极小的悬殊对比拉开层级。例如：`massive oversized headline spanning the full width` 配合 `tiny micro-typography metadata aligned vertically along the left margin`。
+
+  ### 主图形与正负形关系（Figure-Ground Relationship）
+
+  - **单焦点原则**：版面中只允许存在一个核心图形焦点。若包含多个次要元素，必须收纳进统一的网格容器或拼贴轮廓中，禁止元素散乱漂浮。
+  - **图底分离与穿插**：
+    - 图形与背景必须具备高可辨识度的明度差或色相差。
+    - 若采用图文穿插（Text-Image Interplay），须明确前后遮挡逻辑（如：`the subject's silhouette partially overlaps the giant bold title behind it`，但保留文字足够的可识别轮廓）。
+    - 鼓励使用正负形反转（Figure-Ground Reversal）或双重曝光剪影（Double-exposure Silhouette）来精炼视觉概念。
+
+  ### 留白与视觉呼吸感
+
+  | 版式密度类型 | 有效留白（负空间）占比 | 适用场景 |
+  |---|---:|---|
+  | 极简/奢侈品/艺术展海报 | 60%～85% | 强调克制、静谧、高级感与单一符号冲击力 |
+  | 现代标准商业海报/封面 | 30%～55% | 主图清晰、标题突出、阅读舒适 |
+  | 瑞士网格/信息图表/杂志内页 | 20%～35% | 信息量大，依靠网格线、分栏与色块建立秩序 |
+  | 酸性设计/拼贴/地下音乐海报 | 5%～20% | 有意采用高密度视觉轰炸（Maximalism），但必须靠色彩主次或粗大轮廓维持核心焦点 |
+
+  ---
+
+  ## 字体排印规范（Typography & Lettering）
+
+  在 AI 提示词中，文字必须同时定义**“写什么内容”**与**“长什么视觉形态”**：
+
+  ### 1. 需精确渲染的核心文本（Exact Text）
+
+  - **文本声明**：需要准确拼写的标题或单词，必须使用英文双引号 `""` 严格包裹（如 `the bold text "SILENCE"`）。
+  - **字数控制**：单张设计图中要求精确拼写的独立文本块不宜超过 2～3 处，总词数控制在极简范围，避免生成长句拼写乱码。
+  - **字形定义（Typeface Specification）**：必须具体说明字体类别与字重，不得只写 `text` 或 `title`：
+    - **无衬线（Sans-Serif）**：`ultra-bold geometric sans-serif`、`condensed grotesque headline`、`clean neo-grotesque typography`
+    - **衬线（Serif）**：`high-contrast editorial didone serif`、`sharp transitional serif`、`elegant italic serif`
+    - **展示与手写（Display & Script）**：`custom liquid chrome lettering`、`brutalist distressed stencil font`、`expressive brush calligraphy`、`pixel bitmap font`
+    - **等宽与技术感（Monospace）**：`technical monospace data type`、`industrial label typography`
+
+  ### 2. 装饰性与结构化文本块（Structural / Greeking Typography）
+
+  对于不要求逐字阅读、仅用于丰富版面细节的副标题、日期、内文段落或角标，禁止输入冗长的真实句子，应直接描述其**几何视觉形态**：
+  - `a compact block of fine-print editorial body copy in the lower-left corner`
+  - `vertical micro-typography running along the right border`
+  - `minimalist typographic registration marks, barcode, and issue numbers in the header`
+
+  ### 3. 文字可读性保护
+
+  - 文字跨在复杂图形之上时，必须指定可读性保护措施：如高反差纯色（白字压暗底）、反相混合效果（Difference Blend Mode）、色块衬底（Solid Pill Container / Banner Box）或干净的负空间区域。
+  - 严禁将细体字直接放置在碎裂、高对比的复杂纹理之上。
+
+  ---
+
+  ## 色彩体系与面积配比
+
+  平面设计的色彩重在**色块面积对比、明度反差与专色质感**，而非自然环境光漫反射：
+
+  1. **严格限制色盘数量**：明确指定配色方案（如双色调 Duotone、三原色 Bauhaus Primary Palette、单色明度渐变 Monochromatic、高反差黑白加单一荧光强调色 Black & White with Acid Green Accent）。
+  2. **明确面积配比（60-30-10 或极端反差法则）**：
+     - **基底色（Dominant Base）**：定义画布底色或最大色块（如 `matte off-white paper base`、`deep cobalt blue background`）。
+     - **主体色（Secondary Structure）**：定义主图形或网格块的色彩。
+     - **强调色（Focal Accent）**：仅用于核心标题、关键符号或视觉引导点的小面积高锐度颜色（如 `a sharp vermilion red accent on the title and stamp`）。
+  3. **印刷色彩模式表达**：根据风格需要，可使用印刷与平面专属色彩词汇，如 `Pantone spot colors`、`high-contrast CMYK color separation`、`fluorescent neon ink`、`muted earthy risograph inks`。
+
+  ---
+
+  ## 材质、工艺与表面肌理（Tactility & Print Finish）
+
+  优秀的平面设计提示词需要消灭廉价的“数码生硬感”，通过媒介与印刷工艺描述赋予画面物理质感（即使在 2D 平视构图中也完全可见）：
+
+  - **纸张与基底肌理**：`uncoated textured cotton paper`、`heavyweight matte cardstock`、`vintage yellowed newsprint`、`raw industrial kraft paper`、`sleek glossy magazine stock`。
+  - **印刷与油墨特征**：
+    - **孔版/丝网印刷（Risograph / Screenprint）**：`authentic risograph print texture`、`subtle ink overprint misalignment (registration shift)`、`halftone dot patterns`、`grainy ink stippling`。
+    - **传统凸版/凹版（Letterpress / Embossing）**：`debossed letterpress typography`、`blind embossing`。
+    - **现代特种工艺（Specialty Finishes）**：`holographic foil stamping`、`metallic gold leaf accents`、`spot UV gloss contrast against a matte base`。
+  - **复古与做旧痕迹（仅在风格需要时使用）**：`subtle xerox photocopy noise`、`high-contrast threshold distress`、`folded poster crease lines`（若要求纯净矢量或现代商业稿，则明确声明 `clean vector precision, zero distressed noise`）。
+
+  ---
+
+  ## 八维平面设计表现力检查
+
+  在完成基础版面组装后，自查以下 8 个平面设计维度，**至少触发 4 个维度以上**。缺失的维度通过自然语言描述层补全，且补全内容必须服务于整体设计风格：
+
+  | 维度 | 检查问题 | 缺失表现 | 补全方向 |
+  |---|---|---|---|
+  | **层级 (Hierarchy)** | 第一眼看哪里、第二眼看哪里是否明确？ | 所有元素一样大，文字与图形互相抢戏 | 拉开主标题、主图与辅助文字的尺寸差距（极大 vs 极小） |
+  | **网格 (Grid)** | 元素排列是否有内在几何秩序？ | 元素随意漂浮，边距不统一 | 明确对齐方式（左对齐/居中/四角锚定）、分栏比例或分割线 |
+  | **排印 (Typography)** | 字体是否有明确的性格与形态？ | 默认无聊字体，或文字糊成一团 | 指定具体字形（如高对比衬线/粗野无衬线）、字间距与排版方向 |
+  | **正负形 (Figure-Ground)** | 留白是否参与了构图？ | 画面塞满或留白松散无力 | 明确负空间占比、剪影轮廓切割或图底反转关系 |
+  | **比例 (Scale & Tension)** | 元素之间是否有戏剧性的尺度反差？ | 尺寸平庸，缺乏视觉张力 | 巨型出血裁切图形/字体 vs 精密微小的信息角标 |
+  | **配色 (Color System)** | 色彩面积与主次是否受控？ | 颜色杂乱无章，缺乏统一调性 | 限定 2～4 种核心色，明确基底色、主体色与小面积高饱和强调色 |
+  | **肌理 (Print Tactility)** | 画面是否有媒介与工艺质感？ | 廉价平滑的数码塑料感 | 补充纸张纹理、半调网点、丝网印刷叠印、噪点颗粒或烫金工艺 |
+  | **符号感 (Iconography)** | 视觉概念是否高度凝练？ | 变成普通写实摄影或琐碎插画 | 提炼几何形态、高反差剪影、抽象图形符号或超现实拼贴组合 |
+
+  ---
+
+  ## 平面设计冲突检查表
+
+  输出前必须逐项排查并消解以下常见平面生成冲突：
+
+  | 冲突对 | 消解规则 |
+  |---|---|
+  | 2D 纯平面稿 vs 3D 样机摆拍 | 严格二选一。默认使用 `flat 2D graphic design, full-bleed artwork`，严禁混入桌面、墙面透视或环境杂物 |
+  | 极简主义 (`minimalist`) vs 高密度拼贴 (`maximalist collage`) | 选定唯一版面密度，不得同时要求“大片留白”和“塞满复杂细节” |
+  | 扁平矢量 (`flat vector`) vs 写实摄影景深 (`shallow depth of field / bokeh`) | 扁平平面稿禁止出现镜头背景虚化（Bokeh）；仅当主图本身是摄影局部时才可限定在主图框内使用 |
+  | 自然环境光照 vs 平面图形配色 | 2D 版式不描述“夕阳从左侧照亮海报”，只描述画面内图形本身的明暗、渐变或油墨色彩 |
+  | 精确拼写文本 vs 冗长段落 | 引号内的精确渲染文本必须简短；长段文字一律改写为视觉排版纹理（`micro-type block`） |
+  | 复杂底图 vs 细小文字 | 文字覆盖区域必须保持干净或添加高反差衬底，防止文字与背景纹理粘连 |
+  | 出血构图 (`full-bleed`) vs 留白外框 (`white border margin`) | 明确画幅边缘是直接裁切色块/图形，还是四周保留统一的留白边框 |
+
+  ---
+
+  ## 平面设计最终自检清单
+
+  输出前确认以下要素：
+
+  1. 是否已明确定义这是**满画幅 2D 纯平面设计稿**还是**带有环境透视的 3D 实物样机**（默认前者，且排除了无关环境背景）？
+  2. 是否只选择了一种版式架构模式（字体主导、主图主导、网格分割或极简留白），且第一视觉焦点唯一？
+  3. 版面中的网格划分、对齐方式（居中/左对齐/四角锚定）和留白区域是否交代清楚？
+  4. 需要精确显示的文字是否已精简并用双引号包裹？是否明确指定了字体的具体形态（衬线/无衬线/字重/风格）与可读性对比保护？
+  5. 装饰性小字、角标和辅助信息是否已转化为结构化排版形态描述，而非堆砌无法渲染的长句？
+  6. 色彩系统是否明确了基底色、主体色和强调色的面积配比，避免了互不相容的杂乱调色词？
+  7. 是否根据设计风格补充了恰当的媒介质感（如纸张纹理、丝网印刷网点、瑞士平滑矢量或特种工艺），并消除了不属于平面设计的镜头虚化与外部环境光干扰？
+  8. 是否已通过“平面设计冲突检查表”与“八维平面设计表现力检查”（至少触发 4 维）？
+
 # MCP 和 REST 共用规范；修改配置后重启服务生效。
 art_direction: |2-
   # 通用视觉构图与创作规范

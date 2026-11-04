@@ -44,7 +44,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core.engine import DanbooruTagger, run_in_slot
 from core.models import MAX_INPUT_TAGS, MAX_INPUT_TAG_LENGTH, SearchRequest, SearchResponse
-from core.prompt_formats import PROMPT_FORMATS
+from core.prompt_formats import ArtProfile, PROMPT_FORMATS, get_prompt_format
 from core.moss_prompt import compile_prompt as _compile_moss_prompt, centered_box as _centered_moss_box
 from core.api_keys import governed, engine_call, get_key_service
 import core.counter as counter
@@ -364,15 +364,20 @@ async def get_newbie_format() -> str:
 
 
 @app.get("/get_qwen_image_2_1_format", response_class=PlainTextResponse)
-async def get_qwen_image_2_1_format(mode: Literal["T2I", "I2I"]) -> str:
-    """返回 Qwen-Image-2.1 规范；必填 mode：T2I 文生图，I2I 图生图。"""
-    return PROMPT_FORMATS[{"T2I": "qwen_t2i", "I2I": "qwen_i2i"}[mode]]
+async def get_qwen_image_2_1_format(
+    mode: Literal["T2I", "I2I"], art_profile: ArtProfile | None = None,
+) -> str:
+    """获取 Qwen 规范，消耗 0 点。T2I 可选 illustration 或 graphic_design；省略时沿用原规范，I2I 不接受艺术规范选择。"""
+    try:
+        return get_prompt_format({"T2I": "qwen_t2i", "I2I": "qwen_i2i"}[mode], art_profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/get_moss_image_format", response_class=PlainTextResponse)
-async def get_moss_image_format() -> str:
-    """获取 MOSS 艺术与格式规范，消耗 0 点；与 MCP 共用规范来源。"""
-    return PROMPT_FORMATS["moss"]
+async def get_moss_image_format(art_profile: ArtProfile | None = None) -> str:
+    """获取 MOSS 艺术与格式规范，消耗 0 点。art_profile 可选 illustration 或 graphic_design，省略时沿用插画规范；与 MCP 行为一致。"""
+    return get_prompt_format("moss", art_profile)
 
 
 @app.post("/compile_moss_prompt", response_class=PlainTextResponse, response_model=str)
